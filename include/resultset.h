@@ -133,6 +133,10 @@ static inline void setItemFloat(DataModelElement_t *rootDM, Tupel_t *tupel, char
 
 static inline void setItemString(DataModelElement_t *rootDM, Tupel_t *tupel, char *typeName, char *value) {
 	GET_MEMBER_POINTER(tupel,rootDM,typeName);
+	if (IS_COMPACT(tupel)) {
+		DEBUG_MSG(1,"Refusing access (%s) to an item, because to tupel is compact.\n",__FUNCTION__);
+		return;
+	}
 	*(PTR_TYPE*)valuePtr = (PTR_TYPE)value;
 }
 
