@@ -90,7 +90,6 @@ void freeSubtree(DataModelElement_t *node, int freeNodeItself) {
 	} while(curNode != node);
 	freeNode(curNode,freeNodeItself);
 }
-#include <stdio.h>
 
 /**
  * Calculate the size in bytes of the element described by {@link typeDesc}.
@@ -286,7 +285,7 @@ DataModelElement_t* copyNode(DataModelElement_t *node) {
 			// Nothing to do
 		}
 	}
-	
+
 	return ret;
 }
 /**
