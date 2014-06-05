@@ -111,7 +111,6 @@ git_version.h:
 	@./git_version.sh -o git_version.h
 
 clean: clean-dep clean-obj
-	$(MAKE) -C $(DISKSIM_DIR) $@
 
 clean-dep:
 	$(RM) $(DEP)
