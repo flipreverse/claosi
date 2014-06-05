@@ -174,7 +174,7 @@ static inline void setArraySlotByte(DataModelElement_t *rootDM,Tupel_t *tupel,ch
 	if (arraySlot >= *(int*)(*(PTR_TYPE*)valuePtr)) {
 		return;
 	}
-	*(char*)((*(PTR_TYPE*)(valuePtr)) + sizeof(int) + arraySlot * sizeof(char)) = value;
+	*(char*)((*(PTR_TYPE*)(valuePtr)) + sizeof(int) + arraySlot * SIZE_BYTE) = value;
 }
 
 static inline void setArraySlotInt(DataModelElement_t *rootDM,Tupel_t *tupel,char *arrayTypeName,int arraySlot,int value) {
@@ -182,7 +182,7 @@ static inline void setArraySlotInt(DataModelElement_t *rootDM,Tupel_t *tupel,cha
 	if (arraySlot >= *(int*)(*(PTR_TYPE*)valuePtr)) {
 		return;
 	}
-	*(int*)((*(PTR_TYPE*)(valuePtr)) + sizeof(int) + arraySlot * sizeof(int)) = value;
+	*(int*)((*(PTR_TYPE*)(valuePtr)) + sizeof(int) + arraySlot * SIZE_INT) = value;
 }
 
 static inline void setArraySlotFloat(DataModelElement_t *rootDM,Tupel_t *tupel,char *arrayTypeName,int arraySlot,double value) {
@@ -190,7 +190,7 @@ static inline void setArraySlotFloat(DataModelElement_t *rootDM,Tupel_t *tupel,c
 	if (arraySlot >= *(int*)(*(PTR_TYPE*)valuePtr)) {
 		return;
 	}
-	*(double*)((*(PTR_TYPE*)(valuePtr)) + sizeof(int) + arraySlot * sizeof(double)) = value;
+	*(double*)((*(PTR_TYPE*)(valuePtr)) + sizeof(int) + arraySlot * SIZE_FLOAT) = value;
 }
 
 static inline void setArraySlotString(DataModelElement_t *rootDM,Tupel_t *tupel,char *arrayTypeName,int arraySlot,char *value) {
@@ -198,7 +198,7 @@ static inline void setArraySlotString(DataModelElement_t *rootDM,Tupel_t *tupel,
 	if (arraySlot >= *(int*)(*(PTR_TYPE*)valuePtr) || IS_COMPACT(tupel)) {
 		return;
 	}
-	*(char**)((*(PTR_TYPE*)(valuePtr)) + sizeof(int) + arraySlot * sizeof(char*)) = value;
+	*(char**)((*(PTR_TYPE*)(valuePtr)) + sizeof(int) + arraySlot * SIZE_STRING) = value;
 }
 
 static inline char getArraySlotByte(DataModelElement_t *rootDM,Tupel_t *tupel,char *arrayTypeName,int arraySlot) {
@@ -206,7 +206,7 @@ static inline char getArraySlotByte(DataModelElement_t *rootDM,Tupel_t *tupel,ch
 	if (arraySlot >= *(int*)(*(PTR_TYPE*)valuePtr)) {
 		return '\0';
 	}
-	return *(char*)((*(PTR_TYPE*)(valuePtr)) + sizeof(int) + arraySlot * sizeof(char));
+	return *(char*)((*(PTR_TYPE*)(valuePtr)) + sizeof(int) + arraySlot * SIZE_BYTE);
 }
 
 static inline int getArraySlotInt(DataModelElement_t *rootDM,Tupel_t *tupel,char *arrayTypeName,int arraySlot) {
@@ -214,12 +214,12 @@ static inline int getArraySlotInt(DataModelElement_t *rootDM,Tupel_t *tupel,char
 	if (arraySlot >= *(int*)(*(PTR_TYPE*)valuePtr)) {
 		return 0;
 	}
-	return *(int*)((*(PTR_TYPE*)(valuePtr)) + sizeof(int) + arraySlot * sizeof(int));
+	return *(int*)((*(PTR_TYPE*)(valuePtr)) + sizeof(int) + arraySlot * SIZE_INT);
 }
 
 static inline double getArraySlotFloat(DataModelElement_t *rootDM,Tupel_t *tupel,char *arrayTypeName,int arraySlot) {
 	GET_MEMBER_POINTER_RETURN(tupel,rootDM,arrayTypeName,0);
-	return *(double*)((*(PTR_TYPE*)(valuePtr)) + sizeof(int) + arraySlot * sizeof(double));
+	return *(double*)((*(PTR_TYPE*)(valuePtr)) + sizeof(int) + arraySlot * SIZE_FLOAT);
 }
 
 static inline char* getArraySlotString(DataModelElement_t *rootDM,Tupel_t *tupel,char *arrayTypeName,int arraySlot) {
@@ -227,7 +227,7 @@ static inline char* getArraySlotString(DataModelElement_t *rootDM,Tupel_t *tupel
 	if (arraySlot >= *(int*)(*(PTR_TYPE*)valuePtr)) {
 		return NULL;
 	}
-	return (char*)((*(PTR_TYPE*)(valuePtr)) + sizeof(int) + arraySlot * sizeof(char*));
+	return (char*)((*(PTR_TYPE*)(valuePtr)) + sizeof(int) + arraySlot * SIZE_STRING);
 }
 
 static inline int initTupel(Tupel_t **tupel,unsigned long long timestamp, int numItems) {

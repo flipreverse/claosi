@@ -11,7 +11,7 @@ static void freeItem(DataModelElement_t *rootDM, void *value, DataModelElement_t
 			DEBUG_MSG(2,"Freeing string array: %s (=%p), offset=%d\n",element->children[j]->name,value+offset,offset);
 			len = *(int*)(*((PTR_TYPE*)(value + offset)));
 			for (k = 0; k < len; k++) {
-				FREE(*(char**)((*(PTR_TYPE*)(value + offset)) + sizeof(int) + k * sizeof(char*)));
+				FREE((char*)((*(PTR_TYPE*)(value + offset)) + sizeof(int) + k * SIZE_STRING));
 			}
 		} else if (element->children[j]->dataModelType & ARRAY || element->children[j]->dataModelType & STRING) {
 			DEBUG_MSG(2,"Freeing array/string: %s (=%p), offset=%d\n",element->children[j]->name,(void*)*(PTR_TYPE*)(value + offset),offset);
@@ -83,7 +83,7 @@ static int getAddiotionalItemSize(DataModelElement_t *rootDM, void *value, DataM
 		len = *(int*)(*((PTR_TYPE*)(value)));
 		size += len * sizeof(char*) + sizeof(int);
 		for (k = 0; k < len; k++) {
-			size += strlen((char*)((*(PTR_TYPE*)value) + sizeof(int) + k * sizeof(char*))) + 1;
+			size += strlen((char*)((*(PTR_TYPE*)value) + sizeof(int) + k * SIZE_STRING)) + 1;
 		}
 		DEBUG_MSG(2,"Calculated size of string array %s@%p (%d)\n",element->name,(void*)*(PTR_TYPE*)value,size);
 	} else if (type & ARRAY) {
@@ -163,7 +163,7 @@ static int copyAndCollectAdditionalMem(DataModelElement_t *rootDM, void *oldValu
 		tempValue += sizeof(PTR_TYPE);
 		*((PTR_TYPE*)newValue) = (PTR_TYPE)tempValue;
 		len = size = *(int*)(*((PTR_TYPE*)(oldValue)));
-		size *= sizeof(char*);
+		size *= SIZE_STRING;
 		size += sizeof(int);
 		memcpy(tempValue,(void*)*((PTR_TYPE*)(oldValue)),size);
 		DEBUG_MSG(1,"Copied string array (name=%s) with %d strings to %p\n",element->name,len, (void*)(*(PTR_TYPE*)newValue));

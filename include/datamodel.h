@@ -38,10 +38,10 @@ enum DataModelType {
 
 // Size of the plain datatypes in the datamodel
 enum SizePOD {
-	SIZE_INT		=	0x4,					// :-)
+	SIZE_INT		=	sizeof(int),			// :-)
 	SIZE_STRING		=	sizeof(PTR_TYPE),		// In fact, a STRING is just a pointer to a char array. Thus, its size is equal to the size of a pointer, which is 4 bytes on ARM.
-	SIZE_FLOAT		=	0x8,					// Assuming a floating point number which double precision
-	SIZE_BYTE		=	0x1,					// Nothing more to say. :-)
+	SIZE_FLOAT		=	sizeof(double),			// Assuming a floating point number which double precision
+	SIZE_BYTE		=	sizeof(char),			// Nothing more to say. :-)
 	SIZE_REF		=	0x4,
 	SIZE_ARRAY		=	sizeof(PTR_TYPE)
 };
