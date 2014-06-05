@@ -131,24 +131,21 @@ int getTupelSize(DataModelElement_t *rootDM, Tupel_t *tupel) {
 	return size;
 }
 
-static int copyAndCollectAdditionalMem(DataModelElement_t *rootDM, void *oldValue, void *newValue, DataModelElement_t *element);
+static int copyAndCollectAdditionalMem(DataModelElement_t *rootDM, void *oldValue, void *newValue, void *freeMem, DataModelElement_t *element);
 
-static int copyAndCollectIndirectMem(DataModelElement_t *rootDM, void *oldValue, void *newValue, DataModelElement_t *element) {
+static int copyAndCollectIndirectMem(DataModelElement_t *rootDM, void *oldValue, void *newValue, void *freeMem, DataModelElement_t *element) {
 	int j = 0, offset = 0, size = 0;
-	void *tempValue = newValue;
 
 	for (j = 0; j < element->childrenLen; j++) {
 		offset = getOffset(element,element->children[j]->name);
-		size = copyAndCollectAdditionalMem(rootDM,oldValue + offset, tempValue,element->children[j]);
-		tempValue += size;
+		size += copyAndCollectAdditionalMem(rootDM,oldValue + offset, newValue + offset,freeMem,element->children[j]);
 	}
 	
-	return tempValue - newValue;
+	return size;
 }
 
-static int copyAndCollectAdditionalMem(DataModelElement_t *rootDM, void *oldValue, void *newValue, DataModelElement_t *element) {
+static int copyAndCollectAdditionalMem(DataModelElement_t *rootDM, void *oldValue, void *newValue, void *freeMem, DataModelElement_t *element) {
 	int k = 0, len = 0, size = 0, ret = 0, type = 0;
-	void *tempValue = newValue;
 	
 	if (element->dataModelType == SOURCE) {
 		type = ((Source_t*)element->typeInfo)->returnType;
@@ -160,44 +157,37 @@ static int copyAndCollectAdditionalMem(DataModelElement_t *rootDM, void *oldValu
 		type = element->dataModelType;
 	}
 	if ((type & (STRING | ARRAY)) == (STRING | ARRAY)) {
-		tempValue += sizeof(PTR_TYPE);
-		*((PTR_TYPE*)newValue) = (PTR_TYPE)tempValue;
+		*((PTR_TYPE*)newValue) = (PTR_TYPE)freeMem;
 		len = size = *(int*)(*((PTR_TYPE*)(oldValue)));
 		size *= SIZE_STRING;
 		size += sizeof(int);
-		memcpy(tempValue,(void*)*((PTR_TYPE*)(oldValue)),size);
+		memcpy(freeMem,(void*)*((PTR_TYPE*)(oldValue)),size);
 		DEBUG_MSG(1,"Copied string array (name=%s) with %d strings to %p\n",element->name,len, (void*)(*(PTR_TYPE*)newValue));
-		tempValue += size;
 		
 		for (k = 0; k < len; k++) {
-			size = strlen((char*)((*(PTR_TYPE*)oldValue) + sizeof(int) + k * sizeof(char*))) + 1;
-			memcpy(tempValue,(char*)((*(PTR_TYPE*)newValue) + sizeof(int) + k * sizeof(char*)),size);
-			DEBUG_MSG(1,"Copied %d string of array (%s) to %p\n",k,element->name,tempValue);
-			tempValue += size;
+			ret = strlen((char*)((*(PTR_TYPE*)oldValue) + sizeof(int) + k * SIZE_STRING)) + 1;
+			memcpy((char*)((*(PTR_TYPE*)newValue) + sizeof(int) + k * SIZE_STRING),(char*)((*(PTR_TYPE*)oldValue) + sizeof(int) + k * SIZE_STRING),ret);
+			DEBUG_MSG(1,"Copied %d string of array (%s) to %p\n",k,element->name,(char*)((*(PTR_TYPE*)newValue) + sizeof(int) + k * SIZE_STRING));
+			size += ret;
 		}
 	} else if (type & ARRAY) {
-		tempValue += sizeof(PTR_TYPE);
-		*((PTR_TYPE*)newValue) = (PTR_TYPE)tempValue;
+		*((PTR_TYPE*)newValue) = (PTR_TYPE)freeMem;
 		len = *(int*)(*((PTR_TYPE*)oldValue));
 		if ((ret = getDataModelSize(rootDM,element,1)) == -1) {
 			return -1;
 		}
 		size = len * ret + sizeof(int);
-		memcpy(tempValue,(void*)*((PTR_TYPE*)oldValue),size);
-		DEBUG_MSG(1,"Copied an array (%s) with %d elemetns to %p\n",element->name,len,tempValue);
-		tempValue += size;
-	} else if (type & STRING) {	
-		tempValue += sizeof(PTR_TYPE);
-		*((PTR_TYPE*)newValue) = (PTR_TYPE)tempValue;	
+		memcpy(freeMem,(void*)*((PTR_TYPE*)oldValue),size);
+		DEBUG_MSG(1,"Copied an array (%s) with %d elemetns to %p, %p\n",element->name,len,(void*)*((PTR_TYPE*)newValue),newValue);
+	} else if (type & STRING) {
+		*((PTR_TYPE*)newValue) = (PTR_TYPE)freeMem;
 		size = strlen((char*)(*(PTR_TYPE*)oldValue)) + 1;
-		memcpy(tempValue,(char*)(*(PTR_TYPE*)oldValue),size);
-		DEBUG_MSG(1,"Copied string (%s='%s'@%p) to %p with size %d\n",element->name,(char*)(*(PTR_TYPE*)oldValue),(char*)(*(PTR_TYPE*)oldValue),(char*)(*(PTR_TYPE*)newValue),size);
-		tempValue += size;
+		memcpy(freeMem,(char*)(*(PTR_TYPE*)oldValue),size);
+		DEBUG_MSG(1,"Copied string (%s='%s'@%p) to %p with size %d\n",element->name,(char*)(*(PTR_TYPE*)oldValue),(char*)(*(PTR_TYPE*)oldValue),freeMem,size);
 	} else if ((type & TYPE) || (type & COMPLEX)) {
-		size = copyAndCollectIndirectMem(rootDM,oldValue,tempValue,element);
-		tempValue += size;
+		size = copyAndCollectIndirectMem(rootDM,oldValue,newValue,freeMem,element);
 	}
-	return tempValue - newValue;
+	return size;
 }
 
 Tupel_t* copyAndCollectTupel(DataModelElement_t *rootDM, Tupel_t *tupel) {
@@ -233,7 +223,7 @@ Tupel_t* copyAndCollectTupel(DataModelElement_t *rootDM, Tupel_t *tupel) {
 		ret->items[i]->value = newValue;
 		DEBUG_MSG(1,"Copied %d items (%s) value bytes (%d) to %p\n",i,ret->items[i]->name,size,ret->items[i]->value);
 	
-		size += copyAndCollectAdditionalMem(rootDM,tupel->items[i]->value,newValue,element);
+		size += copyAndCollectAdditionalMem(rootDM,tupel->items[i]->value,newValue,newValue+size,element);
 		newValue += size;
 	}
 	
