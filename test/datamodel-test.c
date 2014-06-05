@@ -168,9 +168,9 @@ int main() {
 	printf(".... found at %p\n",getDescription(copy,"net.device.rxBytes"));
 	printf("-------------------------\n");
 
-	
-
-	freeSubtree(copy);
+	freeSubtree(&model1,0);
+	freeSubtree(&model2,0);
+	freeSubtree(copy,1);
 
 	return EXIT_SUCCESS;
 }

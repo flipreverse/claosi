@@ -54,53 +54,44 @@ DataModelElement_t* getDescription(DataModelElement_t *root, char *name) {
  * Frees all memory used by the subtree including {@link node}.
  * @param node The root of the subtree to be freed
  */
-void freeSubtree(DataModelElement_t *node) {
-	DataModelElement_t *curNode = node;
-	int i = 0, j= 0;
+void freeSubtree(DataModelElement_t *node, int freeNodeItself) {
+	DataModelElement_t *curNode = node, *parent = NULL;
+	int i = 0, j = 0;
 
 	do {
+		// First, step down until the first leaf is reached.
 		if (curNode->childrenLen > 0) {
-			j = -1;
-			// Check for the next child of curNode wich is not NULL.
-			for (i = 0; i < curNode->childrenLen; i++) {
-				if (curNode->children[i] != NULL) {
-					j = i;
-					break;
-				}
-			}
-			// All children were processed.
-			if (j == -1) {
-				// No children left. Hence, search for the position of curNode in the children array of its parent.
-				for (i = 0; i < curNode->parent->childrenLen; i++) {
-					if (curNode->parent->children[i] == curNode) {
-						// Position found. Free the node and set its entry to NULL:
-						curNode = curNode->parent;
-						freeNode(curNode->children[i]);
-						curNode->children[i] = NULL;
+				curNode = curNode->children[0];
+		} else {
+			// Second, look for the current nodes sibling.
+			while(curNode != node) {
+				j = -1;
+				parent = curNode->parent;
+				for (i = 0; i < parent->childrenLen; i++) {
+					if (parent->children[i] == curNode) {
+						freeNode(parent->children[i],freeNodeItself);
+						parent->children[i] = NULL;
+						j = i;
 						break;
 					}
 				}
-			} else {
-				// Proceed to the next child of curNode which is not NULL.
-				curNode = curNode->children[j];
-			}
-		} else {
-			// curNode has no children. Well... do the same stuff as few lines above: Find curNode in its parents children array and delete it.
-			for (i = 0; i < curNode->parent->childrenLen; i++) {
-				if (curNode->parent->children[i] == curNode) {
-					curNode = curNode->parent;
-					freeNode(curNode->children[i]);
-					curNode->children[i] = NULL;
+				if (j == parent->childrenLen - 1) {
+					// If there is none, go one level up and look for this nodes sibling.
+					curNode = parent;
+				} else {
+					// At least one sibling left. Go for it.
+					j++;
+					curNode = parent->children[j];
 					break;
 				}
-			}
+			// Stop, if the root node is reached.
+			};
 		}
-	// Stop, if curNode gets beyond the root node of the 'delete' tree.
-	} while (curNode != curNode->parent && curNode->parent != NULL);
-	// Last step: free the root node.
-	freeNode(curNode);
+	} while(curNode != node);
+	freeNode(curNode,freeNodeItself);
 }
 #include <stdio.h>
+
 /**
  * Calculate the size in bytes of the element described by {@link typeDesc}.
  * @param typeDesc
@@ -302,14 +293,18 @@ DataModelElement_t* copyNode(DataModelElement_t *node) {
  * Free the node itself, its payload and its children array.
  * @param node
  */
-void freeNode(DataModelElement_t *node) {
+void freeNode(DataModelElement_t *node, int freeNodeItself) {
 	if (node->children != NULL) {
 		FREE(node->children);
+		node->children = NULL;
 	}
 	if (node->typeInfo != NULL) {
 		FREE(node->typeInfo);
+		node->typeInfo = NULL;
 	}
-	FREE(node);
+	if (freeNodeItself == 1) {
+		FREE(node);
+	}
 }
 /**
  * Deletes all nodes from {@link treePresent} described in {@link treeDelete}.
@@ -366,7 +361,7 @@ int deleteSubtree(DataModelElement_t **treePresent, DataModelElement_t *treeDele
 				} else {
 					// Reached the root node. Free it and set the pointer to the root node to NULL.
 					if (curPresent->parent == NULL) {
-						freeNode(curPresent);
+						freeNode(curPresent,1);
 						*treePresent = NULL;
 						// We're done.
 						break;
@@ -376,7 +371,7 @@ int deleteSubtree(DataModelElement_t **treePresent, DataModelElement_t *treeDele
 						if (curPresent->parent->children[i] == curPresent) {
 							// Position found. Free the node and set the entry to NULL:
 							curPresent = curPresent->parent;
-							freeNode(curPresent->children[i]);
+							freeNode(curPresent->children[i],1);
 							curPresent->children[i] = NULL;
 							break;
 						}
@@ -416,7 +411,7 @@ int deleteSubtree(DataModelElement_t **treePresent, DataModelElement_t *treeDele
 			for (i = 0; i < curPresent->parent->childrenLen; i++) {
 				if (curPresent->parent->children[i] == curPresent) {
 					curPresent = curPresent->parent;
-					freeNode(curPresent->children[i]);
+					freeNode(curPresent->children[i],1);
 					curPresent->children[i] = NULL;
 					curDeletePrev = curDelete;
 					curDelete = curDelete->parent;
@@ -453,7 +448,7 @@ DataModelElement_t* copySubtree(DataModelElement_t *rootOrigin) {
 			if (curCopy->children[i] == NULL) {
 				curCopy->children[i] = copyNode(curOrigin->children[i]);
 				if (!curCopy->children[i]) {
-					freeSubtree(rootCopy);
+					freeSubtree(rootCopy,1);
 					return NULL;
 				}
 				curCopy->children[i]->parent = curCopy;

@@ -44,8 +44,8 @@ int main() {
 	freeTupel(&model1,tupel);
 	setItemString(&model1,tupelCompact,"net.device.rxBytes","LOOOOL");
 	printTupel(&model1,tupelCompact);
-	//freeTupel(&model1,tupel);
 	freeTupel(&model1,tupelCompact);
+	freeSubtree(&model1,0);
 
 	return EXIT_SUCCESS;
 }

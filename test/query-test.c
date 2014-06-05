@@ -59,6 +59,7 @@ int main() {
 	freeQuery(GET_BASE(processObj),0);
 	freeQuery(GET_BASE(txStream),0);
 	freeQuery(GET_BASE(txSrc),0);
+	freeSubtree(&model1,0);
 
 	return EXIT_SUCCESS;
 }

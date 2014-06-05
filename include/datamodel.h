@@ -101,10 +101,10 @@ int checkSyntax(DataModelElement_t *rootCurrent,DataModelElement_t *rootToCheck,
 DataModelElement_t* getDescription(DataModelElement_t *root, char *name);
 int mergeDataModel(int justCheckSyntax, DataModelElement_t *oldTree, DataModelElement_t *newTree) ;
 DataModelElement_t* copySubtree(DataModelElement_t*);
-void freeSubtree(DataModelElement_t *node);
+void freeSubtree(DataModelElement_t *node, int freeNodes);
 int deleteSubtree(DataModelElement_t **root, DataModelElement_t *tree);
 int getOffset(DataModelElement_t *parent, char *child);
-void freeNode(DataModelElement_t *node);
+void freeNode(DataModelElement_t *node, int freeNodes);
 int getDataModelSize(DataModelElement_t *rootDM, DataModelElement_t *elem, int ignoreArray);
 #define getSize(rootDMVar, elemVar) getDataModelSize(rootDMVar,elemVar,1)
 
