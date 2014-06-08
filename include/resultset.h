@@ -112,7 +112,7 @@ typedef struct __attribute__((packed)) Item {
 typedef struct __attribute__((packed)) Tupel {
 	unsigned long long timestamp;
 	unsigned short itemLen;
-	unsigned short isCompact;
+	unsigned int isCompact;
 	Item_t **items;
 } Tupel_t;
 
@@ -265,6 +265,18 @@ static inline int allocItem(DataModelElement_t *rootDM, Tupel_t *tupel, int slot
 	tupel->items[slot]->value = ALLOC(ret);
 	strncpy((char*)&tupel->items[slot]->name,itemTypeName,MAX_NAME_LEN);
 	DEBUG_MSG(2,"Allocated %d@%p bytes for %s\n",ret,tupel->items[slot]->value,dm->name);
+	return 0;
+}
+
+static inline int addItem(Tupel_t **tupel, int newItems) {
+	Tupel_t *temp = NULL;
+	
+	if ((temp = REALLOC(*tupel,sizeof(Tupel_t) + sizeof(Item_t**) * ((*tupel)->itemLen + newItems))) == NULL) {
+		return -1;
+	}
+	*tupel = temp;
+	(*tupel)->itemLen += newItems;
+	(*tupel)->items = (Item_t**)(*tupel + 1);
 	return 0;
 }
 
