@@ -76,10 +76,10 @@ if (i >= tupel->itemLen) { \
 } \
 valuePtr = tupelVar->items[i]->value; \
 childName += strlen(tupelVar->items[i]->name); \
+if ((dm = getDescription(rootDatamodel,tupelVar->items[i]->name)) == NULL) { \
+	return; \
+} \
 if (strlen(childName) > 0) { \
-	if ((dm = getDescription(rootDatamodel,tupelVar->items[i]->name)) == NULL) { \
-		return; \
-	} \
 	if ((tokInput = ALLOC(strlen(childName) + 1)) == NULL) { \
 		return; \
 	} \

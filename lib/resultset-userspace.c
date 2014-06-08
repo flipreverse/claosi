@@ -22,7 +22,7 @@ void printValue(DataModelElement_t *rootDM, DataModelElement_t *elem, void *valu
 	}
 
 
-	isArray = elem->dataModelType & ARRAY;
+	isArray = type & ARRAY;
 	if (isArray) {
 		value = (void*) *((PTR_TYPE*)value);
 		len = *((int*)value);
