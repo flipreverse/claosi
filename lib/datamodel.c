@@ -130,6 +130,9 @@ int getTypeSize(DataModelElement_t *typeDesc) {
 int getDataModelSize(DataModelElement_t *rootDM, DataModelElement_t *elem, int ignoreArray) {
 	int size = -1, ret = 0, type = 0;
 
+	if (elem == NULL) {
+		return -1;
+	}
 	if (elem->dataModelType == SOURCE) {
 		type = ((Source_t*)elem->typeInfo)->returnType;
 		if (type & COMPLEX) {
