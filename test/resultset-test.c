@@ -15,6 +15,7 @@ static void initDatamodel(void);
 
 int main() {
 	Tupel_t *tupel = NULL, *tupelCompact = NULL;
+	char *string = NULL;
 
 	initDatamodel();
 
@@ -31,8 +32,10 @@ int main() {
 	setArraySlotByte(&model1,tupel,"net.packetType.macHdr",3,4);
 	setItemByte(&model1,tupel,"net.packetType.macProtocol",65);
 
+	string = (char*)malloc(6);
+	strcpy(string,"PFERD");
 	allocItem(&model1,tupel,2,"net.device.rxBytes");
-	setItemString(&model1,tupel,"net.device.rxBytes","PFERD");
+	setItemString(&model1,tupel,"net.device.rxBytes",string);
 
 	printf("test=%s\n",getItemString(&model1,tupel,"net.device.rxBytes"));
 	printf("test=%d\n",getItemInt(&model1,tupel,"net.device.txBytes"));
