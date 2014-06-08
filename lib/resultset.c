@@ -43,7 +43,7 @@ void freeTupel(DataModelElement_t *rootDM, Tupel_t *tupel) {
 		FREE(tupel->items[i]);
 	}
 
-	FREE(tupel->items);
+	//FREE(tupel->items);
 	FREE(tupel);
 }
 

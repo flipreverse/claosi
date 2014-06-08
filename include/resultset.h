@@ -235,15 +235,13 @@ static inline char* getArraySlotString(DataModelElement_t *rootDM,Tupel_t *tupel
 }
 
 static inline int initTupel(Tupel_t **tupel,unsigned long long timestamp, int numItems) {
-	if ((*tupel = (Tupel_t*)ALLOC(sizeof(Tupel_t))) == NULL) {
+	if ((*tupel = (Tupel_t*)ALLOC(sizeof(Tupel_t) + numItems * sizeof(Item_t**))) == NULL) {
 		return -1;
 	}
 	(*tupel)->isCompact = 0;
 	(*tupel)->timestamp = timestamp;
 	(*tupel)->itemLen = numItems;
-	if (((*tupel)->items = ALLOC_ITEM_ARRAY(numItems)) == NULL) {
-		return -1;
-	}
+	(*tupel)->items = (Item_t**)(*tupel + 1);
 	return 0;
 }
 
