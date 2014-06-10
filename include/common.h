@@ -8,6 +8,7 @@
 
 #define	ALLOC(size)							malloc(size)
 #define	FREE(ptr)							free(ptr)
+#define REALLOC(ptr,size)					realloc(ptr,size)
 
 enum {
 	ECHILDRENNUM		=	0x1,	// Wrong number of children
