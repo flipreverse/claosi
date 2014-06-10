@@ -32,6 +32,11 @@
 	varName.predicateLen = numPredicates; \
 	varName.predicates = (Predicate_t**)ALLOC(sizeof(Predicate_t) * numPredicates);
 
+#define INIT_FILTER(varName,childVar,numPredicates)	varName.op_type = FILTER; \
+	varName.op_child = childVar; \
+	varName.predicateLen = numPredicates; \
+	varName.predicates = (Predicate_t**)ALLOC(sizeof(Predicate_t) * numPredicates);
+
 #define SET_PREDICATE(varName, predType, predLeftType, predLeftName, predRightType, predRightName)	varName.type = predType; \
 	varName.left.type = predLeftType; \
 	strncpy((char*)&varName.left.value,predLeftName,MAX_NAME_LEN); \
