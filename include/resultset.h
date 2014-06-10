@@ -15,10 +15,6 @@
 
 #define ALLOC_ITEM_ARRAY(size)	(Item_t**)ALLOC(sizeof(Item_t**) * size)
 
-#define SET_ITEM_INT(tupelVarName,slot,itemValue)	*((int*)tupelVarName->items[slot]->value) = itemValue;
-#define SET_ITEM_FLOAT(tupelVarName,slot,itemValue)	*((double*)tupelVarName->items[slot]->value) = itemValue;
-#define SET_ITEM_BYTE(tupelVarName,slot,itemValue)	*((char*)tupelVarName->items[slot]->value) = itemValue;
-#define SET_ITEM_STRING(tupelVarName,slot,itemValue)	*((int*)tupelVarName->items[slot]->value) = itemValue;
 
 #define GET_MEMBER_POINTER_RETURN(tupelVar,rootDatamodel,typeName,returnValue)	int ret = 0, i = 0; \
 DataModelElement_t *dm = NULL; \
