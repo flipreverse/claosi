@@ -36,6 +36,27 @@ int main() {
 	strcpy(string,"PFERD");
 	allocItem(&model1,tupel,2,"net.device.rxBytes");
 	setItemString(&model1,tupel,"net.device.rxBytes",string);
+	
+	string = (char*)malloc(5);
+	strcpy(string,"eth0");
+	addItem(&tupel,3);
+	allocItem(&model1,tupel,3,"net.device");
+	setItemString(&model1,tupel,"net.device",string);
+
+	allocItem(&model1,tupel,4,"process.process.utime");
+	setItemFloat(&model1,tupel,"process.process.utime",3.14);
+
+	allocItem(&model1,tupel,5,"process.process.stime");
+	setItemArray(&model1,tupel,"process.process.stime",3);
+	string = (char*)malloc(3);
+	strcpy(string,"Ö");
+	setArraySlotString(&model1,tupel,"process.process.stime",0,string);
+	string = (char*)malloc(3);
+	strcpy(string,"Ä");
+	setArraySlotString(&model1,tupel,"process.process.stime",1,string);
+	string = (char*)malloc(3);
+	strcpy(string,"Ü");
+	setArraySlotString(&model1,tupel,"process.process.stime",2,string);
 
 	printf("test=%s\n",getItemString(&model1,tupel,"net.device.rxBytes"));
 	printf("test=%d\n",getItemInt(&model1,tupel,"net.device.txBytes"));
@@ -116,8 +137,8 @@ static void initDatamodel(void) {
 	ADD_CHILD(nsNet1,1,objSocket)
 	ADD_CHILD(nsNet1,2,typePacketType)
 
-	INIT_SOURCE_POD(srcUTime,"utime",objProcess,INT,getSrc)
-	INIT_SOURCE_POD(srcSTime,"stime",objProcess,INT,getSrc)
+	INIT_SOURCE_POD(srcUTime,"utime",objProcess,FLOAT,getSrc)
+	INIT_SOURCE_POD(srcSTime,"stime",objProcess,STRING|ARRAY,getSrc)
 	INIT_SOURCE_COMPLEX(srcProcessSockets,"sockets",objProcess,"net.socket",getSrc) //TODO: Should be an array
 	INIT_OBJECT(objProcess,"process",nsProcess,3,INT,regObjectCallback,unregObjectCallback)
 	ADD_CHILD(objProcess,0,srcUTime)
