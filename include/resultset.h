@@ -4,12 +4,8 @@
 #include <string.h>
 #include <stdio.h>
 #include <datamodel.h>
-#include <query.h>
 #include <debug.h>
 
-#define GET_BASE(varName)	(Operator_t*)&varName
-#define ADD_PREDICATE(varOperator,slot,predicateVar)	varOperator.predicates[slot] = &predicateVar;
-#define ADD_ELEMENT(varOperator,slot,elementVar)	varOperator.elements[slot] = &elementVar;
 #define IS_COMPACT(tupelVar)	((tupelVar->isCompact & 0x1) == 0x1)
 #define COMPACT_SIZE(tupelVar)	(tupelVar->isCompact >> 8)
 

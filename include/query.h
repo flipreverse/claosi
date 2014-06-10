@@ -3,6 +3,11 @@
 
 #include <common.h>
 #include <datamodel.h>
+#include <resultset.h>
+
+#define GET_BASE(varName)	(Operator_t*)&varName
+#define ADD_PREDICATE(varOperator,slot,predicateVar)	varOperator.predicates[slot] = &predicateVar;
+#define ADD_ELEMENT(varOperator,slot,elementVar)	varOperator.elements[slot] = &elementVar;
 
 #define INIT_SRC_STREAM(varName,srcName,isUrgent,childVar,srcFrequency)	strncpy((char*)&varName.st_name,srcName,MAX_NAME_LEN); \
 	varName.st_type = GEN_SOURCE; \
