@@ -28,18 +28,9 @@ static void freeAdditionalItemSpace(DataModelElement_t *rootDM, void *value, Dat
 static void freeItem(DataModelElement_t *rootDM, void *value, DataModelElement_t *element) {
 	int j = 0, k = 0, len = 0,type = 0;
 	
-	if (element->dataModelType == SOURCE) {
-		type = ((Source_t*)element->typeInfo)->returnType;
-	} else if (element->dataModelType == EVENT) {
-		type = ((Event_t*)element->typeInfo)->returnType;
-	} else if (element->dataModelType == OBJECT) {
-		type = ((Object_t*)element->typeInfo)->identifierType;
-	} else {
-		type = element->dataModelType;
-	}
-
+	GET_TYPE_FROM_DM(element,type);
 	if ((type & (STRING | ARRAY)) == (STRING | ARRAY)) {
-		DEBUG_MSG(1,"Freeing string array: %s (=%p)\n",element->name,(void*)*(PTR_TYPE*)value);
+		DEBUG_MSG(2,"Freeing string array: %s (=%p)\n",element->name,(void*)*(PTR_TYPE*)value);
 		len = *(int*)(*((PTR_TYPE*)value));
 		for (k = 0; k < len; k++) {
 			FREE(*(char**)((*(PTR_TYPE*)value) + sizeof(int) + k * SIZE_STRING));
@@ -69,7 +60,7 @@ void freeTupel(DataModelElement_t *rootDM, Tupel_t *tupel) {
 			continue;
 		}
 		freeItem(rootDM,tupel->items[i]->value,element);
-		DEBUG_MSG(1,"Freeing %s (%p)\n",element->name,tupel->items[i]->value);
+		DEBUG_MSG(2,"Freeing %s (%p)\n",element->name,tupel->items[i]->value);
 		FREE(tupel->items[i]->value);
 		FREE(tupel->items[i]);
 	}
@@ -99,16 +90,7 @@ static int getIndirectSize(DataModelElement_t *rootDM, void *value, DataModelEle
 static int getAddiotionalItemSize(DataModelElement_t *rootDM, void *value, DataModelElement_t *element) {
 	int k = 0, len = 0, size = 0, ret = 0, type = 0;
 	
-	if (element->dataModelType == SOURCE) {
-		type = ((Source_t*)element->typeInfo)->returnType;
-	} else if (element->dataModelType == EVENT) {
-		type = ((Event_t*)element->typeInfo)->returnType;
-	} else if (element->dataModelType == OBJECT) {
-		type = ((Object_t*)element->typeInfo)->identifierType;
-	} else {
-		type = element->dataModelType;
-	}
-
+	GET_TYPE_FROM_DM(element,type);
 	if ((type & (STRING | ARRAY)) == (STRING | ARRAY)) {
 		DEBUG_MSG(2,"Calculating size of string array %s@%p (%d)\n",element->name,(void*)*(PTR_TYPE*)value,size);
 		len = *(int*)(*((PTR_TYPE*)(value)));
@@ -178,15 +160,7 @@ static int copyAndCollectIndirectMem(DataModelElement_t *rootDM, void *oldValue,
 static int copyAndCollectAdditionalMem(DataModelElement_t *rootDM, void *oldValue, void *newValue, void *freeMem, DataModelElement_t *element) {
 	int k = 0, len = 0, size = 0, ret = 0, type = 0;
 	
-	if (element->dataModelType == SOURCE) {
-		type = ((Source_t*)element->typeInfo)->returnType;
-	} else if (element->dataModelType == EVENT) {
-		type = ((Event_t*)element->typeInfo)->returnType;
-	} else if (element->dataModelType == OBJECT) {
-		type = ((Object_t*)element->typeInfo)->identifierType;
-	} else {
-		type = element->dataModelType;
-	}
+	GET_TYPE_FROM_DM(element,type);
 	if ((type & (STRING | ARRAY)) == (STRING | ARRAY)) {
 		*((PTR_TYPE*)newValue) = (PTR_TYPE)freeMem;
 		len = size = *(int*)(*((PTR_TYPE*)(oldValue)));
