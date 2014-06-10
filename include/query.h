@@ -72,18 +72,18 @@ enum ObjectEvents {
 
 enum PredicateType {
 	EQUAL			=	0x0,
-	LE				=	0x1,
-	LEQ				=	0x2,
-	GE				=	0x4,
-	GEQ				=	0x8,
-	IN				=	0x10,
+	NEQ,
+	LE,
+	LEQ,
+	GE,
+	GEQ,
+	IN,
 	PREDICATETYPE_END
 };
 
 enum OperandType {
 	STREAM			=	0x0,
-	DATAMODEL		=	0x1,
-	POD				=	0x2,
+	POD,
 	OPERANDTYPE_END
 };
 
@@ -94,7 +94,7 @@ enum SizeUnit {
 	SIZEUNIT_END
 };
 
-typedef void (*queryCompletedFunction)(void);
+typedef void (*queryCompletedFunction)(Tupel_t*);
 
 typedef struct Operator {
 	unsigned short type;
@@ -161,6 +161,12 @@ typedef struct Select {
 	unsigned short elementsLen;
 	Element_t **elements;
 } Select_t;
+/**
+ * für alle elements: ist i-tes element vorhanden?
+ * 				ja: merken/makieren
+ * 				nein: -
+ * alle makierten elements in ein neues Tupel gießen
+ */
 
 typedef struct Sort {
 	Operator_t base;
@@ -171,8 +177,14 @@ typedef struct Sort {
 	unsigned short sizeUnit;
 	unsigned int size;
 } Sort_t;
+/**
+ * NOT IMPLEMENTET
+ */
 
 typedef Sort_t Group_t;
+/**
+ * NOT IMPLEMENTET
+ */
 
 typedef struct Join {
 	Operator_t base;
@@ -182,6 +194,10 @@ typedef struct Join {
 	unsigned short predicateLen;
 	Predicate_t **predicates;
 } Join_t;
+/**
+ * Datamodell: Object: +Fkt für 
+ * NOT IMPLEMENTET
+ */
 
 typedef struct Aggregate {
 	Operator_t base;
@@ -194,6 +210,9 @@ typedef struct Aggregate {
 	unsigned short advanceUnit;
 	unsigned int advance;
 } Aggregate_t;
+/**
+ * NOT IMPLEMENTET
+ */
 
 typedef struct __attribute__((packed)) Query {
 	struct Query *next;
@@ -207,5 +226,6 @@ int checkQuerySyntax(DataModelElement_t *rootDM, Operator_t *rootQuery, Operator
 int checkAndSanitizeElementPath(char *elemPath, char **elemPathSani, char **objId);
 void printQuery(Operator_t *root);
 void freeQuery(Operator_t *op, int freeOperator);
+void executeQuery(DataModelElement_t *rootDM, Query_t *query, Tupel_t **tupel);
 
 #endif // __QUERY_H__

@@ -1,9 +1,155 @@
 #include <stdlib.h>
 #include <string.h>
+#include <resultset.h>
 #include <query.h>
 
 #include <stdio.h>
 
+static int applyPredicate(DataModelElement_t *rootDM, Predicate_t *predicate, Tupel_t *tupel) {
+	int type = STRING, leftI = 0, rightI = 0;
+	char leftC = 0, rightC = 0;
+	double leftD = 0, rightD = 0;
+	void *valueLeft = NULL, *valueRight = NULL;
+	DataModelElement_t *dm = NULL;
+
+	#define DEFAULT_RETURN_VALUE 0
+	if (predicate->left.type == STREAM) {
+		GET_MEMBER_POINTER_ALGO_ONLY(tupel, rootDM, (char*)&predicate->left.value, dm, valueLeft);
+		GET_TYPE_FROM_DM(dm,type);
+	}
+	if (predicate->right.type == STREAM) {
+		GET_MEMBER_POINTER_ALGO_ONLY(tupel, rootDM, (char*)&predicate->right.value, dm, valueRight);
+		GET_TYPE_FROM_DM(dm,type);
+	}
+	#undef DEFAULT_RETURN_VALUE
+
+	if (type & ARRAY) {
+		return 0;
+	}
+	switch (type) {
+		case STRING:
+			if (predicate->left.type == POD) {
+				valueLeft = &predicate->left.value;
+				valueRight = (char*)*(PTR_TYPE*)valueRight;
+			} else {
+				valueRight = &predicate->right.value;
+				valueLeft = (char*)*(PTR_TYPE*)valueLeft;
+			}
+			if (predicate->type == EQUAL) {
+				return strcmp((char*)valueLeft,(char*)valueRight) == 0;
+			} else if (predicate->type == NEQ) {
+				return strcmp((char*)valueLeft,(char*)valueRight) != 0;
+			}
+			break;
+
+		case INT:
+			if (predicate->left.type == POD) {
+				leftI = atoi((char*)&predicate->left.value);
+				rightI = *(int*)valueRight;
+			} else {
+				leftI = *(int*)valueLeft;
+				rightI = atoi((char*)&predicate->right.value);
+			}
+			switch (predicate->type) {
+				case EQUAL: return leftI == rightI;
+				case NEQ: return leftI != rightI;
+				case LE: return leftI < rightI;
+				case LEQ: return leftI <= rightI;
+				case GE: return leftI > rightI;
+				case GEQ: return leftI >= rightI;
+			}
+			break;
+
+		case FLOAT:
+			if (predicate->left.type == POD) {
+				leftD = atof((char*)&predicate->left.value);
+				rightD = *(int*)valueRight;
+			} else {
+				leftD = *(double*)valueLeft;
+				rightD = atof((char*)&predicate->right.value);
+			}
+			switch (predicate->type) {
+				case EQUAL: return leftD == rightD;
+				case NEQ: return leftD != rightD;
+				case LE: return leftD < rightD;
+				case LEQ: return leftD <= rightD;
+				case GE: return leftD > rightD;
+				case GEQ: return leftD >= rightD;
+			}
+			break;
+
+		case BYTE:
+			if (predicate->left.type == POD) {
+				leftC = atoi((char*)&predicate->left.value);
+				rightC = *(char*)valueRight;
+			} else {
+				leftC = *(char*)valueLeft;
+				rightC = atoi((char*)&predicate->right.value);
+			}
+			switch (predicate->type) {
+				case EQUAL: return leftC == rightC;
+				case NEQ: return leftC != rightC;
+				case LE: return leftC < rightC;
+				case LEQ: return leftC <= rightC;
+				case GE: return leftC > rightC;
+				case GEQ: return leftC >= rightC;
+			}
+			break;
+	}
+
+	return 0;
+}
+
+static int applyFilter(DataModelElement_t *rootDM, Filter_t *filter, Tupel_t *tupel) {
+	int i = 0;
+	
+	for (i = 0; i < filter->predicateLen; i++) {
+		if (applyPredicate(rootDM,filter->predicates[i],tupel) == 0) {
+			return 0;
+		}
+	}
+	return 1;
+}
+
+void executeQuery(DataModelElement_t *rootDM, Query_t *query, Tupel_t **tupel) {
+	Operator_t *cur = query->root;
+	
+	while (cur != NULL) {
+		switch (cur->type) {
+			case GEN_SOURCE:
+			case GEN_OBJECT:
+			case GEN_EVENT:
+				break;
+
+			case FILTER:
+				if (applyFilter(rootDM,(Filter_t*)cur,*tupel) == 0) {
+					freeTupel(rootDM,*tupel);
+					*tupel = NULL;
+					return;
+				}
+				break;
+
+			case SELECT:
+				break;
+
+			case SORT:
+			case GROUP:
+				break;
+
+			case JOIN:
+				break;
+
+			case MAX:
+			case MIN:
+			case AVG:
+				break;
+		}
+		cur = cur->child;
+	}
+	if (query->onQueryCompleted != NULL) {
+		query->onQueryCompleted(*tupel);
+	}
+}
 
 void freeQuery(Operator_t *op, int freeOperator) {
 	Operator_t *cur = op, *prev = NULL;
@@ -64,11 +210,11 @@ void freeQuery(Operator_t *op, int freeOperator) {
  * - one operand is a POD and the other one refers to an object. In this case all predicate types are allowed except IN.
  * - ...
  */
+#if 0
 #define CHECK_PREDICATES(varOperator,varDM,tempVarDM)	for (j = 0; j < varOperator->predicateLen; j++) { \
 	switch (varOperator->predicates[j]->left.type) { \
 		case POD: \
 			break; \
-		case DATAMODEL: \
 		case STREAM: \
 			if (getDescription(varDM,varOperator->predicates[j]->left.value) == NULL) { \
 				return -ENOOPERAND; \
@@ -79,12 +225,10 @@ void freeQuery(Operator_t *op, int freeOperator) {
 				if (tempVarDM->dataModelType == REF) { \
 					tempVarDM = getDescription(varDM,(char*)tempVarDM->typeInfo); \
 					if (tempVarDM->dataModelType == COMPLEX) { \
-						printf("1: %s\n",tempVarDM->name); \
 						return -ENOTCOMPARABLE; \
 					} \
 				} else if (tempVarDM->dataModelType == SOURCE) { \
 					if (((Source_t*)tempVarDM->typeInfo)->returnType == COMPLEX) { \
-						printf("2: %s\n",tempVarDM->name); \
 						return -ENOTCOMPARABLE; \
 					} \
 				} \
@@ -94,7 +238,6 @@ void freeQuery(Operator_t *op, int freeOperator) {
 	switch (varOperator->predicates[j]->right.type) {\
 		case POD: \
 			break; \
-		case DATAMODEL: \
 		case STREAM: \
 			if ((tempVarDM = getDescription(varDM,varOperator->predicates[j]->right.value)) == NULL) { \
 				return -ENOOPERAND; \
@@ -105,12 +248,10 @@ void freeQuery(Operator_t *op, int freeOperator) {
 				if (tempVarDM->dataModelType == REF) { \
 					tempVarDM = getDescription(varDM,(char*)tempVarDM->typeInfo); \
 					if (tempVarDM->dataModelType == COMPLEX) { \
-						printf("1: %s\n",tempVarDM->name); \
 						return -ENOTCOMPARABLE; \
 					} \
 				} else if (tempVarDM->dataModelType == SOURCE) { \
 					if (((Source_t*)tempVarDM->typeInfo)->returnType == COMPLEX) { \
-						printf("2: %s\n",tempVarDM->name); \
 						return -ENOTCOMPARABLE; \
 					} \
 				} \
@@ -118,6 +259,9 @@ void freeQuery(Operator_t *op, int freeOperator) {
 			break; \
 	} \
 }
+#else
+#define CHECK_PREDICATES(varOperator,varDM,tempVarDM)
+#endif
 
 /*
  * TODO: maybe someone wanna do a more sophisticated syntax check. For now, this will do.

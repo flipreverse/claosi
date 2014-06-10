@@ -12,53 +12,75 @@ DECLARE_ELEMENTS(objProcess, srcUTime, srcSTime, srcProcessSockets)
 DECLARE_ELEMENTS(objSocket, objDevice, srcSocketType, srcSocketFlags, typePacketType, srcTXBytes, srcRXBytes, evtOnRX, evtOnTX)
 DECLARE_ELEMENTS(typeMacHdr, typeMacProt, typeNetHdr, typeNetProt, typeTranspHdr, typeTransProt, typeDataLen, typeSockRef)
 static void initDatamodel(void);
+static void initResultset(void);
 
 SourceStream_t txSrc;
 ObjectStream_t processObj;
 EventStream_t txStream, rxStream;
 Join_t joinProcess, joinApp;
-Predicate_t joinProcessPredicate, joinAppPredicate;
+Predicate_t joinProcessPredicate, joinAppPredicate, filterTXPredicate,filterRXPredicate;
+Filter_t filter;
+Select_t select;
+Tupel_t *tupel = NULL;
+Query_t query;
+
+void printResult(Tupel_t *tupel) {
+	printf("Received tupel:\t");
+	printTupel(&model1,tupel);
+}
 
 int main() {
 	int ret = 0;
 	Operator_t *errOperator = NULL;
 
+	query.next = NULL;
+	query.queryType = SYNC;
+	query.queryID = 0;
+	query.onQueryCompleted = printResult;
+
 	initDatamodel();
+	initResultset();
 	
-	INIT_EVT_STREAM(txStream,"net.device.onTx",0,GET_BASE(joinProcess))
+	INIT_EVT_STREAM(txStream,"net.device.onTx",0,GET_BASE(filter))
+	INIT_FILTER(filter, NULL,2)
+	ADD_PREDICATE(filter,0,filterTXPredicate)
+	ADD_PREDICATE(filter,1,filterRXPredicate)
+	SET_PREDICATE(filterTXPredicate,EQUAL, STREAM, "net.packetType.macProtocol", POD, "65")
+	SET_PREDICATE(filterRXPredicate,GEQ, STREAM, "process.process.utime", POD, "3.14")
+	if ((ret = checkQuerySyntax(&model1,GET_BASE(txStream),&errOperator)) == 0) {
+		printQuery(GET_BASE(txStream));
+	} else {
+		printf("Failed. Reason: %d\n",-ret);
+	}
+	query.root = GET_BASE(txStream);
+	executeQuery(&model1,&query,&tupel);
+
+	INIT_SRC_STREAM(txSrc,"process.process.utime",0,GET_BASE(joinProcess),100)
 	INIT_JOIN(joinProcess,"process.process", GET_BASE(joinApp),1)
 	ADD_PREDICATE(joinProcess,0,joinProcessPredicate)
-	SET_PREDICATE(joinProcessPredicate,IN, STREAM, "net.packetType.socket", DATAMODEL, "process.process.sockets")
+	SET_PREDICATE(joinProcessPredicate,IN, STREAM, "net.packetType.socket", STREAM, "process.process.sockets")
 	INIT_JOIN(joinApp,"ui.app", NULL,1)
 	ADD_PREDICATE(joinApp,0,joinAppPredicate)
-	SET_PREDICATE(joinAppPredicate,IN, STREAM, "process.process", DATAMODEL, "ui.app.processes")
-	if ((ret = checkQuerySyntax(&model1,GET_BASE(txStream),&errOperator)) == 0) {
-		printf("Ok.\n");
-		printQuery(GET_BASE(txStream));
-	} else {
-		printf("Failed. Reason: 0x%x\n",-ret);
-	}
-		printQuery(GET_BASE(txStream));
-
-	INIT_SRC_STREAM(txSrc,"process.process.utime",0,NULL,100)
+	SET_PREDICATE(joinAppPredicate,IN, STREAM, "process.process", STREAM, "ui.app.processes")
 	if ((ret = checkQuerySyntax(&model1,GET_BASE(txSrc),&errOperator)) == 0) {
-		printf("Ok.\n");
 		printQuery(GET_BASE(txSrc));
 	} else {
-		printf("Failed. Reason: 0x%x\n",-ret);
+		printf("Failed. Reason: %d\n",-ret);
 	}
 	
 	INIT_OBJ_STREAM(processObj,"process.process",0,NULL,OBJECT_CREATE)
 	if ((ret = checkQuerySyntax(&model1,GET_BASE(processObj),&errOperator)) == 0) {
-		printf("Ok.\n");
 		printQuery(GET_BASE(processObj));
 	} else {
-		printf("Failed. Reason: 0x%x\n",-ret);
+		printf("Failed. Reason: %d\n",-ret);
 	}
 	
 	freeQuery(GET_BASE(processObj),0);
 	freeQuery(GET_BASE(txStream),0);
 	freeQuery(GET_BASE(txSrc),0);
+	if (tupel != NULL) {
+		freeTupel(&model1,tupel);
+	}
 	freeSubtree(&model1,0);
 
 	return EXIT_SUCCESS;
@@ -84,6 +106,49 @@ static void regObjectCallback(objectChanged pCallback) {
 static void unregObjectCallback(objectChanged pCallback) {
 	
 };
+
+static void initResultset(void) {
+	char *string = NULL;
+
+	initTupel(&tupel,20140530,3);
+
+	allocItem(&model1,tupel,0,"net.device.txBytes");
+	setItemInt(&model1,tupel,"net.device.txBytes",4711);
+
+	allocItem(&model1,tupel,1,"net.packetType");
+	setItemArray(&model1,tupel,"net.packetType.macHdr",4);
+	setArraySlotByte(&model1,tupel,"net.packetType.macHdr",0,1);
+	setArraySlotByte(&model1,tupel,"net.packetType.macHdr",1,2);
+	setArraySlotByte(&model1,tupel,"net.packetType.macHdr",2,3);
+	setArraySlotByte(&model1,tupel,"net.packetType.macHdr",3,4);
+	setItemByte(&model1,tupel,"net.packetType.macProtocol",65);
+
+	string = (char*)malloc(6);
+	strcpy(string,"PFERD");
+	allocItem(&model1,tupel,2,"net.device.rxBytes");
+	setItemString(&model1,tupel,"net.device.rxBytes",string);
+	
+	string = (char*)malloc(5);
+	strcpy(string,"eth0");
+	addItem(&tupel,3);
+	allocItem(&model1,tupel,3,"net.device");
+	setItemString(&model1,tupel,"net.device",string);
+
+	allocItem(&model1,tupel,4,"process.process.utime");
+	setItemFloat(&model1,tupel,"process.process.utime",3.14);
+
+	allocItem(&model1,tupel,5,"process.process.stime");
+	setItemArray(&model1,tupel,"process.process.stime",3);
+	string = (char*)malloc(3);
+	strcpy(string,"Ö");
+	setArraySlotString(&model1,tupel,"process.process.stime",0,string);
+	string = (char*)malloc(3);
+	strcpy(string,"Ä");
+	setArraySlotString(&model1,tupel,"process.process.stime",1,string);
+	string = (char*)malloc(3);
+	strcpy(string,"Ü");
+	setArraySlotString(&model1,tupel,"process.process.stime",2,string);
+}
 
 static void initDatamodel(void) {
 	INIT_SOURCE_POD(srcSocketType,"type",objSocket,INT,getSrc)
@@ -127,7 +192,7 @@ static void initDatamodel(void) {
 	ADD_CHILD(nsNet1,1,objSocket)
 	ADD_CHILD(nsNet1,2,typePacketType)
 
-	INIT_SOURCE_POD(srcUTime,"utime",objProcess,INT,getSrc)
+	INIT_SOURCE_POD(srcUTime,"utime",objProcess,FLOAT,getSrc)
 	INIT_SOURCE_POD(srcSTime,"stime",objProcess,INT,getSrc)
 	INIT_SOURCE_COMPLEX(srcProcessSockets,"sockets",objProcess,"net.socket",getSrc) //TODO: Should be an array
 	INIT_OBJECT(objProcess,"process",nsProcess,3,INT,regObjectCallback,unregObjectCallback)
