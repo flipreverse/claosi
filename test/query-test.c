@@ -20,9 +20,10 @@ EventStream_t txStream, rxStream;
 Join_t joinProcess, joinApp;
 Predicate_t joinProcessPredicate, joinAppPredicate, filterTXPredicate,filterRXPredicate;
 Filter_t filter;
-Select_t select;
+Select_t selectTest;
 Tupel_t *tupel = NULL;
 Query_t query;
+Element_t elemPacket, elemUTime;
 
 void printResult(Tupel_t *tupel) {
 	printf("Received tupel:\t");
@@ -42,11 +43,14 @@ int main() {
 	initResultset();
 	
 	INIT_EVT_STREAM(txStream,"net.device.onTx",0,GET_BASE(filter))
-	INIT_FILTER(filter, NULL,2)
+	INIT_FILTER(filter,GET_BASE(selectTest),2)
 	ADD_PREDICATE(filter,0,filterTXPredicate)
 	ADD_PREDICATE(filter,1,filterRXPredicate)
 	SET_PREDICATE(filterTXPredicate,EQUAL, STREAM, "net.packetType.macProtocol", POD, "65")
 	SET_PREDICATE(filterRXPredicate,GEQ, STREAM, "process.process.utime", POD, "3.14")
+	INIT_SELECT(selectTest,NULL,2)
+	ADD_ELEMENT(selectTest,0,elemUTime,"process.process.utime")
+	ADD_ELEMENT(selectTest,1,elemPacket,"net.packetType")
 	if ((ret = checkQuerySyntax(&model1,GET_BASE(txStream),&errOperator)) == 0) {
 		printQuery(GET_BASE(txStream));
 	} else {
@@ -193,7 +197,7 @@ static void initDatamodel(void) {
 	ADD_CHILD(nsNet1,2,typePacketType)
 
 	INIT_SOURCE_POD(srcUTime,"utime",objProcess,FLOAT,getSrc)
-	INIT_SOURCE_POD(srcSTime,"stime",objProcess,INT,getSrc)
+	INIT_SOURCE_POD(srcSTime,"stime",objProcess,STRING|ARRAY,getSrc)
 	INIT_SOURCE_COMPLEX(srcProcessSockets,"sockets",objProcess,"net.socket",getSrc) //TODO: Should be an array
 	INIT_OBJECT(objProcess,"process",nsProcess,3,INT,regObjectCallback,unregObjectCallback)
 	ADD_CHILD(objProcess,0,srcUTime)

@@ -58,16 +58,22 @@ int main() {
 	strcpy(string,"Ü");
 	setArraySlotString(&model1,tupel,"process.process.stime",2,string);
 
-	printf("test=%s\n",getItemString(&model1,tupel,"net.device.rxBytes"));
-	printf("test=%d\n",getItemInt(&model1,tupel,"net.device.txBytes"));
-	printf("test=%hhd\n",getArraySlotByte(&model1,tupel,"net.packetType.macHdr",3));
-
 	printTupel(&model1,tupel);
+	printf("Deleting an item...\n");
+	deleteItem(&model1,tupel,0);
+	printTupel(&model1,tupel);
+
 	printf("Size of tupel: %d\n",getTupelSize(&model1,tupel));
+
 	tupelCompact = copyAndCollectTupel(&model1,tupel);
 	freeTupel(&model1,tupel);
 	setItemString(&model1,tupelCompact,"net.device.rxBytes","LOOOOL");
+
 	printTupel(&model1,tupelCompact);
+	printf("Deleting an item...\n");
+	deleteItem(&model1,tupelCompact,0);
+	printTupel(&model1,tupelCompact);
+
 	freeTupel(&model1,tupelCompact);
 	freeSubtree(&model1,0);
 
@@ -111,9 +117,12 @@ static void initDatamodel(void) {
 	INIT_PLAINTYPE(typeDataLen,"dataLength",typePacketType,BYTE)
 	INIT_REF(typeSockRef,"socket",typePacketType,"process.process.sockets")
 
-	INIT_TYPE(typePacketType,"packetType",nsNet1,2)
-	ADD_CHILD(typePacketType,0,typeMacHdr);
-	ADD_CHILD(typePacketType,1,typeMacProt);
+	INIT_TYPE(typePacketType,"packetType",nsNet1,5)
+	ADD_CHILD(typePacketType,4,typeMacHdr);
+	ADD_CHILD(typePacketType,0,typeMacProt);
+	ADD_CHILD(typePacketType,1,typeNetProt);
+	ADD_CHILD(typePacketType,2,typeTransProt);
+	ADD_CHILD(typePacketType,3,typeDataLen);
 	/*ADD_CHILD(typePacketType,2,typeNetHdr);
 	ADD_CHILD(typePacketType,3,typeNetProt);
 	ADD_CHILD(typePacketType,4,typeTranspHdr);
