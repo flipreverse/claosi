@@ -11,52 +11,12 @@
 
 #define ALLOC_ITEM_ARRAY(size)	(Item_t**)ALLOC(sizeof(Item_t**) * size)
 
-
-#define GET_MEMBER_POINTER_RETURN(tupelVar,rootDatamodel,typeName,returnValue)	int ret = 0, i = 0; \
-DataModelElement_t *dm = NULL; \
-char *token = NULL, *tokInput = NULL, *childName = NULL; \
-void *valuePtr = NULL; \
-for (i = 0; i < tupel->itemLen; i++) { \
-	if ((childName = strstr(typeName,tupelVar->items[i]->name)) != NULL) { \
-		break; \
-	} \
-} \
-if (i >= tupel->itemLen) { \
-	return returnValue; \
-} \
-valuePtr = tupelVar->items[i]->value; \
-childName += strlen(tupelVar->items[i]->name); \
-if ((dm = getDescription(rootDatamodel,tupelVar->items[i]->name)) == NULL) { \
-	return returnValue; \
-} \
-if (strlen(childName) > 0) { \
-	if ((tokInput = ALLOC(strlen(childName) + 1)) == NULL) { \
-		return returnValue; \
-	} \
-	strcpy(tokInput,childName); \
-	token = strtok(tokInput,"."); \
-	while (token) { \
-		if ((ret = getOffset(dm,token)) == -1) { \
-			return returnValue; \
-		} \
-		valuePtr = valuePtr + ret; \
-		for(i = 0; i < dm->childrenLen; i++) { \
-			if (strcmp(dm->children[i]->name,token) == 0) { \
-				break; \
-			} \
-		} \
-		if (i >= dm->childrenLen) { \
-			return returnValue; \
-		} \
-		dm = dm->children[i]; \
-		token = strtok(NULL,"."); \
-	} \
-	FREE(tokInput); \
-}
-
 #define GET_MEMBER_POINTER_ALGO_ONLY(tupelVar, rootDatamodelVar, typeName, datamodelElementVar, valuePtrVar) int ret = 0, i = 0; \
 char *token = NULL, *tokInput = NULL, *childName = NULL; \
 for (i = 0; i < tupelVar->itemLen; i++) { \
+	if (tupelVar->items[i] == NULL) { \
+		continue; \
+	} \
 	if ((childName = strstr(typeName,tupelVar->items[i]->name)) != NULL) { \
 		break; \
 	} \
@@ -322,5 +282,6 @@ void printTupel(DataModelElement_t *rootDM, Tupel_t *tupel);
 void freeTupel(DataModelElement_t *rootDM, Tupel_t *tupel);
 int getTupelSize(DataModelElement_t *rootDM, Tupel_t *tupel);
 Tupel_t* copyAndCollectTupel(DataModelElement_t *rootDM, Tupel_t *tupel);
+void deleteItem(DataModelElement_t *rootDM, Tupel_t *tupel, int slot);
 
 #endif // __RESULTSET_H__

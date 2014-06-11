@@ -1,47 +1,65 @@
 #include <resultset.h>
 
-static void freeItem(DataModelElement_t *rootDM, void *value, DataModelElement_t *element);
-
-static void freeAdditionalItemSpace(DataModelElement_t *rootDM, void *value, DataModelElement_t *element) {
-	int j = 0, k = 0, len = 0, offset = 0;
-
-	for (j = 0; j < element->childrenLen; j++) {
-		if ((offset = getOffset(element,element->children[j]->name)) == -1) {
-			continue;
-		}
-		if ((element->children[j]->dataModelType & (STRING | ARRAY)) == (STRING | ARRAY)) {
-			DEBUG_MSG(2,"Freeing string array: %s@%p, offset=%d\n",element->children[j]->name,(void*)*(PTR_TYPE*)(value+offset),offset);
-			len = *(int*)(*((PTR_TYPE*)(value + offset)));
-			for (k = 0; k < len; k++) {
-				FREE(*(char**)((*(PTR_TYPE*)(value + offset)) + sizeof(int) + k * SIZE_STRING));
-			}
-			FREE((char*)(*(PTR_TYPE*)(value + offset)));
-		} else if (element->children[j]->dataModelType & ARRAY || element->children[j]->dataModelType & STRING) {
-			DEBUG_MSG(2,"Freeing array/string: %s@%p, offset=%d\n",element->children[j]->name,(void*)*(PTR_TYPE*)(value + offset),offset);
-			FREE((void*)*(PTR_TYPE*)(value + offset));
-		} else if ((element->children[j]->dataModelType & TYPE) || (element->children[j]->dataModelType & COMPLEX)) {
-			freeItem(rootDM,value + offset,element->children[j]);
-		}
-	}
-}
-
 static void freeItem(DataModelElement_t *rootDM, void *value, DataModelElement_t *element) {
-	int j = 0, k = 0, len = 0,type = 0;
-	
-	GET_TYPE_FROM_DM(element,type);
-	if ((type & (STRING | ARRAY)) == (STRING | ARRAY)) {
-		DEBUG_MSG(2,"Freeing string array: %s (=%p)\n",element->name,(void*)*(PTR_TYPE*)value);
-		len = *(int*)(*((PTR_TYPE*)value));
-		for (k = 0; k < len; k++) {
-			FREE(*(char**)((*(PTR_TYPE*)value) + sizeof(int) + k * SIZE_STRING));
+	int i = 0, j = 0, k = 0, type = 0, len = 0, curOffset = 0, prevOffset = 0, steppedDown = 0;
+	DataModelElement_t *curNode = NULL, *parentNode = NULL;
+	void *curValue = NULL;
+
+	curNode = element;
+	curValue = value;
+	do {
+		steppedDown = 0;
+		GET_TYPE_FROM_DM(curNode,type);
+		if ((type & (STRING | ARRAY)) == (STRING | ARRAY)) {
+			DEBUG_MSG(2,"Freeing string array: %s@%p, offset=%d\n",curNode->name,(void*)*(PTR_TYPE*)curValue,curOffset);
+			len = *(int*)(*((PTR_TYPE*)curValue));
+			for (k = 0; k < len; k++) {
+				FREE(*(char**)((*(PTR_TYPE*)curValue) + sizeof(int) + k * SIZE_STRING));
+			}
+			FREE((char*)(*(PTR_TYPE*)curValue));
+		} else if (type & ARRAY || type & STRING) {
+			DEBUG_MSG(2,"Freeing array/string: %s@%p, offset=%d\n",curNode->name,(void*)*(PTR_TYPE*)curValue,curOffset);
+			FREE((void*)*(PTR_TYPE*)curValue);
+		} else if ((type & TYPE) || (type & COMPLEX)) {
+			curNode = curNode->children[0];
+			prevOffset = 0;
+			steppedDown = 1;
 		}
-		FREE((void*)(*(PTR_TYPE*)value));
-	} else if (type & ARRAY || type & STRING) {
-		DEBUG_MSG(2,"Freeing array/string: %s (=%p)\n",element->children[j]->name,(void*)*(PTR_TYPE*)value);
-		FREE((void*)*(PTR_TYPE*)value);
-	} else if ((type & TYPE) || (type & COMPLEX)) {
-		freeAdditionalItemSpace(rootDM,value,element);
-	}
+		if (steppedDown == 0) {
+			// Second, look for the current nodes sibling.
+			while(curNode != element) {
+				j = -1;
+				parentNode = curNode->parent;
+				for (i = 0; i < parentNode->childrenLen; i++) {
+					if (parentNode->children[i] == curNode) {
+						j = i;
+						break;
+					}
+				}
+				if (j == parentNode->childrenLen - 1) {
+					// If there is none, go one level up and look for this nodes sibling.
+					curNode = parentNode;
+					curValue -= curOffset;
+					if ((curOffset = getOffset(curNode->parent,curNode->name)) == -1) {
+						return;
+					}
+					prevOffset = curOffset;
+				} else {
+					// At least one sibling left. Go for it.
+					j++;
+					if ((curOffset = getOffset(parentNode,parentNode->children[j]->name)) == -1) {
+						return;
+					}
+					curNode = parentNode->children[j];
+					curValue = curValue + (curOffset - prevOffset);
+					prevOffset = curOffset;
+					break;
+				}
+			// Stop, if the root node is reached.
+			};
+		}
+	} while(curNode != element);
+	FREE(value);
 }
 
 void freeTupel(DataModelElement_t *rootDM, Tupel_t *tupel) {
@@ -53,6 +71,9 @@ void freeTupel(DataModelElement_t *rootDM, Tupel_t *tupel) {
 		return;
 	}
 	for (i = 0; i < tupel->itemLen; i++) {
+		if (tupel->items[i] == NULL) {
+			continue;
+		}
 		if ((element = getDescription(rootDM,tupel->items[i]->name)) == NULL) {
 			if (tupel->items[i]->value != NULL) {
 				FREE(tupel->items[i]->value);
@@ -61,7 +82,6 @@ void freeTupel(DataModelElement_t *rootDM, Tupel_t *tupel) {
 		}
 		freeItem(rootDM,tupel->items[i]->value,element);
 		DEBUG_MSG(2,"Freeing %s (%p)\n",element->name,tupel->items[i]->value);
-		FREE(tupel->items[i]->value);
 		FREE(tupel->items[i]);
 	}
 
@@ -69,65 +89,106 @@ void freeTupel(DataModelElement_t *rootDM, Tupel_t *tupel) {
 	FREE(tupel);
 }
 
-static int getAddiotionalItemSize(DataModelElement_t *rootDM, void *value, DataModelElement_t *element);
-
-static int getIndirectSize(DataModelElement_t *rootDM, void *value, DataModelElement_t *element) {
-	int j = 0, offset = 0, size = 0, ret = -1;
-
-	for (j = 0; j < element->childrenLen; j++) {
-		if ((offset = getOffset(element,element->children[j]->name)) == -1) {
-			return -1;
-		}
-		if ((ret = getAddiotionalItemSize(rootDM,value + offset, element->children[j])) == -1) {
-			return -1;
-		}
-		size += ret;
-	}
+void deleteItem(DataModelElement_t *rootDM, Tupel_t *tupel, int slot) {
+	DataModelElement_t *dm = NULL;
 	
+	if (!IS_COMPACT(tupel)) {
+		dm = getDescription(rootDM,tupel->items[slot]->name);
+		freeItem(rootDM,tupel->items[slot]->value,dm);
+		FREE(tupel->items[slot]);
+	}
+	tupel->items[slot] = NULL;
+}
+
+static int getItemSize(DataModelElement_t *rootDM, void *value, DataModelElement_t *element) {
+	int i = 0, j = 0, k = 0, type = 0, len = 0, size = 0, temp = 0, curOffset = 0, prevOffset = 0, steppedDown = 0;
+	DataModelElement_t *curNode = NULL, *parentNode = NULL;
+	void *curValue = NULL;
+
+	curNode = element;
+	curValue = value;
+	do {
+		steppedDown = 0;
+		GET_TYPE_FROM_DM(curNode,type);
+		printf("curNode=%s@%d\n",curNode->name,curOffset);
+		if ((type & (STRING | ARRAY)) == (STRING | ARRAY)) {
+			DEBUG_MSG(2,"Calculating size of string array %s@%p (%d)\n",curNode->name,(void*)*(PTR_TYPE*)curValue,size);
+			len = *(int*)(*((PTR_TYPE*)curValue));
+			temp = len * sizeof(char*) + sizeof(int);
+			for (k = 0; k < len; k++) {
+				temp += strlen(*(char**)((*(PTR_TYPE*)curValue) + sizeof(int) + k * SIZE_STRING)) + 1;
+			}
+			size += temp;
+			DEBUG_MSG(2,"Calculated size of string array %s@%p (%d)\n",curNode->name,(void*)*(PTR_TYPE*)curValue,size);
+		} else if (type & ARRAY) {
+			DEBUG_MSG(2,"Calculating size of array %s@%p (%d)\n",curNode->name,(void*)*(PTR_TYPE*)curValue,size);
+			len = *(int*)(*((PTR_TYPE*)curValue));
+			if ((temp = getDataModelSize(rootDM,curNode,1)) == -1) {
+				return -1;
+			}
+			size += len * temp + sizeof(int);
+			DEBUG_MSG(2,"Calculated size of array %s@%p (%d)\n",curNode->name,(void*)*(PTR_TYPE*)curValue,size);
+		} else if (type & STRING) {
+			DEBUG_MSG(2,"Calculating size of string %s@%p (%d)\n",curNode->name,(void*)*(PTR_TYPE*)curValue,size);
+			size += strlen((char*)(*(PTR_TYPE*)curValue)) + 1;
+			DEBUG_MSG(2,"Calculated size of string %s@%p (%d)\n",curNode->name,(void*)*(PTR_TYPE*)curValue,size);
+		} else if ((type & TYPE) || (type & COMPLEX)) {
+			curNode = curNode->children[0];
+			prevOffset = 0;
+			curOffset = 0;
+			steppedDown = 1;
+					printf("down: offset=%d\n",curOffset);
+		}
+		if (steppedDown == 0) {
+			// Second, look for the current nodes sibling.
+			while(curNode != element) {
+				j = -1;
+				parentNode = curNode->parent;
+				for (i = 0; i < parentNode->childrenLen; i++) {
+					if (parentNode->children[i] == curNode) {
+						j = i;
+						break;
+					}
+				}
+				if (j == parentNode->childrenLen - 1) {
+					// If there is none, go one level up and look for this nodes sibling.
+					curNode = parentNode;
+					curValue -= curOffset;
+					if ((curOffset = getOffset(curNode->parent,curNode->name)) == -1) {
+						return -1;
+					}
+					prevOffset = curOffset;
+					printf("up: offset=%d\n",curOffset);
+				} else {
+					// At least one sibling left. Go for it.
+					j++;
+					if ((curOffset = getOffset(parentNode,parentNode->children[j]->name)) == -1) {
+						return -1;
+					}
+					curNode = parentNode->children[j];
+					curValue = curValue + (curOffset - prevOffset);
+					prevOffset = curOffset;
+					break;
+				}
+			// Stop, if the root node is reached.
+			};
+		}
+	} while(curNode != element);
+
 	return size;
 }
 
-static int getAddiotionalItemSize(DataModelElement_t *rootDM, void *value, DataModelElement_t *element) {
-	int k = 0, len = 0, size = 0, ret = 0, type = 0;
-	
-	GET_TYPE_FROM_DM(element,type);
-	if ((type & (STRING | ARRAY)) == (STRING | ARRAY)) {
-		DEBUG_MSG(2,"Calculating size of string array %s@%p (%d)\n",element->name,(void*)*(PTR_TYPE*)value,size);
-		len = *(int*)(*((PTR_TYPE*)(value)));
-		size += len * sizeof(char*) + sizeof(int);
-		for (k = 0; k < len; k++) {
-			size += strlen(*(char**)((*(PTR_TYPE*)value) + sizeof(int) + k * SIZE_STRING)) + 1;
-		}
-		DEBUG_MSG(2,"Calculated size of string array %s@%p (%d)\n",element->name,(void*)*(PTR_TYPE*)value,size);
-	} else if (type & ARRAY) {
-		DEBUG_MSG(2,"Calculating size of array %s@%p (%d)\n",element->name,(void*)*(PTR_TYPE*)value,size);
-		len = *(int*)(*((PTR_TYPE*)value));
-		if ((ret = getDataModelSize(rootDM,element,1)) == -1) {
-			return -1;
-		}
-		size += len * ret + sizeof(int);
-		DEBUG_MSG(2,"Calculated size of array %s@%p (%d)\n",element->name,(void*)*(PTR_TYPE*)value,size);
-	} else if (type & STRING) {
-		DEBUG_MSG(2,"Calculating size of string %s@%p (%d)\n",element->name,(void*)*(PTR_TYPE*)value,size);
-		size += strlen((char*)(*(PTR_TYPE*)value)) + 1;
-		DEBUG_MSG(2,"Calculated size of string %s@%p (%d)\n",element->name,(void*)*(PTR_TYPE*)value,size);
-	} else if ((type & TYPE) || (type & COMPLEX)) {
-		if ((ret = getIndirectSize(rootDM,value,element)) == -1) {
-			return -1;
-		}
-		size += ret;
-	}
-	return size;
-}
+
 
 int getTupelSize(DataModelElement_t *rootDM, Tupel_t *tupel) {
 	DataModelElement_t *element = NULL;
 	int i = 0, ret = 0, size = 0;
 	
 	size = sizeof(Tupel_t);
-	size += sizeof(Item_t**) * tupel->itemLen;
-	size += sizeof(Item_t) * tupel->itemLen;
 	for (i = 0; i < tupel->itemLen; i++) {
+		if (tupel->items[i] == NULL) {
+			continue;
+		}
 		if ((element = getDescription(rootDM,tupel->items[i]->name)) == NULL) {
 			return -1;
 		}
@@ -135,11 +196,11 @@ int getTupelSize(DataModelElement_t *rootDM, Tupel_t *tupel) {
 			return -1;
 		}
 		size += ret;
-		if ((ret = getAddiotionalItemSize(rootDM,tupel->items[i]->value,element)) == -1) {
+		if ((ret = getItemSize(rootDM,tupel->items[i]->value,element)) == -1) {
 			return -1;
 		}
-		size += ret;
-	}	
+		size += ret + sizeof(Item_t) + sizeof(Item_t**);
+	}
 	
 	return size;
 }
@@ -199,7 +260,7 @@ static int copyAndCollectAdditionalMem(DataModelElement_t *rootDM, void *oldValu
 }
 
 Tupel_t* copyAndCollectTupel(DataModelElement_t *rootDM, Tupel_t *tupel) {
-	int size = 0, i = 0;
+	int size = 0, i = 0, j = 0, numItems = 0;
 	Tupel_t *ret = NULL;
 	DataModelElement_t *element = NULL;
 	void *newValue = NULL;
@@ -213,26 +274,35 @@ Tupel_t* copyAndCollectTupel(DataModelElement_t *rootDM, Tupel_t *tupel) {
 	memcpy(ret,tupel,sizeof(Tupel_t));
 	ret->isCompact = (size << 8) | 0x1;
 	ret->items = (Item_t**)(((void*)ret) + sizeof(Tupel_t));
-	memcpy(ret->items,tupel->items,sizeof(Item_t**) * tupel->itemLen);
-	newValue = ((void*)ret) + sizeof(Tupel_t) + sizeof(Item_t**) * tupel->itemLen;
-	DEBUG_MSG(2,"Copied tupel to %p and %d item pointers to %p. Starting with value pointer at %p\n",ret,ret->itemLen,ret->items,newValue);
-	
-	
 	for (i = 0; i < tupel->itemLen; i++) {
+		if (tupel->items[i] != NULL) {
+			numItems++;
+		}
+	}
+	memcpy(ret->items,tupel->items,sizeof(Item_t**) * numItems);
+	ret->itemLen = numItems;
+	newValue = ((void*)ret) + sizeof(Tupel_t) + sizeof(Item_t**) * numItems;
+	DEBUG_MSG(2,"Copied tupel to %p and %d item pointers to %p. Starting with value pointer at %p\n",ret,ret->itemLen,ret->items,newValue);
+
+	for (i = 0; i < tupel->itemLen; i++) {
+		if (tupel->items[i] == NULL) {
+			continue;
+		}
 		memcpy(newValue,tupel->items[i],sizeof(Item_t));
-		ret->items[i] = newValue;
-		ret->items[i]->value = NULL;
-		DEBUG_MSG(2,"Copied %d item (%s) to %p\n",i,ret->items[i]->name,ret->items[i]);
+		ret->items[j] = newValue;
+		ret->items[j]->value = NULL;
+		DEBUG_MSG(2,"Copied %d (->%d) item (%s) to %p\n",i,j,ret->items[j]->name,ret->items[j]);
 		newValue += sizeof(Item_t);
 		
 		element = getDescription(rootDM,tupel->items[i]->name);
 		size = getDataModelSize(rootDM,element,0);
 		memcpy(newValue,tupel->items[i]->value,size);
-		ret->items[i]->value = newValue;
-		DEBUG_MSG(2,"Copied %d items (%s) value bytes (%d) to %p\n",i,ret->items[i]->name,size,ret->items[i]->value);
+		ret->items[j]->value = newValue;
+		DEBUG_MSG(1,"Copied %d (->%d) items (%s) value bytes (%d) to %p\n",i,j,ret->items[j]->name,size,ret->items[j]->value);
 	
 		size += copyAndCollectAdditionalMem(rootDM,tupel->items[i]->value,newValue,newValue+size,element);
 		newValue += size;
+		j++;
 	}
 	
 	return ret;

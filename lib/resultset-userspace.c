@@ -91,6 +91,9 @@ void printTupel(DataModelElement_t *rootDM, Tupel_t *tupel) {
 		printf("size=%d,",COMPACT_SIZE(tupel));
 	}
 	for(i = 0; i < tupel->itemLen; i++) {
+		if (tupel->items[i] == NULL) {
+			continue;
+		}
 		printItem(rootDM,tupel->items[i]);
 		if (i < tupel->itemLen - 1) {
 			printf(",");
