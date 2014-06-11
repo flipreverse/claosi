@@ -7,7 +7,8 @@
 
 #define GET_BASE(varName)	(Operator_t*)&varName
 #define ADD_PREDICATE(varOperator,slot,predicateVar)	varOperator.predicates[slot] = &predicateVar;
-#define ADD_ELEMENT(varOperator,slot,elementVar)	varOperator.elements[slot] = &elementVar;
+#define ADD_ELEMENT(varOperator,slot,elementVar,elementName)	varOperator.elements[slot] = &elementVar; \
+	strncpy((char*)&elementVar.name,elementName,MAX_NAME_LEN);
 
 #define INIT_SRC_STREAM(varName,srcName,isUrgent,childVar,srcFrequency)	strncpy((char*)&varName.st_name,srcName,MAX_NAME_LEN); \
 	varName.st_type = GEN_SOURCE; \
@@ -30,12 +31,17 @@
 	varName.op_type = JOIN; \
 	varName.op_child = childVar; \
 	varName.predicateLen = numPredicates; \
-	varName.predicates = (Predicate_t**)ALLOC(sizeof(Predicate_t) * numPredicates);
+	varName.predicates = (Predicate_t**)ALLOC(sizeof(Predicate_t**) * numPredicates);
 
 #define INIT_FILTER(varName,childVar,numPredicates)	varName.op_type = FILTER; \
 	varName.op_child = childVar; \
 	varName.predicateLen = numPredicates; \
-	varName.predicates = (Predicate_t**)ALLOC(sizeof(Predicate_t) * numPredicates);
+	varName.predicates = (Predicate_t**)ALLOC(sizeof(Predicate_t**) * numPredicates);
+
+#define INIT_SELECT(varName,childVar,numElements) varName.op_type = SELECT; \
+	varName.op_child = childVar; \
+	varName.elementsLen = numElements; \
+	varName.elements = (Element_t**)ALLOC(sizeof(Element_t**) * numElements);
 
 #define SET_PREDICATE(varName, predType, predLeftType, predLeftName, predRightType, predRightName)	varName.type = predType; \
 	varName.left.type = predLeftType; \

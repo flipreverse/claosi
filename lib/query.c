@@ -100,14 +100,35 @@ static int applyPredicate(DataModelElement_t *rootDM, Predicate_t *predicate, Tu
 	return 0;
 }
 
-static int applyFilter(DataModelElement_t *rootDM, Filter_t *filter, Tupel_t *tupel) {
+static int applyFilter(DataModelElement_t *rootDM, Filter_t *filterOperator, Tupel_t *tupel) {
 	int i = 0;
 	
-	for (i = 0; i < filter->predicateLen; i++) {
-		if (applyPredicate(rootDM,filter->predicates[i],tupel) == 0) {
+	for (i = 0; i < filterOperator->predicateLen; i++) {
+		if (applyPredicate(rootDM,filterOperator->predicates[i],tupel) == 0) {
 			return 0;
 		}
 	}
+	return 1;
+}
+
+static int applySelect(DataModelElement_t *rootDM, Select_t *selectOperator, Tupel_t *tupel) {
+	int i = 0, j = 0, found = 0;
+	
+	for (i = 0; i < tupel->itemLen; i++) {
+		if (tupel->items[i] == NULL) {
+			continue;
+		}
+		found = 0;
+		for (j = 0; j < selectOperator->elementsLen; j++) {
+			if (strcmp((char*)&selectOperator->elements[j]->name,(char*)&tupel->items[i]->name) == 0) {
+				found = 1;
+			}
+		}
+		if (found == 0) {
+			deleteItem(rootDM,tupel,i);
+		}
+	}
+	
 	return 1;
 }
 
@@ -130,6 +151,11 @@ void executeQuery(DataModelElement_t *rootDM, Query_t *query, Tupel_t **tupel) {
 				break;
 
 			case SELECT:
+				if (applySelect(rootDM,(Select_t*)cur,*tupel) == 0) {
+					freeTupel(rootDM,*tupel);
+					*tupel = NULL;
+					return;
+				}
 				break;
 
 			case SORT:
@@ -270,7 +296,7 @@ void freeQuery(Operator_t *op, int freeOperator) {
  * - 
  */
 #define CHECK_ELEMENTS(varOperator,varDM) for (j = 0; j < varOperator->elementsLen; j++) { \
-	if (getDescription(varDM,varOperator->elements[i]->name) == NULL) { \
+	if (getDescription(varDM,varOperator->elements[j]->name) == NULL) { \
 		return -ENOELEMENT; \
 	} \
 }
