@@ -110,7 +110,7 @@ static int getItemSize(DataModelElement_t *rootDM, void *value, DataModelElement
 	do {
 		steppedDown = 0;
 		GET_TYPE_FROM_DM(curNode,type);
-		printf("curNode=%s@%d\n",curNode->name,curOffset);
+		//printf("curNode=%s@%d\n",curNode->name,curOffset);
 		if ((type & (STRING | ARRAY)) == (STRING | ARRAY)) {
 			DEBUG_MSG(2,"Calculating size of string array %s@%p (%d)\n",curNode->name,(void*)*(PTR_TYPE*)curValue,size);
 			len = *(int*)(*((PTR_TYPE*)curValue));
@@ -137,7 +137,7 @@ static int getItemSize(DataModelElement_t *rootDM, void *value, DataModelElement
 			prevOffset = 0;
 			curOffset = 0;
 			steppedDown = 1;
-					printf("down: offset=%d\n",curOffset);
+			//printf("down: offset=%d\n",curOffset);
 		}
 		if (steppedDown == 0) {
 			// Second, look for the current nodes sibling.
@@ -158,7 +158,7 @@ static int getItemSize(DataModelElement_t *rootDM, void *value, DataModelElement
 						return -1;
 					}
 					prevOffset = curOffset;
-					printf("up: offset=%d\n",curOffset);
+					//printf("up: offset=%d\n",curOffset);
 				} else {
 					// At least one sibling left. Go for it.
 					j++;

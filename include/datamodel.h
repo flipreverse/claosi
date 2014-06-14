@@ -5,9 +5,9 @@
 
 #define MAX_QUERIES_PER_DM	8
 
-#define ALLOC_CHILDREN_ARRAY(size)			(DataModelElement_t**)malloc(sizeof(DataModelElement_t**) * size)
-#define ALLOC_TYPEINFO(type)				(type*)malloc(sizeof(type))
-#define REALLOC_CHILDREN_ARRAY(ptr,size)	(DataModelElement_t**)realloc(ptr,sizeof(DataModelElement_t**) * size)		
+#define ALLOC_CHILDREN_ARRAY(size)			(DataModelElement_t**)ALLOC(sizeof(DataModelElement_t**) * size)
+#define ALLOC_TYPEINFO(type)				(type*)ALLOC(sizeof(type))
+#define REALLOC_CHILDREN_ARRAY(ptr,size)	(DataModelElement_t**)REALLOC(ptr,sizeof(DataModelElement_t**) * size)
 
 #define DECLARE_ELEMENT(elem)	static DataModelElement_t elem;
 #define DECLARE_ELEMENTS(vars...)	static DataModelElement_t vars;

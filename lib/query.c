@@ -1,16 +1,15 @@
-#include <stdlib.h>
-#include <string.h>
+#include <common.h>
 #include <resultset.h>
 #include <query.h>
-
-#include <stdio.h>
 
 static QueryID_t globalQueryID = 1;
 
 static int applyPredicate(DataModelElement_t *rootDM, Predicate_t *predicate, Tupel_t *tupel) {
 	int type = STRING, leftI = 0, rightI = 0;
 	char leftC = 0, rightC = 0;
+	#ifndef __KERNEL__
 	double leftD = 0, rightD = 0;
+	#endif
 	void *valueLeft = NULL, *valueRight = NULL;
 	DataModelElement_t *dm = NULL;
 
@@ -46,11 +45,15 @@ static int applyPredicate(DataModelElement_t *rootDM, Predicate_t *predicate, Tu
 
 		case INT:
 			if (predicate->left.type == POD) {
-				leftI = atoi((char*)&predicate->left.value);
+				if (STRTOINT((char*)&predicate->left.value,leftI) < 0) {
+					return 0;
+				}
 				rightI = *(int*)valueRight;
 			} else {
 				leftI = *(int*)valueLeft;
-				rightI = atoi((char*)&predicate->right.value);
+				if (STRTOINT((char*)&predicate->right.value,rightI) < 0) {
+					return 0;
+				}
 			}
 			switch (predicate->type) {
 				case EQUAL: return leftI == rightI;
@@ -63,9 +66,12 @@ static int applyPredicate(DataModelElement_t *rootDM, Predicate_t *predicate, Tu
 			break;
 
 		case FLOAT:
+			#ifdef __KERNEL__
+			return 0;
+			#else
 			if (predicate->left.type == POD) {
 				leftD = atof((char*)&predicate->left.value);
-				rightD = *(int*)valueRight;
+				rightD = *(double*)valueRight;
 			} else {
 				leftD = *(double*)valueLeft;
 				rightD = atof((char*)&predicate->right.value);
@@ -78,16 +84,22 @@ static int applyPredicate(DataModelElement_t *rootDM, Predicate_t *predicate, Tu
 				case GE: return leftD > rightD;
 				case GEQ: return leftD >= rightD;
 			}
+			#endif
 			break;
 
 		case BYTE:
 			if (predicate->left.type == POD) {
-				leftC = atoi((char*)&predicate->left.value);
+				if (STRTOCHAR((char*)&predicate->left.value,leftC) < 0) {
+					return -EPARAM;
+				}
 				rightC = *(char*)valueRight;
 			} else {
 				leftC = *(char*)valueLeft;
-				rightC = atoi((char*)&predicate->right.value);
+				if (STRTOCHAR((char*)&predicate->right.value,rightC) < 0) {
+					return -EPARAM;
+				}
 			}
+		PRINT_MSG("Comparing %hhd with %hhd\n",leftC,rightC);
 			switch (predicate->type) {
 				case EQUAL: return leftC == rightC;
 				case NEQ: return leftC != rightC;
@@ -563,13 +575,14 @@ int delQueries(DataModelElement_t *rootDM, Query_t *queries) {
 
 int checkAndSanitizeElementPath(char *elemPath, char **elemPathSani, char **objId) {
 	
-	char *elemPathCopy = NULL, *token = NULL, *objIdStart = NULL, *objIdEnd = NULL;
+	char *elemPathCopy = NULL, *elemPathCopy_ = NULL, *token = NULL, *objIdStart = NULL, *objIdEnd = NULL;
 	int strLen = strlen(elemPath);
 	
 	elemPathCopy = (char*)ALLOC(sizeof(char) * (strLen + 1));
 	if (!elemPathCopy) {
 		return -ENOMEMORY;
 	}
+	elemPathCopy_ = elemPathCopy;
 	*elemPathSani = (char*)ALLOC(sizeof(char) * (strLen + 1));
 	if (!*elemPathSani) {
 		return -ENOMEMORY;
@@ -577,7 +590,7 @@ int checkAndSanitizeElementPath(char *elemPath, char **elemPathSani, char **objI
 	
 	strcpy(elemPathCopy,elemPath);
 	
-	token = strtok(elemPathCopy,".");
+	token = strsep(&elemPathCopy,".");
 	while (token) {
 		objIdStart = strchr(token,'[');
 		if (objIdStart != NULL) {
@@ -604,12 +617,12 @@ int checkAndSanitizeElementPath(char *elemPath, char **elemPathSani, char **objI
 		} else {
 			strcat(*elemPathSani,token);
 		}
-		token = strtok(NULL,".");
+		token = strsep(&elemPathCopy,".");
 		if (token != NULL) {
 			strcat(*elemPathSani,".");
 		}
 	}
-	FREE(elemPathCopy);
+	FREE(elemPathCopy_);
 	
 	return 0;
 }

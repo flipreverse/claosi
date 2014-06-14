@@ -26,7 +26,7 @@ void printValue(DataModelElement_t *rootDM, DataModelElement_t *elem, void *valu
 	if (isArray) {
 		value = (void*) *((PTR_TYPE*)value);
 		len = *((int*)value);
-		printf("{");
+		PRINT_MSG("{");
 		value += SIZE_INT;
 		if (type & STRING) {
 			advance = SIZE_STRING;
@@ -41,30 +41,30 @@ void printValue(DataModelElement_t *rootDM, DataModelElement_t *elem, void *valu
 	for(i = 0; i < len; i++) {
 		cur = value + i * advance;
 		if (type & TYPE) {
-			printf("{");
+			PRINT_MSG("{");
 			for(i = 0; i < elem->childrenLen; i++) {
-				printf("%s=",elem->children[i]->name);
+				PRINT_MSG("%s=",elem->children[i]->name);
 				printValue(rootDM,elem->children[i],cur + getOffset(elem,elem->children[i]->name));
 				if(i < elem->childrenLen - 1) {
-					printf(",");
+					PRINT_MSG(",");
 				}
 			}
-			printf("}");
+			PRINT_MSG("}");
 		} else if (type & STRING) {
-			printf("%s",(char*)*((PTR_TYPE*)cur));
+			PRINT_MSG("%s",(char*)*((PTR_TYPE*)cur));
 		} else if (type & FLOAT) {
-			printf("%e",*(double*)cur);
+			PRINT_MSG("%e",*(double*)cur);
 		} else if (type & INT) {
-			printf("%d",*(int*)cur);
+			PRINT_MSG("%d",*(int*)cur);
 		} else if (type & BYTE) {
-			printf("%hhu",*((char*)cur));
+			PRINT_MSG("%hhu",*((char*)cur));
 		}
 		if (isArray && i < len - 1) {
-			printf(",");
+			PRINT_MSG(",");
 		}
 	}
 	if (isArray) {
-		printf("}");
+		PRINT_MSG("}");
 	}
 }
 
@@ -72,13 +72,13 @@ static void printItem(DataModelElement_t *rootDM, Item_t *item) {
 	DataModelElement_t *elem = NULL;
 	
 	if ((elem = getDescription(rootDM,item->name)) == NULL) {
-		printf("(null)");
+		PRINT_MSG("(null)");
 	} else {
-		printf("%s=",item->name);
+		PRINT_MSG("%s=",item->name);
 		if (item->value != NULL) {
 			printValue(rootDM,elem,item->value);
 		} else {
-			printf("(null)");
+			PRINT_MSG("(null)");
 		}
 	}
 }
@@ -86,9 +86,9 @@ static void printItem(DataModelElement_t *rootDM, Item_t *item) {
 void printTupel(DataModelElement_t *rootDM, Tupel_t *tupel) {
 	int i = 0;
 
-	printf("%llu,isCompact=%hhd,",tupel->timestamp,IS_COMPACT(tupel));
+	PRINT_MSG("%llu,isCompact=%hhd,",tupel->timestamp,IS_COMPACT(tupel));
 	if (IS_COMPACT(tupel)) {
-		printf("size=%d,",COMPACT_SIZE(tupel));
+		PRINT_MSG("size=%d,",COMPACT_SIZE(tupel));
 	}
 	for(i = 0; i < tupel->itemLen; i++) {
 		if (tupel->items[i] == NULL) {
@@ -96,8 +96,8 @@ void printTupel(DataModelElement_t *rootDM, Tupel_t *tupel) {
 		}
 		printItem(rootDM,tupel->items[i]);
 		if (i < tupel->itemLen - 1) {
-			printf(",");
+			PRINT_MSG(",");
 		}
 	}
-	printf("\n");
+	PRINT_MSG("\n");
 }

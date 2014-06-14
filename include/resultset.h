@@ -1,8 +1,11 @@
 #ifndef __RESULTSET_H__
 #define __RESULTSET_H__
 
+#ifdef __KERNEL__
+#include <linux/string.h>
+#else
 #include <string.h>
-#include <stdio.h>
+#endif
 #include <datamodel.h>
 #include <debug.h>
 
@@ -12,7 +15,7 @@
 #define ALLOC_ITEM_ARRAY(size)	(Item_t**)ALLOC(sizeof(Item_t**) * size)
 
 #define GET_MEMBER_POINTER_ALGO_ONLY(tupelVar, rootDatamodelVar, typeName, datamodelElementVar, valuePtrVar) int ret = 0, i = 0; \
-char *token = NULL, *tokInput = NULL, *childName = NULL; \
+char *token = NULL, *tokInput = NULL, *tokInput_ = NULL, *childName = NULL; \
 for (i = 0; i < tupelVar->itemLen; i++) { \
 	if (tupelVar->items[i] == NULL) { \
 		continue; \
@@ -30,11 +33,15 @@ if ((datamodelElementVar = getDescription(rootDatamodelVar,tupelVar->items[i]->n
 	return DEFAULT_RETURN_VALUE; \
 } \
 if (strlen(childName) > 0) { \
+	if (*childName == '.') { \
+		childName++; \
+	} \
 	if ((tokInput = ALLOC(strlen(childName) + 1)) == NULL) { \
 		return DEFAULT_RETURN_VALUE; \
 	} \
+	tokInput_ = tokInput; \
 	strcpy(tokInput,childName); \
-	token = strtok(tokInput,"."); \
+	token = strsep(&tokInput,"."); \
 	while (token) { \
 		if ((ret = getOffset(datamodelElementVar,token)) == -1) { \
 			return DEFAULT_RETURN_VALUE; \
@@ -49,9 +56,9 @@ if (strlen(childName) > 0) { \
 			return DEFAULT_RETURN_VALUE; \
 		} \
 		datamodelElementVar = datamodelElementVar->children[i]; \
-		token = strtok(NULL,"."); \
+		token = strsep(&tokInput,"."); \
 	} \
-	FREE(tokInput); \
+	FREE(tokInput_); \
 }
 
 #define GET_MEMBER_POINTER(tupelVar,rootDatamodel,typeName) DataModelElement_t *dm = NULL; \
@@ -125,14 +132,14 @@ static inline char getItemByte(DataModelElement_t *rootDM, Tupel_t *tupel, char 
 	return *(char*)valuePtr;
 	#undef DEFAULT_RETURN_VALUE
 }
-
+#ifndef __KERNEL__
 static inline double getItemFloat(DataModelElement_t *rootDM, Tupel_t *tupel, char *typeName) {
 	#define DEFAULT_RETURN_VALUE 0
 	GET_MEMBER_POINTER(tupel,rootDM,typeName);
 	return *(double*)valuePtr;
 	#undef DEFAULT_RETURN_VALUE
 }
-
+#endif
 static inline char* getItemString(DataModelElement_t *rootDM, Tupel_t *tupel, char *typeName) {
 	#define DEFAULT_RETURN_VALUE NULL
 	GET_MEMBER_POINTER(tupel,rootDM,typeName);
@@ -214,14 +221,14 @@ static inline int getArraySlotInt(DataModelElement_t *rootDM,Tupel_t *tupel,char
 	return *(int*)((*(PTR_TYPE*)(valuePtr)) + sizeof(int) + arraySlot * SIZE_INT);
 	#undef DEFAULT_RETURN_VALUE
 }
-
+#ifndef __KERNEL__
 static inline double getArraySlotFloat(DataModelElement_t *rootDM,Tupel_t *tupel,char *arrayTypeName,int arraySlot) {
 	#define DEFAULT_RETURN_VALUE 0
 	GET_MEMBER_POINTER(tupel,rootDM,arrayTypeName);
 	return *(double*)((*(PTR_TYPE*)(valuePtr)) + sizeof(int) + arraySlot * SIZE_FLOAT);
 	#undef DEFAULT_RETURN_VALUE
 }
-
+#endif
 static inline char* getArraySlotString(DataModelElement_t *rootDM,Tupel_t *tupel,char *arrayTypeName,int arraySlot) {
 	#define DEFAULT_RETURN_VALUE NULL
 	GET_MEMBER_POINTER(tupel,rootDM,arrayTypeName);

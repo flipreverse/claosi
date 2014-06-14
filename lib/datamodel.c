@@ -1,6 +1,5 @@
+#include <common.h>
 #include <datamodel.h>
-#include <stdlib.h>
-#include <string.h>
 
 /**
  * Tries to resolve an element described by {@link name} to an instance of DataModelElement_t.
@@ -10,7 +9,7 @@
  */
 DataModelElement_t* getDescription(DataModelElement_t *root, char *name) {
 	DataModelElement_t *cur = root;
-	char *token = NULL, *nameCopy = NULL;
+	char *token = NULL, *nameCopy = NULL, *nameCopy_ = NULL;
 	int found = 0, i = 0;
 	
 	if (root == NULL) {
@@ -21,9 +20,10 @@ DataModelElement_t* getDescription(DataModelElement_t *root, char *name) {
 	if (!nameCopy) {
 		return NULL;
 	}
+	nameCopy_ = nameCopy;
 	strcpy(nameCopy,name);
-	
-	token = strtok(nameCopy,".");
+
+	token = strsep(&nameCopy,".");
 	while (token) {
 		found = 0;
 		// Look up th current token in the current nodes children array.
@@ -37,12 +37,12 @@ DataModelElement_t* getDescription(DataModelElement_t *root, char *name) {
 		}
 		if (found) {
 			// Read the next token. If this was the last one, the loop will terminate and the function returns a pointer to the description.
-			token = strtok(NULL,".");
+			token = strsep(&nameCopy,".");
 		} else {
 			break;
 		}
 	};
-	FREE(nameCopy);
+	FREE(nameCopy_);
 	if (found) {
 		return cur;
 	}	
@@ -221,7 +221,7 @@ DataModelElement_t* copyNode(DataModelElement_t *node) {
 	Source_t *src = NULL;
 	int len = 0, i = 0;
 			
-	ret = (DataModelElement_t*)malloc(sizeof(DataModelElement_t));
+	ret = (DataModelElement_t*)ALLOC(sizeof(DataModelElement_t));
 	if (!ret) {
 		return NULL;
 	}
@@ -275,7 +275,7 @@ DataModelElement_t* copyNode(DataModelElement_t *node) {
 			
 		case REF:
 			len = strlen((const char*)node->typeInfo) + 1;
-			ret->typeInfo = malloc(sizeof(char) * len);
+			ret->typeInfo = ALLOC(sizeof(char) * len);
 			if (!ret->typeInfo) {
 				FREE(ret->children);
 				FREE(ret);

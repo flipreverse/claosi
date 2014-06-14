@@ -1,6 +1,6 @@
 # Author: A. Lochmann C 2010
 # Based on a makefile found at: http://ubuntuforums.org/showthread.php?t=1204739
-
+KDIR?=/lib/modules/`uname -r`/build
 INCLUDE_PATH:= ./include
 BUILD_PATH:=build
 OBJ_PATH:=$(BUILD_PATH)/obj
@@ -32,10 +32,13 @@ LDFLAGS :=
 
 LIB_DIR=lib
 LIB_SRC=datamodel.c query.c resultset.c api.c
-LIB_SRC_USERSPACE=$(LIB_SRC) datamodel-userspace.c query-userspace.c resultset-userspace.c
 LIB_OBJ=$(patsubst %.o,$(OBJ_PATH)/$(LIB_DIR)/%.o,$(LIB_SRC:%.c=%.o))
+
+LIB_SRC_USERSPACE=$(LIB_SRC) datamodel-userspace.c query-userspace.c resultset-userspace.c
 LIB_OBJ_USERSPACE=$(patsubst %.o,$(OBJ_PATH)/$(LIB_DIR)/%.o,$(LIB_SRC_USERSPACE:%.c=%.o))
 
+KERNEL_DIR:=$(BUILD_PATH)/kernel
+KERNEL_SRC= $(KERNEL_DIR)/$(LIB_DIR)/libkernel.c $(patsubst %.c,$(KERNEL_DIR)/$(LIB_DIR)/%.c,$(LIB_SRC))
 
 #***************************** BEGIN SOURCE FILES FOR TEST APPS *****************************
 
@@ -80,7 +83,7 @@ DIRS = $(TEST_DIR) $(LIB_DIR)
 #***************************** DO NOT EDIT BELOW THIS LINE EXCEPT YOU WANT TO ADD A TEST APPLICATION (OR YOU KNOW WHAT YOU'RE DOING :-) )***************************** 
 DEP = $(subst .o,.d,$(OBJ_USERSPACE)) $(subst .o,.d,$(TEST_OBJ))
 
-all: buildrepo git_version.h $(DEP) $(OBJ) $(OBJ_USERSPACE) $(TEST_BIN) $(TEST_OBJ)
+all: buildrepo git_version.h $(DEP) $(OBJ) $(OBJ_USERSPACE) $(TEST_BIN) $(TEST_OBJ) kernel
 
 #***************************** BEGIN TARGETS FOR TEST APPLICATION *****************************
 
@@ -106,6 +109,25 @@ objects: buildrepo $(OBJ) $(OBJ_USERSPACE) $(TEST_OBJ)
 
 tests: buildrepo $(TEST_BIN)
 
+$(KERNEL_DIR):
+	@echo "Creating dir $@..."
+	@mkdir $@
+
+$(KERNEL_DIR)/Kbuild:
+	ln -s ../../Kbuild $@
+
+$(KERNEL_DIR)/Makefile:
+	ln -s ../../Makefile $@
+
+$(KERNEL_DIR)/%: %
+	ln -s ../../../$< $@
+
+kernel: buildrepo $(KERNEL_SRC) $(KERNEL_DIR)/Kbuild $(KERNEL_DIR)/Makefile
+	$(MAKE) -C $(KDIR) KBUILD_EXTMOD=$$PWD/$(KERNEL_DIR) KBUILD_SRC=$(KDIR)
+	
+kernel-clean:
+	$(MAKE) -C $(KDIR) KBUILD_EXTMOD=$$PWD KBUILD_SRC=$(KDIR) clean
+
 # Every object file depends on its source and dependency file
 $(OBJ_PATH)/%.o: %.c $(OBJ_PATH)/%.d
 	@echo $(CC_TEXT)
@@ -120,7 +142,7 @@ git_version.h:
 	@echo "Generating version information"
 	@./git_version.sh -o git_version.h
 
-clean: clean-dep clean-obj
+clean: clean-dep clean-obj kernel-clean
 
 clean-dep:
 	$(RM) $(DEP)
@@ -132,18 +154,19 @@ distclean: clean
 	$(RM) -r $(BUILD_PATH)
 
 buildrepo:
-	@$(call make-repo)
+	@$(call make-repo,$(OBJ_PATH))
+	@$(call make-repo,$(KERNEL_DIR))
 
 #***************************** INCLUDE EVERY EXISTING DEPENDENCY FILE  *****************************
 include $(EXISTING_DEPS)
 #*****************************		END INCLUDE		       *****************************
 
-.PHONY: all clean clean-deps clean-obj distclean tests objects
+.PHONY: all clean clean-deps clean-obj distclean kernel-clean tests objects kernel kernel-clean
 
 define make-repo
    for dir in $(DIRS); \
    do \
-	mkdir -p $(OBJ_PATH)/$$dir; \
+	mkdir -p $(1)/$$dir; \
    done
 endef
 

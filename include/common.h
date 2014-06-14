@@ -1,14 +1,33 @@
 #ifndef __COMMON_H__
 #define __COMMON_H__
 
+#ifdef __KERNEL__
+#include <linux/slab.h>
+#include <linux/string.h>
+#else
 #include <stdlib.h>
+#include <string.h>
+#include <stdio.h>
+#endif
 
 #define MAX_NAME_LEN	40
 #define DECLARE_BUFFER(name)	char name[MAX_NAME_LEN + 1];
 
+#ifdef __KERNEL__
+#define PRINT_MSG(args...)	printk(KERN_INFO args);
+#define	ALLOC(size)							kmalloc(size,GFP_KERNEL)
+#define	FREE(ptr)							kfree(ptr)
+#define REALLOC(ptr,size)					krealloc(ptr,size,GFP_KERNEL)
+#define STRTOINT(strVar,intVar)				kstrtos32(strVar,10,&intVar)
+#define STRTOCHAR(strVar,charVar)			kstrtos8(strVar,10,&charVar)
+#else
+#define PRINT_MSG(args...)	printf(args);
 #define	ALLOC(size)							malloc(size)
 #define	FREE(ptr)							free(ptr)
 #define REALLOC(ptr,size)					realloc(ptr,size)
+#define STRTOINT(strVar,intVar)				(intVar = atoi(strVar))
+#define STRTOCHAR(strVar,charVar)			(charVar = atoi(strVar))
+#endif
 
 enum {
 	ECHILDRENNUM		=	0x1,	// Wrong number of children

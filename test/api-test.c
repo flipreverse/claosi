@@ -109,7 +109,7 @@ static void initQuery(void) {
 	INIT_EVT_STREAM(txStream,"net.device.onTx",0,GET_BASE(filter))
 	INIT_FILTER(filter,GET_BASE(selectTest),1)
 	ADD_PREDICATE(filter,0,filterTXPredicate)
-	SET_PREDICATE(filterTXPredicate,EQUAL, STREAM, "net.packetType.macProtocol", POD, "65")
+	SET_PREDICATE(filterTXPredicate,EQUAL, STREAM, "net.packetType.macProtocol", POD, "64")
 	INIT_SELECT(selectTest,NULL,1)
 	ADD_ELEMENT(selectTest,0,elemPacket,"net.packetType")
 }
