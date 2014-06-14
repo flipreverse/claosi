@@ -4,6 +4,8 @@
 #include <resultset.h>
 #include <stdio.h>
 #include <debug.h>
+#include <time.h>
+
 
 DECLARE_ELEMENTS(nsNet1, nsProcess, nsUI, model1)
 DECLARE_ELEMENTS(evtDisplay, typeEventType, srcForegroundApp, srcProcessess,objApp)
@@ -16,9 +18,10 @@ static void initDatamodel(void);
 int main() {
 	Tupel_t *tupel = NULL, *tupelCompact = NULL;
 	char *string = NULL;
+	clock_t startClock, endClock;
 
+	startClock = clock();
 	initDatamodel();
-
 	initTupel(&tupel,20140530,3);
 
 	allocItem(&model1,tupel,0,"net.device.txBytes");
@@ -57,6 +60,8 @@ int main() {
 	string = (char*)malloc(3);
 	strcpy(string,"Ü");
 	setArraySlotString(&model1,tupel,"process.process.stime",2,string);
+	endClock = clock();
+	printf("Start: %ld, end: %ld, diff: %ld\n",startClock, endClock, (endClock - startClock));
 
 	printTupel(&model1,tupel);
 	printf("Deleting an item...\n");
@@ -76,6 +81,8 @@ int main() {
 
 	freeTupel(&model1,tupelCompact);
 	freeDataModel(&model1,0);
+	endClock = clock();
+	printf("Start: %ld, end: %ld, diff: %ld/%e\n",startClock, endClock, (endClock - startClock),((double)endClock - (double)startClock) / (double)CLOCKS_PER_SEC);
 
 	return EXIT_SUCCESS;
 }
