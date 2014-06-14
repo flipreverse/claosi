@@ -54,7 +54,7 @@ DataModelElement_t* getDescription(DataModelElement_t *root, char *name) {
  * Frees all memory used by the subtree including {@link node}.
  * @param node The root of the subtree to be freed
  */
-void freeSubtree(DataModelElement_t *node, int freeNodeItself) {
+void freeDataModel(DataModelElement_t *node, int freeNodeItself) {
 	DataModelElement_t *curNode = node, *parent = NULL;
 	int i = 0, j = 0;
 
@@ -450,7 +450,7 @@ DataModelElement_t* copySubtree(DataModelElement_t *rootOrigin) {
 			if (curCopy->children[i] == NULL) {
 				curCopy->children[i] = copyNode(curOrigin->children[i]);
 				if (!curCopy->children[i]) {
-					freeSubtree(rootCopy,1);
+					freeDataModel(rootCopy,1);
 					return NULL;
 				}
 				curCopy->children[i]->parent = curCopy;
@@ -616,7 +616,7 @@ int mergeDataModel(int justCheckSyntax, DataModelElement_t *oldTree, DataModelEl
  * @param errElem a pointer to a pointer, where the function can store a pointer to the faulty node
  * @return 0 on success. A value below 0 indicates an error. The absolute value indicates the type of error
  */
-int checkSyntax(DataModelElement_t *rootCurrent,DataModelElement_t *rootToCheck, DataModelElement_t **errElem) {
+int checkDataModelSyntax(DataModelElement_t *rootCurrent,DataModelElement_t *rootToCheck, DataModelElement_t **errElem) {
 	DataModelElement_t *curNode = NULL;
 	Event_t *evt = NULL;
 	Object_t *obj = NULL;

@@ -85,7 +85,7 @@ int main() {
 	if (tupel != NULL) {
 		freeTupel(&model1,tupel);
 	}
-	freeSubtree(&model1,0);
+	freeDataModel(&model1,0);
 
 	return EXIT_SUCCESS;
 }

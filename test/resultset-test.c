@@ -75,7 +75,7 @@ int main() {
 	printTupel(&model1,tupelCompact);
 
 	freeTupel(&model1,tupelCompact);
-	freeSubtree(&model1,0);
+	freeDataModel(&model1,0);
 
 	return EXIT_SUCCESS;
 }

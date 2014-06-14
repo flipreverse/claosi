@@ -134,7 +134,7 @@ int main() {
 	printf("-------------------------\n");
 
 	printf("Is syntax correct? ...");
-	if ((ret = checkSyntax(NULL,copy,&errNode)) == 0) {
+	if ((ret = checkDataModelSyntax(NULL,copy,&errNode)) == 0) {
 		printf("yes\nIs datamodel mergeable? ...");
 		if ((ret = mergeDataModel(1,copy,&model2)) != 0) {
 			printf("not mergable; errcode = 0x%x\n",-ret);
@@ -168,9 +168,9 @@ int main() {
 	printf(".... found at %p\n",getDescription(copy,"net.device.rxBytes"));
 	printf("-------------------------\n");
 
-	freeSubtree(&model1,0);
-	freeSubtree(&model2,0);
-	freeSubtree(copy,1);
+	freeDataModel(&model1,0);
+	freeDataModel(&model2,0);
+	freeDataModel(copy,1);
 
 	return EXIT_SUCCESS;
 }

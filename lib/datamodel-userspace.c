@@ -2,6 +2,39 @@
 #include <stdio.h>
 
 
+const char* typeToString(unsigned short pType) {
+	unsigned short type = 0;
+	
+	if (pType & ARRAY) {
+		type = pType & ~ARRAY;
+		switch (type) {
+			case STRING:
+				return "str[]";
+			case INT:
+				return "int[]";
+			case FLOAT:
+				return "float[]";
+			case BYTE:
+				return "byte[]";
+			default:
+				return "n.a.[]";
+		}
+	} else {
+		switch (pType) {
+			case STRING:
+				return "str";
+			case INT:
+				return "int";
+			case FLOAT:
+				return "float";
+			case BYTE:
+				return "byte";
+			default:
+				return "n.a.";
+		}
+	}
+};
+
 /**
  * Prints the datamodel {@link root} to stdout.
  * @param root the root node of the datamodel
@@ -110,36 +143,3 @@ void printDatamodel(DataModelElement_t *root) {
 
 	printf("}\n");
 }
-
-const char* typeToString(unsigned short pType) {
-	unsigned short type = 0;
-	
-	if (pType & ARRAY) {
-		type = pType & ~ARRAY;
-		switch (type) {
-			case STRING:
-				return "str[]";
-			case INT:
-				return "int[]";
-			case FLOAT:
-				return "float[]";
-			case BYTE:
-				return "byte[]";
-			default:
-				return "n.a.[]";
-		}
-	} else {
-		switch (pType) {
-			case STRING:
-				return "str";
-			case INT:
-				return "int";
-			case FLOAT:
-				return "float";
-			case BYTE:
-				return "byte";
-			default:
-				return "n.a.";
-		}
-	}
-};
