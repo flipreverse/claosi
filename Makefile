@@ -18,9 +18,11 @@ EXISTING_DEPS:=
 endif
 
 # COMPILER AND LINKER FLAGS
-CC:=gcc
+#CROSS_COMPILE=/opt/arm-linux-androideabi-4.6/bin/arm-linux-androideabi-
+CROSS_COMPILE=
+CC:=$(CROSS_COMPILE)gcc
 CFLAGS := -Wall -Werror -c -g -I$(INCLUDE_PATH)
-LDFLAGS := 
+LDFLAGS :=
 
 #***************************** ADD YOUR LISTING OF SOURCE FILES FOR EACH DIRECTORY HERE *****************************
 # Example:
@@ -29,7 +31,7 @@ LDFLAGS :=
 #<name>_OBJ=$(patsubst %.o,$(OBJ_PATH)/$(<name>_DIR)/%.o,$(<name>_SRC:%.cpp=%.o))
 
 LIB_DIR=lib
-LIB_SRC=datamodel.c query.c resultset.c
+LIB_SRC=datamodel.c query.c resultset.c api.c
 LIB_SRC_USERSPACE=$(LIB_SRC) datamodel-userspace.c query-userspace.c resultset-userspace.c
 LIB_OBJ=$(patsubst %.o,$(OBJ_PATH)/$(LIB_DIR)/%.o,$(LIB_SRC:%.c=%.o))
 LIB_OBJ_USERSPACE=$(patsubst %.o,$(OBJ_PATH)/$(LIB_DIR)/%.o,$(LIB_SRC_USERSPACE:%.c=%.o))
@@ -54,6 +56,10 @@ RESULTSET_TEST=resultset-test
 RESULTSET_TEST_SRC = resultset-test.c
 RESULTSET_TEST_OBJ=$(patsubst %.o,$(OBJ_PATH)/$(TEST_DIR)/%.o,$(RESULTSET_TEST_SRC:%.c=%.o))
 
+API_TEST=api-test
+API_TEST_SRC = api-test.c
+API_TEST_OBJ=$(patsubst %.o,$(OBJ_PATH)/$(TEST_DIR)/%.o,$(API_TEST_SRC:%.c=%.o))
+
 #*****************************			END SOURCE FILE				*****************************
 
 # ADD YOUR NEW OBJ VAR HERE
@@ -63,8 +69,8 @@ OBJ_USERSPACE = $(OBJ) $(LIB_OBJ_USERSPACE)
 
 # ADD HERE THE VAR FOR THE TEST APP
 # Example: $(<name>_OBJ)
-TEST_OBJ = $(QUERY_TEST_OBJ) $(DATAMODEL_TEST_OBJ) $(RESULTSET_TEST_OBJ)
-TEST_BIN = $(QUERY_TEST) $(DATAMODEL_TEST) $(RESULTSET_TEST)
+TEST_OBJ = $(QUERY_TEST_OBJ) $(DATAMODEL_TEST_OBJ) $(RESULTSET_TEST_OBJ) $(API_TEST_OBJ)
+TEST_BIN = $(QUERY_TEST) $(DATAMODEL_TEST) $(RESULTSET_TEST) $(API_TEST)
 TEST_BIN := $(addprefix $(BUILD_PATH)/,$(TEST_BIN))
 
 # ADD HERE YOUR NEW SOURCE DIRECTORY
@@ -87,6 +93,10 @@ $(BUILD_PATH)/$(DATAMODEL_TEST): $(DATAMODEL_TEST_OBJ) $(OBJ_USERSPACE)
 	@$(CC) $^ $(LDFLAGS) -o $@
 
 $(BUILD_PATH)/$(RESULTSET_TEST): $(RESULTSET_TEST_OBJ) $(OBJ_USERSPACE)
+	@echo $(LD_TEXT)
+	@$(CC) $^ $(LDFLAGS) -o $@
+
+$(BUILD_PATH)/$(API_TEST): $(API_TEST_OBJ) $(OBJ_USERSPACE)
 	@echo $(LD_TEXT)
 	@$(CC) $^ $(LDFLAGS) -o $@
 

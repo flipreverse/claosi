@@ -34,7 +34,11 @@ enum {
 	ENOOPERAND,						// At least one operand does not name an element present in the datamodel
 	ENOFERQ,						// No frequency provided
 	ENOOBJSTATUS,					// No valid bitmask for an objects status were provided
-	EWRONGSTREAMTYPE				// The provided stream origin and the corresponding element in the datamodel does not have the same type
+	EWRONGSTREAMTYPE,				// The provided stream origin and the corresponding element in the datamodel does not have the same type
+	EPARAM,
+	ERESULTFUNCPTR,
+	EQUERYTYPE,
+	EMAXQUERIES
 };
 
 #endif // __COMMON_H__

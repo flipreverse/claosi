@@ -3,6 +3,8 @@
 
 #include <common.h>
 
+#define MAX_QUERIES_PER_DM	8
+
 #define ALLOC_CHILDREN_ARRAY(size)			(DataModelElement_t**)malloc(sizeof(DataModelElement_t**) * size)
 #define ALLOC_TYPEINFO(type)				(type*)malloc(sizeof(type))
 #define REALLOC_CHILDREN_ARRAY(ptr,size)	(DataModelElement_t**)realloc(ptr,sizeof(DataModelElement_t**) * size)		
@@ -10,9 +12,6 @@
 #define DECLARE_ELEMENT(elem)	static DataModelElement_t elem;
 #define DECLARE_ELEMENTS(vars...)	static DataModelElement_t vars;
 #define ADD_CHILD(node,slot,child)	node.children[slot] = &child;
-
-#define GET_MEMBER(varDM,varPtr,name)	(varPtr + getOffset(varDM,name))
-#define setInt(varPtr,value)	sprintf((char*)varPtr,"%d",value)
 
 enum DataModelType {
 	MODEL			=	0x0,
@@ -69,11 +68,14 @@ typedef struct TypeItem {
 typedef void (*activateEventCallback)(void);
 typedef void (*deactivateEventCallback)(void);
 
+struct Query;
+
 typedef struct Event {
 	unsigned short returnType;
 	DECLARE_BUFFER(returnName);
 	activateEventCallback activate;
 	deactivateEventCallback deactivate;
+	struct Query *queries[MAX_QUERIES_PER_DM];
 } Event_t;
 
 typedef void* (*getSource)(void);
@@ -82,6 +84,7 @@ typedef struct Source {
 	unsigned short returnType;
 	DECLARE_BUFFER(returnName);
 	getSource callback;
+	struct Query *queries[MAX_QUERIES_PER_DM];
 } Source_t;
 
 typedef void (*activateObject)(void);
@@ -91,6 +94,7 @@ typedef struct Object {
 	unsigned short identifierType;
 	activateObject activate;
 	deactivateObject deactivate;
+	struct Query *queries[MAX_QUERIES_PER_DM];
 } Object_t;
 
 void printDatamodel(DataModelElement_t *root);

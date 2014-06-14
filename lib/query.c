@@ -5,6 +5,8 @@
 
 #include <stdio.h>
 
+static QueryID_t globalQueryID = 1;
+
 static int applyPredicate(DataModelElement_t *rootDM, Predicate_t *predicate, Tupel_t *tupel) {
 	int type = STRING, leftI = 0, rightI = 0;
 	char leftC = 0, rightC = 0;
@@ -172,8 +174,8 @@ void executeQuery(DataModelElement_t *rootDM, Query_t *query, Tupel_t **tupel) {
 		}
 		cur = cur->child;
 	}
-	if (query->onQueryCompleted != NULL) {
-		query->onQueryCompleted(*tupel);
+	if (query->onQueryCompleted != NULL && *tupel != NULL) {
+		query->onQueryCompleted(query->queryID,*tupel);
 	}
 }
 
@@ -446,6 +448,114 @@ int checkQuerySyntax(DataModelElement_t *rootDM, Operator_t *rootQuery, Operator
 		
 		i++;
 		cur = cur->child;
+	} while(cur != NULL);
+
+	return 0;
+}
+
+int checkQueries(DataModelElement_t *rootDM, Query_t *queries, Operator_t **errOperator, int syncAllowed) {
+	int ret = 0;
+	Query_t *cur = queries;
+	
+	do {
+		if (cur->root == NULL) {
+			return -EPARAM;
+		}
+		if (cur->onQueryCompleted == NULL) {
+			return -ERESULTFUNCPTR;
+		}
+		if (syncAllowed == 0 && cur->queryType == SYNC) {
+			return -EQUERYTYPE;
+		}
+		if ((ret = checkQuerySyntax(rootDM,cur->root,errOperator)) < 0) {
+			return ret;
+		}
+		cur = cur->next;
+	} while(cur != NULL);
+	
+	return 0;
+}
+
+int addQueries(DataModelElement_t *rootDM, Query_t *queries) {
+	DataModelElement_t *dm = NULL;
+	Query_t *cur = queries, **regQueries = NULL;
+	char *name = NULL;
+	int i = 0;
+	
+	do {
+		switch (cur->root->type) {
+			case GEN_EVENT:
+			case GEN_OBJECT:
+			case GEN_SOURCE:
+				name = ((GenStream_t*)cur->root)->name;
+				break;
+		}
+
+		dm = getDescription(rootDM,name);
+		switch (dm->dataModelType) {
+			case EVENT:
+				regQueries = ((Event_t*)dm->typeInfo)->queries;
+				break;
+
+			case OBJECT:
+				regQueries = ((Object_t*)dm->typeInfo)->queries;
+				break;
+
+			case SOURCE:
+				regQueries = ((Source_t*)dm->typeInfo)->queries;
+				break;
+		}
+		for (i = 0; i < MAX_QUERIES_PER_DM; i++) {
+			if (regQueries[i] == NULL) {
+				break;
+			}
+		}
+		if (i >= MAX_QUERIES_PER_DM) {
+			return -EMAXQUERIES;
+		}
+		regQueries[i] = cur;
+		cur->queryID = MAKE_QUERY_ID(globalQueryID,i);
+		globalQueryID++;
+
+		cur = cur->next;
+	} while(cur != NULL);
+
+	return 0;
+}
+
+int delQueries(DataModelElement_t *rootDM, Query_t *queries) {
+	DataModelElement_t *dm = NULL;
+	Query_t *cur = queries, **regQueries = NULL;
+	char *name = NULL;
+	int id = 0;
+	
+	do {
+		switch (cur->root->type) {
+			case GEN_EVENT:
+			case GEN_OBJECT:
+			case GEN_SOURCE:
+				name = ((GenStream_t*)cur->root)->name;
+				break;
+		}
+
+		dm = getDescription(rootDM,name);
+		switch (dm->dataModelType) {
+			case EVENT:
+				regQueries = ((Event_t*)dm->typeInfo)->queries;
+				break;
+
+			case OBJECT:
+				regQueries = ((Object_t*)dm->typeInfo)->queries;
+				break;
+
+			case SOURCE:
+				regQueries = ((Source_t*)dm->typeInfo)->queries;
+				break;
+		}
+		id = GET_LOCAL_QUERY_ID(cur->queryID);
+		regQueries[id] = NULL;
+
+		cur = cur->next;
 	} while(cur != NULL);
 
 	return 0;

@@ -5,6 +5,10 @@
 #include <datamodel.h>
 #include <resultset.h>
 
+#define MAKE_QUERY_ID(globalID,localID)	((globalID << 8) | (localID & 0xf))
+#define GET_LOCAL_QUERY_ID(queryID)		(queryID & 0xf)
+#define GET_GLOBAL_QUERY_ID(queryID)	(queryID >> 8)
+
 #define GET_BASE(varName)	(Operator_t*)&varName
 #define ADD_PREDICATE(varOperator,slot,predicateVar)	varOperator.predicates[slot] = &predicateVar;
 #define ADD_ELEMENT(varOperator,slot,elementVar,elementName)	varOperator.elements[slot] = &elementVar; \
@@ -100,7 +104,7 @@ enum SizeUnit {
 	SIZEUNIT_END
 };
 
-typedef void (*queryCompletedFunction)(Tupel_t*);
+typedef void (*queryCompletedFunction)(QueryID_t,Tupel_t*);
 
 typedef struct Operator {
 	unsigned short type;
@@ -184,12 +188,12 @@ typedef struct Sort {
 	unsigned int size;
 } Sort_t;
 /**
- * NOT IMPLEMENTET
+ * NOT IMPLEMENTED
  */
 
 typedef Sort_t Group_t;
 /**
- * NOT IMPLEMENTET
+ * NOT IMPLEMENTED
  */
 
 typedef struct Join {
@@ -202,7 +206,7 @@ typedef struct Join {
 } Join_t;
 /**
  * Datamodell: Object: +Fkt für 
- * NOT IMPLEMENTET
+ * NOT IMPLEMENTED
  */
 
 typedef struct Aggregate {
@@ -229,6 +233,9 @@ typedef struct __attribute__((packed)) Query {
 } Query_t;
 
 int checkQuerySyntax(DataModelElement_t *rootDM, Operator_t *rootQuery, Operator_t **errOperator);
+int checkQueries(DataModelElement_t *rootDM, Query_t *queries, Operator_t **errOperator, int syncAllowed);
+int addQueries(DataModelElement_t *rootDM, Query_t *queries);
+int delQueries(DataModelElement_t *rootDM, Query_t *queries);
 int checkAndSanitizeElementPath(char *elemPath, char **elemPathSani, char **objId);
 void printQuery(Operator_t *root);
 void freeQuery(Operator_t *op, int freeOperator);

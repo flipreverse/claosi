@@ -4,6 +4,8 @@
 #include <resultset.h>
 #include <stdio.h>
 #include <debug.h>
+#include <api.h>
+#include <time.h>
 
 DECLARE_ELEMENTS(nsNet1, nsProcess, nsUI, model1)
 DECLARE_ELEMENTS(evtDisplay, typeEventType, srcForegroundApp, srcProcessess,objApp)
@@ -12,18 +14,16 @@ DECLARE_ELEMENTS(objProcess, srcUTime, srcSTime, srcProcessSockets)
 DECLARE_ELEMENTS(objSocket, objDevice, srcSocketType, srcSocketFlags, typePacketType, srcTXBytes, srcRXBytes, evtOnRX, evtOnTX)
 DECLARE_ELEMENTS(typeMacHdr, typeMacProt, typeNetHdr, typeNetProt, typeTranspHdr, typeTransProt, typeDataLen, typeSockRef)
 static void initDatamodel(void);
-static void initResultset(void);
+static void initQuery(void);
+static void issueEvent(void);
 
-SourceStream_t txSrc;
-ObjectStream_t processObj;
-EventStream_t txStream, rxStream;
-Join_t joinProcess, joinApp;
-Predicate_t joinProcessPredicate, joinAppPredicate, filterTXPredicate,filterRXPredicate;
-Filter_t filter;
-Select_t selectTest;
-Tupel_t *tupel = NULL;
-Query_t query;
-Element_t elemPacket, elemUTime;
+static EventStream_t txStream;
+static Predicate_t filterTXPredicate;
+static Filter_t filter;
+static Select_t selectTest;
+static Query_t query;
+static Element_t elemPacket;
+static Tupel_t *tupel = NULL;
 
 void printResult(QueryID_t id, Tupel_t *tupel) {
 	printf("Received tupel:\t");
@@ -32,63 +32,35 @@ void printResult(QueryID_t id, Tupel_t *tupel) {
 
 int main() {
 	int ret = 0;
-	Operator_t *errOperator = NULL;
+	clock_t startClock, endClock;
 
-	query.next = NULL;
-	query.queryType = SYNC;
-	query.queryID = 0;
-	query.onQueryCompleted = printResult;
-
+	startClock = clock();
 	initDatamodel();
-	initResultset();
-	
-	INIT_EVT_STREAM(txStream,"net.device.onTx",0,GET_BASE(filter))
-	INIT_FILTER(filter,GET_BASE(selectTest),2)
-	ADD_PREDICATE(filter,0,filterTXPredicate)
-	ADD_PREDICATE(filter,1,filterRXPredicate)
-	SET_PREDICATE(filterTXPredicate,EQUAL, STREAM, "net.packetType.macProtocol", POD, "65")
-	SET_PREDICATE(filterRXPredicate,GEQ, STREAM, "process.process.utime", POD, "3.14")
-	INIT_SELECT(selectTest,NULL,2)
-	ADD_ELEMENT(selectTest,0,elemUTime,"process.process.utime")
-	ADD_ELEMENT(selectTest,1,elemPacket,"net.packetType")
-	if ((ret = checkQuerySyntax(&model1,GET_BASE(txStream),&errOperator)) == 0) {
-		printQuery(GET_BASE(txStream));
-	} else {
-		printf("Failed. Reason: %d\n",-ret);
-	}
-	query.root = GET_BASE(txStream);
-	executeQuery(&model1,&query,&tupel);
+	initQuery();
 
-	INIT_SRC_STREAM(txSrc,"process.process.utime",0,GET_BASE(joinProcess),100)
-	INIT_JOIN(joinProcess,"process.process", GET_BASE(joinApp),1)
-	ADD_PREDICATE(joinProcess,0,joinProcessPredicate)
-	SET_PREDICATE(joinProcessPredicate,IN, STREAM, "net.packetType.socket", STREAM, "process.process.sockets")
-	INIT_JOIN(joinApp,"ui.app", NULL,1)
-	ADD_PREDICATE(joinApp,0,joinAppPredicate)
-	SET_PREDICATE(joinAppPredicate,IN, STREAM, "process.process", STREAM, "ui.app.processes")
-	if ((ret = checkQuerySyntax(&model1,GET_BASE(txSrc),&errOperator)) == 0) {
-		printQuery(GET_BASE(txSrc));
-	} else {
-		printf("Failed. Reason: %d\n",-ret);
+	slcDataModel = ALLOC(sizeof(DataModelElement_t));
+	INIT_MODEL((*slcDataModel),0);
+	if ((ret = registerProvider(&model1, &query)) < 0 ) {
+		printf("Register failed: %d\n",-ret);
+		return EXIT_FAILURE;
 	}
-	
-	INIT_OBJ_STREAM(processObj,"process.process",0,NULL,OBJECT_CREATE)
-	if ((ret = checkQuerySyntax(&model1,GET_BASE(processObj),&errOperator)) == 0) {
-		printQuery(GET_BASE(processObj));
-	} else {
-		printf("Failed. Reason: %d\n",-ret);
+	printf("Sucessfully registered datamodel and query. Query has id: 0x%x\n",query.queryID);
+
+	issueEvent();
+
+	if ((ret = unregisterProvider(&model1, &query)) < 0 ) {
+		printf("Unregister failed: %d\n",-ret);
+		return EXIT_FAILURE;
 	}
-	
-	freeQuery(GET_BASE(processObj),0);
+
 	freeQuery(GET_BASE(txStream),0);
-	freeQuery(GET_BASE(txSrc),0);
-	if (tupel != NULL) {
-		freeTupel(&model1,tupel);
-	}
 	freeDataModel(&model1,0);
+	endClock = clock();
+	printf("Start: %ld, end: %ld, diff: %ld/%e\n",startClock, endClock, (endClock - startClock),((double)endClock - (double)startClock) / (double)CLOCKS_PER_SEC);
 
 	return EXIT_SUCCESS;
 }
+
 
 static void regEventCallback(void) {
 	
@@ -110,9 +82,7 @@ static void unregObjectCallback(void) {
 	
 };
 
-static void initResultset(void) {
-	char *string = NULL;
-
+static void issueEvent(void) {
 	initTupel(&tupel,20140530,3);
 
 	allocItem(&model1,tupel,0,"net.device.txBytes");
@@ -125,32 +95,23 @@ static void initResultset(void) {
 	setArraySlotByte(&model1,tupel,"net.packetType.macHdr",2,3);
 	setArraySlotByte(&model1,tupel,"net.packetType.macHdr",3,4);
 	setItemByte(&model1,tupel,"net.packetType.macProtocol",65);
-
-	string = (char*)malloc(6);
-	strcpy(string,"PFERD");
-	allocItem(&model1,tupel,2,"net.device.rxBytes");
-	setItemString(&model1,tupel,"net.device.rxBytes",string);
 	
-	string = (char*)malloc(5);
-	strcpy(string,"eth0");
-	addItem(&tupel,3);
-	allocItem(&model1,tupel,3,"net.device");
-	setItemString(&model1,tupel,"net.device",string);
+	eventOccured("net.device.onTx",tupel);
+}
 
-	allocItem(&model1,tupel,4,"process.process.utime");
-	setItemFloat(&model1,tupel,"process.process.utime",3.14);
+static void initQuery(void) {
+	query.next = NULL;
+	query.queryType = ASYNC;
+	query.queryID = 0;
+	query.onQueryCompleted = printResult;
+	query.root = GET_BASE(txStream);
 
-	allocItem(&model1,tupel,5,"process.process.stime");
-	setItemArray(&model1,tupel,"process.process.stime",3);
-	string = (char*)malloc(3);
-	strcpy(string,"Ö");
-	setArraySlotString(&model1,tupel,"process.process.stime",0,string);
-	string = (char*)malloc(3);
-	strcpy(string,"Ä");
-	setArraySlotString(&model1,tupel,"process.process.stime",1,string);
-	string = (char*)malloc(3);
-	strcpy(string,"Ü");
-	setArraySlotString(&model1,tupel,"process.process.stime",2,string);
+	INIT_EVT_STREAM(txStream,"net.device.onTx",0,GET_BASE(filter))
+	INIT_FILTER(filter,GET_BASE(selectTest),1)
+	ADD_PREDICATE(filter,0,filterTXPredicate)
+	SET_PREDICATE(filterTXPredicate,EQUAL, STREAM, "net.packetType.macProtocol", POD, "65")
+	INIT_SELECT(selectTest,NULL,1)
+	ADD_ELEMENT(selectTest,0,elemPacket,"net.packetType")
 }
 
 static void initDatamodel(void) {
