@@ -88,6 +88,9 @@ void freeTupel(DataModelElement_t *rootDM, Tupel_t *tupel) {
 	//FREE(tupel->items);
 	FREE(tupel);
 }
+#ifdef __KERNEL__
+EXPORT_SYMBOL(freeTupel);
+#endif
 
 void deleteItem(DataModelElement_t *rootDM, Tupel_t *tupel, int slot) {
 	DataModelElement_t *dm = NULL;

@@ -90,6 +90,7 @@ void printTupel(DataModelElement_t *rootDM, Tupel_t *tupel) {
 	if (IS_COMPACT(tupel)) {
 		PRINT_MSG("size=%d,",COMPACT_SIZE(tupel));
 	}
+
 	for(i = 0; i < tupel->itemLen; i++) {
 		if (tupel->items[i] == NULL) {
 			continue;

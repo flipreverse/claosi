@@ -241,7 +241,9 @@ void freeQuery(Operator_t *op, int freeOperator) {
 		}	
 	} while (cur != NULL);
 }
-
+#ifdef __KERNEL__
+EXPORT_SYMBOL(freeQuery);
+#endif
 
 /*
  * TODO: maybe someone wanna do a more sophisticated syntax check. For now, this will do.

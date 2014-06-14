@@ -6,13 +6,17 @@
 
 static int __init slc_init(void)
 {
-	DEBUG_MSG(1,"Hello World!\n");
+	if (initSLC() == -1) {
+		return -1;
+	}
+	DEBUG_MSG(1,"Initialized SLC\n");
 	return 0;
 }
 
 static void __exit slc_exit(void)
 {
-	DEBUG_MSG(1,"Good bye World!\n");
+	destroySLC();
+	DEBUG_MSG(1,"Destroyed SLC\n");
 }
 
 module_init(slc_init);

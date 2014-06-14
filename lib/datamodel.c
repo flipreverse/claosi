@@ -49,6 +49,9 @@ DataModelElement_t* getDescription(DataModelElement_t *root, char *name) {
 	
 	return NULL;
 };
+#ifdef __KERNEL__
+EXPORT_SYMBOL(getDescription);
+#endif
 
 /**
  * Frees all memory used by the subtree including {@link node}.
@@ -90,6 +93,9 @@ void freeDataModel(DataModelElement_t *node, int freeNodeItself) {
 	} while(curNode != node);
 	freeNode(curNode,freeNodeItself);
 }
+#ifdef __KERNEL__
+EXPORT_SYMBOL(freeDataModel);
+#endif
 
 /**
  * Calculate the size in bytes of the element described by {@link typeDesc}.
@@ -171,6 +177,10 @@ int getDataModelSize(DataModelElement_t *rootDM, DataModelElement_t *elem, int i
 	
 	return size;
 }
+#ifdef __KERNEL__
+EXPORT_SYMBOL(getDataModelSize);
+#endif
+
 /**
  * Calculates the offset in bytes of {@link child} within the type (struct) {@link parent}.
  * @param parent a pointer to DataModelElement_t describing the complex type (a.k.a. struct)
@@ -208,6 +218,10 @@ int getOffset(DataModelElement_t *parent, char *child) {
 	}
 	return -1;
 }
+#ifdef __KERNEL__
+EXPORT_SYMBOL(getOffset);
+#endif
+
 /**
  * Copies a node and its payload. Children points to a newly allocated memory area.
  * It size will be set according to ChildrenLen. In addition, all elements are set to NULL.
@@ -484,7 +498,11 @@ int addSubtree(DataModelElement_t  *node, DataModelElement_t *newTree) {
 	 * Try to avoid wasting memory. There may be some free space behind node->children.
 	 * If not, REALLOC will allocate a new X of bytes and move the contents.
 	 */
-	temp = REALLOC_CHILDREN_ARRAY(node->children,node->childrenLen);
+	if (node->children == NULL) {
+		temp = ALLOC_CHILDREN_ARRAY(node->childrenLen);
+	} else {
+		temp = REALLOC_CHILDREN_ARRAY(node->children,node->childrenLen);
+	}
 	if (!temp) {
 		node->childrenLen--;
 		return -1;
