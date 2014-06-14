@@ -3,7 +3,8 @@
 KDIR?=/lib/modules/`uname -r`/build
 INCLUDE_PATH:= ./include
 BUILD_PATH:=build
-OBJ_PATH:=$(BUILD_PATH)/obj
+BUILD_KERN:=$(BUILD_PATH)/kern
+BUILD_USER:=$(BUILD_PATH)/user
 TEST_DIR:=test
 
 LD_TEXT = -e "LD\t$@"
@@ -15,6 +16,15 @@ ifneq (,$(wildcard $(BUILD_PATH)))
 EXISTING_DEPS:=$(shell find $(BUILD_PATH) -name '*.d')
 else
 EXISTING_DEPS:=
+endif
+
+ifndef VERBOSE
+VERBOSE = 0
+endif
+ifeq ($(VERBOSE),0)
+OUTPUT= @
+else
+OUTPUT=
 endif
 
 # COMPILER AND LINKER FLAGS
@@ -30,15 +40,24 @@ LDFLAGS :=
 #<name>_SRC=<source files>
 #<name>_OBJ=$(patsubst %.o,$(OBJ_PATH)/$(<name>_DIR)/%.o,$(<name>_SRC:%.cpp=%.o))
 
-LIB_DIR=lib
-LIB_SRC=datamodel.c query.c resultset.c api.c
-LIB_OBJ=$(patsubst %.o,$(OBJ_PATH)/$(LIB_DIR)/%.o,$(LIB_SRC:%.c=%.o))
+LIB_COMMON_DIR=lib
+LIB_COMMON_SRC=datamodel.c query.c resultset.c api.c
+LIB_COMMON_OBJ=$(patsubst %.o,$(BUILD_USER)/$(LIB_COMMON_DIR)/%.o,$(LIB_COMMON_SRC:%.c=%.o))
 
-LIB_SRC_USERSPACE=$(LIB_SRC) datamodel-userspace.c query-userspace.c resultset-userspace.c
-LIB_OBJ_USERSPACE=$(patsubst %.o,$(OBJ_PATH)/$(LIB_DIR)/%.o,$(LIB_SRC_USERSPACE:%.c=%.o))
+LIB_USERSPACE_DIR=$(LIB_COMMON_DIR)/userspace
+LIB_USERSPACE_SRC=datamodel-userspace.c query-userspace.c resultset-userspace.c
+LIB_USERSPACE_OBJ=$(patsubst %.o,$(BUILD_USER)/$(LIB_USERSPACE_DIR)/%.o,$(LIB_USERSPACE_SRC:%.c=%.o))
 
-KERNEL_DIR:=$(BUILD_PATH)/kernel
-KERNEL_SRC= $(KERNEL_DIR)/$(LIB_DIR)/libkernel.c $(patsubst %.c,$(KERNEL_DIR)/$(LIB_DIR)/%.c,$(LIB_SRC))
+LIB_KERNEL_DIR:=$(LIB_COMMON_DIR)/kernel
+LIB_KERNEL_SRC_= libkernel.c
+LIB_KERNEL_SRC= $(patsubst %.c,$(BUILD_KERN)/$(LIB_KERNEL_DIR)/%.c,$(LIB_KERNEL_SRC_)) $(patsubst $(BUILD_USER)/%.c,$(BUILD_KERN)/%.c,$(LIB_COMMON_OBJ:%.o=%.c))
+
+PROVIDER_KERNEL_DIR=provider/kernel
+PROVIDER_KERNEL_SRC= $(patsubst %.c,$(BUILD_KERN)/%.c,$(shell find $(PROVIDER_KERNEL_DIR) -name "*.c"))
+
+PROVIDER_USER_DIR=provider/userspace
+PROVIDER_USER_SRC=$(shell find $(PROVIDER_USER_DIR) -name "*.c")
+PROVIDER_USER_OBJ=$(patsubst %.o,$(BUILD_USER)/%.o,$(PROVIDER_USER_SRC:%.c=%.o))
 
 #***************************** BEGIN SOURCE FILES FOR TEST APPS *****************************
 
@@ -49,26 +68,25 @@ KERNEL_SRC= $(KERNEL_DIR)/$(LIB_DIR)/libkernel.c $(patsubst %.c,$(KERNEL_DIR)/$(
 
 QUERY_TEST=query-test
 QUERY_TEST_SRC = query-test.c
-QUERY_TEST_OBJ=$(patsubst %.o,$(OBJ_PATH)/$(TEST_DIR)/%.o,$(QUERY_TEST_SRC:%.c=%.o))
+QUERY_TEST_OBJ=$(patsubst %.o,$(BUILD_USER)/$(TEST_DIR)/%.o,$(QUERY_TEST_SRC:%.c=%.o))
 
 DATAMODEL_TEST=datamodel-test
 DATAMODEL_TEST_SRC = datamodel-test.c
-DATAMODEL_TEST_OBJ=$(patsubst %.o,$(OBJ_PATH)/$(TEST_DIR)/%.o,$(DATAMODEL_TEST_SRC:%.c=%.o))
+DATAMODEL_TEST_OBJ=$(patsubst %.o,$(BUILD_USER)/$(TEST_DIR)/%.o,$(DATAMODEL_TEST_SRC:%.c=%.o))
 
 RESULTSET_TEST=resultset-test
 RESULTSET_TEST_SRC = resultset-test.c
-RESULTSET_TEST_OBJ=$(patsubst %.o,$(OBJ_PATH)/$(TEST_DIR)/%.o,$(RESULTSET_TEST_SRC:%.c=%.o))
+RESULTSET_TEST_OBJ=$(patsubst %.o,$(BUILD_USER)/$(TEST_DIR)/%.o,$(RESULTSET_TEST_SRC:%.c=%.o))
 
 API_TEST=api-test
 API_TEST_SRC = api-test.c
-API_TEST_OBJ=$(patsubst %.o,$(OBJ_PATH)/$(TEST_DIR)/%.o,$(API_TEST_SRC:%.c=%.o))
+API_TEST_OBJ=$(patsubst %.o,$(BUILD_USER)/$(TEST_DIR)/%.o,$(API_TEST_SRC:%.c=%.o))
 
 #*****************************			END SOURCE FILE				*****************************
 
 # ADD YOUR NEW OBJ VAR HERE
 # Example: $(<name>_OBJ)
-OBJ = $(LIB_OBJ)
-OBJ_USERSPACE = $(OBJ) $(LIB_OBJ_USERSPACE)
+OBJ = $(LIB_COMMON_OBJ) $(LIB_USERSPACE_OBJ) $(PROVIDER_USER_OBJ)
 
 # ADD HERE THE VAR FOR THE TEST APP
 # Example: $(<name>_OBJ)
@@ -78,69 +96,73 @@ TEST_BIN := $(addprefix $(BUILD_PATH)/,$(TEST_BIN))
 
 # ADD HERE YOUR NEW SOURCE DIRECTORY
 # Example: $(<name>_DIR)
-DIRS = $(TEST_DIR) $(LIB_DIR)
+DIRS_ = $(TEST_DIR) $(LIB_COMMON_DIR) $(LIB_USERSPACE_DIR) $(LIB_KERNEL_DIR) $(PROVIDER_KERNEL_DIR) $(PROVIDER_USER_DIR)
+DIRS_USER = $(patsubst %,$(BUILD_USER)/%,$(DIRS_))
+DIRS_KERN = $(patsubst %,$(BUILD_KERN)/%,$(DIRS_))
 
 #***************************** DO NOT EDIT BELOW THIS LINE EXCEPT YOU WANT TO ADD A TEST APPLICATION (OR YOU KNOW WHAT YOU'RE DOING :-) )***************************** 
-DEP = $(subst .o,.d,$(OBJ_USERSPACE)) $(subst .o,.d,$(TEST_OBJ))
+DEP = $(subst .o,.d,$(OBJ)) $(subst .o,.d,$(TEST_OBJ))
 
-all: buildrepo git_version.h $(DEP) $(OBJ) $(OBJ_USERSPACE) $(TEST_BIN) $(TEST_OBJ) kernel
+all: git_version.h $(DIRS_USER) $(DIRS_KERN) $(DEP) $(OBJ) $(TEST_BIN) $(TEST_OBJ) kernel
 
 #***************************** BEGIN TARGETS FOR TEST APPLICATION *****************************
 
-$(BUILD_PATH)/$(QUERY_TEST): $(QUERY_TEST_OBJ) $(OBJ_USERSPACE)
+$(BUILD_PATH)/$(QUERY_TEST): $(QUERY_TEST_OBJ) $(OBJ)
 	@echo $(LD_TEXT)
-	@$(CC) $^ $(LDFLAGS) -o $@
+	$(OUTPUT)$(CC) $^ $(LDFLAGS) -o $@
 
-$(BUILD_PATH)/$(DATAMODEL_TEST): $(DATAMODEL_TEST_OBJ) $(OBJ_USERSPACE)
+$(BUILD_PATH)/$(DATAMODEL_TEST): $(DATAMODEL_TEST_OBJ) $(OBJ)
 	@echo $(LD_TEXT)
-	@$(CC) $^ $(LDFLAGS) -o $@
+	$(OUTPUT)$(CC) $^ $(LDFLAGS) -o $@
 
-$(BUILD_PATH)/$(RESULTSET_TEST): $(RESULTSET_TEST_OBJ) $(OBJ_USERSPACE)
+$(BUILD_PATH)/$(RESULTSET_TEST): $(RESULTSET_TEST_OBJ) $(OBJ)
 	@echo $(LD_TEXT)
-	@$(CC) $^ $(LDFLAGS) -o $@
+	$(OUTPUT)$(CC) $^ $(LDFLAGS) -o $@
 
-$(BUILD_PATH)/$(API_TEST): $(API_TEST_OBJ) $(OBJ_USERSPACE)
+$(BUILD_PATH)/$(API_TEST): $(API_TEST_OBJ) $(OBJ)
 	@echo $(LD_TEXT)
-	@$(CC) $^ $(LDFLAGS) -o $@
+	$(OUTPUT)$(CC) $^ $(LDFLAGS) -o $@
 
 #***************************** END TARGETS FOR TEST APPLICATION	  *****************************
+lol:
+	@echo $(LIB_KERNEL_SRC)
 
-objects: buildrepo $(OBJ) $(OBJ_USERSPACE) $(TEST_OBJ)
-
-tests: buildrepo $(TEST_BIN)
-
-$(KERNEL_DIR):
-	@echo "Creating dir $@..."
-	@mkdir $@
-
-$(KERNEL_DIR)/Kbuild:
-	ln -s ../../Kbuild $@
-
-$(KERNEL_DIR)/Makefile:
-	ln -s ../../Makefile $@
-
-$(KERNEL_DIR)/%: %
-	ln -s ../../../$< $@
-
-kernel: buildrepo $(KERNEL_SRC) $(KERNEL_DIR)/Kbuild $(KERNEL_DIR)/Makefile
-	$(MAKE) -C $(KDIR) KBUILD_EXTMOD=$$PWD/$(KERNEL_DIR) KBUILD_SRC=$(KDIR)
-	
-kernel-clean:
-	$(MAKE) -C $(KDIR) KBUILD_EXTMOD=$$PWD KBUILD_SRC=$(KDIR) clean
-
+tests: $(TEST_BIN)
 # Every object file depends on its source and dependency file
-$(OBJ_PATH)/%.o: %.c $(OBJ_PATH)/%.d
+$(BUILD_USER)/%.o: %.c $(BUILD_USER)/%.d
 	@echo $(CC_TEXT)
-	@$(CC) $(CFLAGS) $< -o $@
+	$(OUTPUT)$(CC) $(CFLAGS) $< -o $@
 
 # Every dependency file depends only on the corresponding source file
-$(OBJ_PATH)/%.d: %.c
+$(BUILD_USER)/%.d: %.c
 	@echo $(DEB_TEXT)
-	@$(call make-depend,$<,$(subst .d,.o,$@),$(subst .o,.d,$@))
+	$(OUTPUT)$(call make-depend,$<,$(subst .d,.o,$@),$(subst .o,.d,$@))
+
+kernel: $(DIRS) $(LIB_KERNEL_SRC) $(BUILD_KERN)/Kbuild $(BUILD_KERN)/Makefile $(PROVIDER_KERNEL_SRC)
+	$(MAKE) -C $(KDIR) KBUILD_EXTMOD=$$PWD/$(BUILD_KERN) KBUILD_SRC=$(KDIR)
+	
+kernel-clean:
+	$(MAKE) -C $(KDIR) KBUILD_EXTMOD=$$PWD/$(BUILD_KERN) KBUILD_SRC=$(KDIR) clean
 
 git_version.h:
 	@echo "Generating version information"
-	@./git_version.sh -o git_version.h
+	$(OUTPUT)./git_version.sh -o git_version.h
+
+$(BUILD_KERN)/%.c: %.c
+	@echo "Creating link from $@ to $<"
+	$(OUTPUT)ln -s $(PWD)/$< $@
+
+$(BUILD_KERN)/Kbuild: Kbuild
+	@echo "Creating link from $@ to $<"
+	$(OUTPUT)ln -s $(PWD)/Kbuild $@
+
+$(BUILD_KERN)/Makefile: Makefile
+	@echo "Creating link from $@ to $<"
+	$(OUTPUT)ln -s $(PWD)/Makefile $@
+
+$(BUILD_PATH)/%:
+	@echo "Creating directory $@"
+	$(OUTPUT)mkdir -p $@
 
 clean: clean-dep clean-obj kernel-clean
 
@@ -152,10 +174,6 @@ clean-obj:
 
 distclean: clean
 	$(RM) -r $(BUILD_PATH)
-
-buildrepo:
-	@$(call make-repo,$(OBJ_PATH))
-	@$(call make-repo,$(KERNEL_DIR))
 
 #***************************** INCLUDE EVERY EXISTING DEPENDENCY FILE  *****************************
 include $(EXISTING_DEPS)

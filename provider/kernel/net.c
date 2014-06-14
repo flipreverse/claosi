@@ -1,11 +1,8 @@
-#include <stdlib.h>
-#include <query.h>
+#include <linux/module.h>
+
 #include <datamodel.h>
-#include <resultset.h>
-#include <stdio.h>
-#include <debug.h>
+#include <query.h>
 #include <api.h>
-#include <time.h>
 
 DECLARE_ELEMENTS(nsNet1, nsProcess, nsUI, model1)
 DECLARE_ELEMENTS(evtDisplay, typeEventType, srcForegroundApp, srcProcessess,objApp)
@@ -16,7 +13,6 @@ DECLARE_ELEMENTS(typeMacHdr, typeMacProt, typeNetHdr, typeNetProt, typeTranspHdr
 static void initDatamodel(void);
 static void initQuery(void);
 static void issueEvent(void);
-
 static EventStream_t txStream;
 static Predicate_t filterTXPredicate;
 static Filter_t filter;
@@ -25,52 +21,11 @@ static Query_t query;
 static Element_t elemPacket;
 static Tupel_t *tupel = NULL;
 
-void printResult(QueryID_t id, Tupel_t *tupel) {
-	printf("Received tupel:\t");
-	printTupel(&model1,tupel);
-	freeTupel(&model1,tupel);
-}
-
-int main() {
-	int ret = 0;
-	clock_t startClock, endClock;
-
-	startClock = clock();
-	initDatamodel();
-	initQuery();
-
-	if (initSLC() == -1) {
-		return EXIT_FAILURE;
-	}
-	INIT_MODEL((*slcDataModel),0);
-	if ((ret = registerProvider(&model1, &query)) < 0 ) {
-		printf("Register failed: %d\n",-ret);
-		return EXIT_FAILURE;
-	}
-	printf("Sucessfully registered datamodel and query. Query has id: 0x%x\n",query.queryID);
-
-	issueEvent();
-
-	if ((ret = unregisterProvider(&model1, &query)) < 0 ) {
-		printf("Unregister failed: %d\n",-ret);
-		return EXIT_FAILURE;
-	}
-
-	freeQuery(GET_BASE(txStream),0);
-	freeDataModel(&model1,0);
-	destroySLC();
-	endClock = clock();
-	printf("Start: %ld, end: %ld, diff: %ld/%e\n",startClock, endClock, (endClock - startClock),((double)endClock - (double)startClock) / (double)CLOCKS_PER_SEC);
-
-	return EXIT_SUCCESS;
-}
-
-
-static void regEventCallback(void) {
+static void activate(void) {
 	
 }
 
-static void unregEventCallback(void) {
+static void deactivate(void) {
 	
 }
 
@@ -78,13 +33,11 @@ static void* getSrc(void) {
 	return NULL;
 };
 
-static void regObjectCallback(void) {
-	
-};
-
-static void unregObjectCallback(void) {
-	
-};
+static void printResult(QueryID_t id, Tupel_t *tupel) {
+	printk("Received tupel:\t");
+	printTupel(slcDataModel,tupel);
+	freeTupel(slcDataModel,tupel);
+}
 
 static void issueEvent(void) {
 	initTupel(&tupel,20140530,2);
@@ -121,7 +74,7 @@ static void initQuery(void) {
 static void initDatamodel(void) {
 	INIT_SOURCE_POD(srcSocketType,"type",objSocket,INT,getSrc)
 	INIT_SOURCE_POD(srcSocketFlags,"flags",objSocket,INT,getSrc)
-	INIT_OBJECT(objSocket,"socket",nsNet1,2,INT,regObjectCallback,unregObjectCallback)
+	INIT_OBJECT(objSocket,"socket",nsNet1,2,INT,activate,deactivate)
 	ADD_CHILD(objSocket,0,srcSocketFlags)
 	ADD_CHILD(objSocket,1,srcSocketType)
 	
@@ -146,10 +99,10 @@ static void initDatamodel(void) {
 
 	INIT_SOURCE_POD(srcTXBytes,"txBytes",objDevice,INT,getSrc)
 	INIT_SOURCE_POD(srcRXBytes,"rxBytes",objDevice,STRING,getSrc)
-	INIT_EVENT_COMPLEX(evtOnRX,"onRx",objDevice,"net.packetType",regEventCallback,unregEventCallback)
-	INIT_EVENT_COMPLEX(evtOnTX,"onTx",objDevice,"net.packetType",regEventCallback,unregEventCallback)
+	INIT_EVENT_COMPLEX(evtOnRX,"onRx",objDevice,"net.packetType",activate,deactivate)
+	INIT_EVENT_COMPLEX(evtOnTX,"onTx",objDevice,"net.packetType",activate,deactivate)
 
-	INIT_OBJECT(objDevice,"device",nsNet1,4,STRING,regObjectCallback,unregObjectCallback)
+	INIT_OBJECT(objDevice,"device",nsNet1,4,STRING,activate,deactivate)
 	ADD_CHILD(objDevice,0,srcTXBytes)
 	ADD_CHILD(objDevice,1,srcRXBytes)
 	ADD_CHILD(objDevice,2,evtOnRX)
@@ -163,7 +116,7 @@ static void initDatamodel(void) {
 	INIT_SOURCE_POD(srcUTime,"utime",objProcess,FLOAT,getSrc)
 	INIT_SOURCE_POD(srcSTime,"stime",objProcess,STRING|ARRAY,getSrc)
 	INIT_SOURCE_COMPLEX(srcProcessSockets,"sockets",objProcess,"net.socket",getSrc) //TODO: Should be an array
-	INIT_OBJECT(objProcess,"process",nsProcess,3,INT,regObjectCallback,unregObjectCallback)
+	INIT_OBJECT(objProcess,"process",nsProcess,3,INT,activate,deactivate)
 	ADD_CHILD(objProcess,0,srcUTime)
 	ADD_CHILD(objProcess,1,srcSTime)
 	ADD_CHILD(objProcess,2,srcProcessSockets)
@@ -171,10 +124,10 @@ static void initDatamodel(void) {
 	INIT_NS(nsProcess,"process",model1,1)
 	ADD_CHILD(nsProcess,0,objProcess)
 
-	INIT_EVENT_COMPLEX(evtDisplay,"display",nsUI,"ui.eventType",regEventCallback,unregEventCallback)
+	INIT_EVENT_COMPLEX(evtDisplay,"display",nsUI,"ui.eventType",activate,deactivate)
 	INIT_SOURCE_COMPLEX(srcProcessess,"processes",objApp,"process.process",getSrc) //TODO: should be an array as well
 	
-	INIT_OBJECT(objApp,"app",nsUI,1,STRING,regObjectCallback,unregObjectCallback)
+	INIT_OBJECT(objApp,"app",nsUI,1,STRING,activate,deactivate)
 	ADD_CHILD(objApp,0,srcProcessess)
 
 	INIT_SOURCE_COMPLEX(srcForegroundApp,"foregroundApp",nsUI,"ui.app",getSrc)
@@ -196,3 +149,43 @@ static void initDatamodel(void) {
 	ADD_CHILD(model1,1,nsProcess)
 	ADD_CHILD(model1,2,nsUI)
 }
+
+static int __init slc_init(void)
+{
+	int ret = 0;
+	initDatamodel();
+	initQuery();
+
+	slcDataModel = ALLOC(sizeof(DataModelElement_t));
+	INIT_MODEL((*slcDataModel),0);
+	if ((ret = registerProvider(&model1, &query)) < 0 ) {
+		DEBUG_MSG(1,"Register failed: %d\n",-ret);
+		return -1;
+	}
+	PRINT_MSG("Sucessfully registered datamodel and query. Query has id: 0x%x\n",query.queryID);
+	DEBUG_MSG(1,"Registered net provider\n");
+
+	issueEvent();
+
+	return 0;
+}
+
+static void __exit slc_exit(void) {
+	int ret = 0;
+
+	if ((ret = unregisterProvider(&model1, &query)) < 0 ) {
+		DEBUG_MSG(1,"Unregister failed: %d\n",-ret);
+	}
+
+	freeQuery(GET_BASE(txStream),0);
+	freeDataModel(&model1,0);
+	DEBUG_MSG(1,"Unregistered net provider\n");
+}
+
+module_init(slc_init);
+module_exit(slc_exit);
+
+MODULE_AUTHOR("Alexander Lochmann (alexander.lochmann@tu-dortmund.de)");
+MODULE_DESCRIPTION("");
+MODULE_LICENSE("GPL");
+MODULE_VERSION("0.1");

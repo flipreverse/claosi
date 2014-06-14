@@ -111,7 +111,9 @@ int getDataModelSize(DataModelElement_t *rootDM, DataModelElement_t *elem, int i
 
 #define INIT_MODEL(varName,numChildren)	memset(&varName.name,'\0',MAX_NAME_LEN); \
 	varName.childrenLen = numChildren; \
+	if (numChildren > 0) { \
 	varName.children = ALLOC_CHILDREN_ARRAY(numChildren); \
+	} \
 	varName.dataModelType = MODEL; \
 	varName.typeInfo = NULL; \
 	varName.parent = NULL;

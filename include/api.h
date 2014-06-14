@@ -8,6 +8,8 @@ int registerProvider(DataModelElement_t *dm, Query_t *queries);
 int unregisterProvider(DataModelElement_t *dm, Query_t *queries);
 int registerQuery(Query_t *queries);
 int unregisterQuery(Query_t *queries);
+int initSLC(void);
+void destroySLC(void);
 
 extern DataModelElement_t *slcDataModel;
 
