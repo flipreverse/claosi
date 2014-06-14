@@ -52,12 +52,12 @@ void printDatamodel(DataModelElement_t *root) {
 				} else {
 					printf("%s",typeToString(evt->returnType));
 				}
-				printf(" @ registerCallback = %p, unregisterCallback = %p;\n", evt->registerCallback, evt->unregisterCallback);
+				printf(" @ activate = %p, deactivate = %p;\n", evt->activate, evt->deactivate);
 				break;
 
 			case OBJECT:
 				obj = (Object_t*)curNode->typeInfo;
-				printf("object %s[%s] @ registerCallback = %p, unregisterCallback = %p {\n", curNode->name, typeToString(obj->identifierType), obj->registerCallback, obj->unregisterCallback);
+				printf("object %s[%s] @ activate = %p, deactivate = %p {\n", curNode->name, typeToString(obj->identifierType), obj->activate, obj->deactivate);
 				break;
 
 			case TYPE:

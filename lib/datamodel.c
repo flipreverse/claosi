@@ -686,7 +686,7 @@ int checkSyntax(DataModelElement_t *rootCurrent,DataModelElement_t *rootToCheck,
 						}
 					}
 				}
-				if (evt->registerCallback == NULL || evt->unregisterCallback == NULL) {
+				if (evt->activate == NULL || evt->deactivate == NULL) {
 					return -ECALLBACK;
 				}
 				break;
@@ -701,7 +701,7 @@ int checkSyntax(DataModelElement_t *rootCurrent,DataModelElement_t *rootToCheck,
 				if (!(obj->identifierType & (INT | STRING | FLOAT | BYTE))) {
 					return -ERETURNTYPE;
 				} 
-				if (obj->registerCallback == NULL || obj->unregisterCallback == NULL) {
+				if (obj->activate == NULL || obj->deactivate == NULL) {
 					return -ECALLBACK;
 				}
 				break;

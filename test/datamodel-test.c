@@ -11,23 +11,23 @@ DECLARE_ELEMENTS(objSocket, objDevice, srcSocketType, srcSocketFlags, typePacket
 DECLARE_ELEMENTS(typeMacHdr, typeMacProt, typeNetHdr, typeNetProt, typeTranspHdr, typeTransProt, typeDataLen, typeSockRef)
 DECLARE_ELEMENTS(model2, srcDelayTolerance, typePacketType2, nsNet2, objDevice2, srcState)
 
-void regEventCallback(eventOccured pCallback) {
+static void regEventCallback(void) {
 	
 }
 
-void unregEventCallback(eventOccured pCallback) {
+static void unregEventCallback(void) {
 	
 }
 
-void* getSrc(void) {
+static void* getSrc(void) {
 	return NULL;
 };
 
-void regObjectCallback(objectChanged pCallback) {
+static void regObjectCallback(void) {
 	
 };
 
-void unregObjectCallback(objectChanged pCallback) {
+static void unregObjectCallback(void) {
 	
 };
 

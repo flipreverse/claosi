@@ -90,12 +90,11 @@ int main() {
 	return EXIT_SUCCESS;
 }
 
-
-static void regEventCallback(eventOccured pCallback) {
+static void regEventCallback(void) {
 	
 }
 
-static void unregEventCallback(eventOccured pCallback) {
+static void unregEventCallback(void) {
 	
 }
 
@@ -103,11 +102,11 @@ static void* getSrc(void) {
 	return NULL;
 };
 
-static void regObjectCallback(objectChanged pCallback) {
+static void regObjectCallback(void) {
 	
 };
 
-static void unregObjectCallback(objectChanged pCallback) {
+static void unregObjectCallback(void) {
 	
 };
 

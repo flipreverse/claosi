@@ -66,15 +66,14 @@ typedef struct TypeItem {
 	DECLARE_BUFFER(name);
 } TypeItem_t;
 
-typedef void (*eventOccured)(DataModelElement_t pEvent, void *pReturnValue);
-typedef void (*registerEventCallback)(eventOccured pCallback);
-typedef void (*unregisterEventCallback)(eventOccured pCallback);
+typedef void (*activateEventCallback)(void);
+typedef void (*deactivateEventCallback)(void);
 
 typedef struct Event {
 	unsigned short returnType;
 	DECLARE_BUFFER(returnName);
-	registerEventCallback registerCallback;
-	unregisterEventCallback unregisterCallback;
+	activateEventCallback activate;
+	deactivateEventCallback deactivate;
 } Event_t;
 
 typedef void* (*getSource)(void);
@@ -85,14 +84,13 @@ typedef struct Source {
 	getSource callback;
 } Source_t;
 
-typedef void (*objectChanged)(DataModelElement_t pObject, unsigned short pEvent, void *pIdentifier);
-typedef void (*registerObjectCallback)(objectChanged pCallback);
-typedef void (*unregisterObjectCallback)(objectChanged pCallback);
+typedef void (*activateObject)(void);
+typedef void (*deactivateObject)(void);
 
 typedef struct Object {
-		unsigned short identifierType;
-		registerObjectCallback registerCallback;
-		unregisterObjectCallback unregisterCallback;
+	unsigned short identifierType;
+	activateObject activate;
+	deactivateObject deactivate;
 } Object_t;
 
 void printDatamodel(DataModelElement_t *root);
@@ -145,8 +143,8 @@ int getDataModelSize(DataModelElement_t *rootDM, DataModelElement_t *elem, int i
 	varName.dataModelType = OBJECT; \
 	varName.typeInfo = ALLOC(sizeof(Object_t)); \
 	((Object_t*)varName.typeInfo)->identifierType = idType; \
-	((Object_t*)varName.typeInfo)->registerCallback = regFunc; \
-	((Object_t*)varName.typeInfo)->unregisterCallback = unregFunc;
+	((Object_t*)varName.typeInfo)->activate = regFunc; \
+	((Object_t*)varName.typeInfo)->deactivate = unregFunc;
 
 #define INIT_EVENT_POD(varName,nodeName,parentNode,evtType,regFunc, unregFunc)	strncpy((char*)&varName.name,nodeName,MAX_NAME_LEN); \
 	varName.childrenLen = 0; \
@@ -156,8 +154,8 @@ int getDataModelSize(DataModelElement_t *rootDM, DataModelElement_t *elem, int i
 	varName.typeInfo = ALLOC(sizeof(Event_t)); \
 	((Event_t*)varName.typeInfo)->returnType = evtType; \
 	memset(&((Event_t*)varName.typeInfo)->returnName,0,MAX_NAME_LEN); \
-	((Event_t*)varName.typeInfo)->registerCallback = regFunc; \
-	((Event_t*)varName.typeInfo)->unregisterCallback = unregFunc;
+	((Event_t*)varName.typeInfo)->activate = regFunc; \
+	((Event_t*)varName.typeInfo)->deactivate = unregFunc;
 
 #define INIT_EVENT_COMPLEX(varName,nodeName,parentNode,returnTypeName,regFunc, unregFunc)	strncpy((char*)&varName.name,nodeName,MAX_NAME_LEN); \
 	varName.childrenLen = 0; \
@@ -167,8 +165,8 @@ int getDataModelSize(DataModelElement_t *rootDM, DataModelElement_t *elem, int i
 	varName.typeInfo = ALLOC(sizeof(Event_t)); \
 	((Event_t*)varName.typeInfo)->returnType = COMPLEX; \
 	strncpy((char*)&((Event_t*)varName.typeInfo)->returnName,returnTypeName,MAX_NAME_LEN); \
-	((Event_t*)varName.typeInfo)->registerCallback = regFunc; \
-	((Event_t*)varName.typeInfo)->unregisterCallback = unregFunc;
+	((Event_t*)varName.typeInfo)->activate = regFunc; \
+	((Event_t*)varName.typeInfo)->deactivate = unregFunc;
 
 #define INIT_TYPE(varName,nodeName,parentNode,numChildren)	strncpy((char*)&varName.name,nodeName,MAX_NAME_LEN);\
 	varName.childrenLen = numChildren; \
