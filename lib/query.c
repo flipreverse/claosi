@@ -99,7 +99,6 @@ static int applyPredicate(DataModelElement_t *rootDM, Predicate_t *predicate, Tu
 					return -EPARAM;
 				}
 			}
-		PRINT_MSG("Comparing %hhd with %hhd\n",leftC,rightC);
 			switch (predicate->type) {
 				case EQUAL: return leftC == rightC;
 				case NEQ: return leftC != rightC;
@@ -147,8 +146,13 @@ static int applySelect(DataModelElement_t *rootDM, Select_t *selectOperator, Tup
 }
 
 void executeQuery(DataModelElement_t *rootDM, Query_t *query, Tupel_t **tupel) {
-	Operator_t *cur = query->root;
-	
+	Operator_t *cur = NULL;
+
+	if (query == NULL) {
+		DEBUG_MSG(1,"%s: Query is NULL",__func__);
+		return;
+	}
+	cur = query->root;
 	while (cur != NULL) {
 		switch (cur->type) {
 			case GEN_SOURCE:

@@ -4,8 +4,7 @@
 #include <query.h>
 #include <api.h>
 
-static int __init slc_init(void)
-{
+static int __init slc_init(void) {
 	if (initSLC() == -1) {
 		return -1;
 	}
@@ -13,8 +12,7 @@ static int __init slc_init(void)
 	return 0;
 }
 
-static void __exit slc_exit(void)
-{
+static void __exit slc_exit(void) {
 	destroySLC();
 	DEBUG_MSG(1,"Destroyed SLC\n");
 }

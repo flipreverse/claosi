@@ -14,7 +14,6 @@
                 PRINT_MSG(TAG args); \
         }                                               \
 } while(0);
-//printk(KERN_INFO TAG args );    
 #else
 #define DEBUG_MSG(prio,...) do {} while(0);
 #endif

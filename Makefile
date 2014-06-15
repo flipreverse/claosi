@@ -164,7 +164,9 @@ $(BUILD_PATH)/%:
 	@echo "Creating directory $@"
 	$(OUTPUT)mkdir -p $@
 
-clean: clean-dep clean-obj kernel-clean
+clean: kernel-clean clean-dep clean-obj 
+	$(RM) $(LIB_KERNEL_SRC)
+	$(RM) $(PROVIDER_KERNEL_SRC)
 
 clean-dep:
 	$(RM) $(DEP)

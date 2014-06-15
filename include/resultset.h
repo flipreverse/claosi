@@ -156,7 +156,10 @@ static inline void setItemArray(DataModelElement_t *rootDM, Tupel_t *tupel, char
 		DEBUG_MSG(1,"Refusing access (%s) to an item, because to tupel is compact.\n",__FUNCTION__);
 		return;
 	}
-	*((PTR_TYPE*)valuePtr) = (PTR_TYPE)ALLOC(num * size + sizeof(int));
+	if ((*((PTR_TYPE*)valuePtr) = (PTR_TYPE)ALLOC(num * size + sizeof(int))) == 0) {
+		DEBUG_MSG(1,"Cannot allocate array: %s\n",typeName);
+		return;
+	}
 	*(int*)(*((PTR_TYPE*)valuePtr)) = num;
 	DEBUG_MSG(2,"Allocated %ld@%p bytes for array %s\n",(long)(num * size + sizeof(int)),(void*)*((PTR_TYPE*)valuePtr),dm->name);
 	#undef DEFAULT_RETURN_VALUE
@@ -267,7 +270,9 @@ static inline int allocItem(DataModelElement_t *rootDM, Tupel_t *tupel, int slot
 	if ((tupel->items[slot] = ALLOC(sizeof(Item_t))) == NULL) {
 		return -1;
 	}
-	tupel->items[slot]->value = ALLOC(ret);
+	if ((tupel->items[slot]->value = ALLOC(ret)) == NULL) {
+		return -1;
+	}
 	strncpy((char*)&tupel->items[slot]->name,itemTypeName,MAX_NAME_LEN);
 	DEBUG_MSG(2,"Allocated %d@%p bytes for %s\n",ret,tupel->items[slot]->value,dm->name);
 	return 0;

@@ -154,6 +154,8 @@ static void initResultset(void) {
 }
 
 static void initDatamodel(void) {
+	int i = 0;
+
 	INIT_SOURCE_POD(srcSocketType,"type",objSocket,INT,getSrc)
 	INIT_SOURCE_POD(srcSocketFlags,"flags",objSocket,INT,getSrc)
 	INIT_OBJECT(objSocket,"socket",nsNet1,2,INT,regObjectCallback,unregObjectCallback)

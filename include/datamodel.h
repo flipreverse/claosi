@@ -29,7 +29,7 @@ enum DataModelType {
 	BYTE			=	0x800
 };
 
-#if __LP64__ == 1
+#if defined(__LP64__) && __LP64__ == 1
 	#define PTR_TYPE	long long
 #else
 	#define PTR_TYPE	int
@@ -109,18 +109,26 @@ void freeNode(DataModelElement_t *node, int freeNodes);
 int getDataModelSize(DataModelElement_t *rootDM, DataModelElement_t *elem, int ignoreArray);
 #define getSize(rootDMVar, elemVar) getDataModelSize(rootDMVar,elemVar,1)
 
+#define SET_CHILDREN_ARRAY(varName,numChildren) if (numChildren > 0) { \
+		varName.children = ALLOC_CHILDREN_ARRAY(numChildren); \
+	} else { \
+		varName.children = NULL; \
+	}
+
+#define INIT_QUERY_ARRAY(queryVar,size) 	for (i = 0; i < size; i++) { \
+	queryVar[i] = NULL; \
+}
+
 #define INIT_MODEL(varName,numChildren)	memset(&varName.name,'\0',MAX_NAME_LEN); \
 	varName.childrenLen = numChildren; \
-	if (numChildren > 0) { \
-	varName.children = ALLOC_CHILDREN_ARRAY(numChildren); \
-	} \
+	SET_CHILDREN_ARRAY(varName,numChildren) \
 	varName.dataModelType = MODEL; \
 	varName.typeInfo = NULL; \
 	varName.parent = NULL;
 
 #define INIT_NS(varName,nodeName,parentNode,numChildren)	strncpy((char*)&varName.name,nodeName,MAX_NAME_LEN); \
 	varName.childrenLen = numChildren; \
-	varName.children = ALLOC_CHILDREN_ARRAY(numChildren); \
+	SET_CHILDREN_ARRAY(varName,numChildren) \
 	varName.dataModelType = NAMESPACE; \
 	varName.typeInfo = NULL; \
 	varName.parent = &parentNode;
@@ -131,7 +139,8 @@ int getDataModelSize(DataModelElement_t *rootDM, DataModelElement_t *elem, int i
 	varName.parent = &parentNode; \
 	varName.dataModelType = SOURCE; \
 	varName.typeInfo = ALLOC(sizeof(Source_t)); \
-	((Source_t*)varName.typeInfo)->callback = cbFunc;
+	((Source_t*)varName.typeInfo)->callback = cbFunc; \
+	INIT_QUERY_ARRAY(((Source_t*)varName.typeInfo)->queries,MAX_QUERIES_PER_DM);
 
 #define INIT_SOURCE_POD(varName,nodeName,parentNode,srcType,cbFunc)	INIT_SOURCE_BASIC(varName,nodeName,parentNode,cbFunc) \
 	memset(&((Source_t*)varName.typeInfo)->returnName,0,MAX_NAME_LEN); \
@@ -143,13 +152,14 @@ int getDataModelSize(DataModelElement_t *rootDM, DataModelElement_t *elem, int i
 
 #define INIT_OBJECT(varName,nodeName,parentNode,numChildren,idType,regFunc, unregFunc)	strncpy((char*)&varName.name,nodeName,MAX_NAME_LEN); \
 	varName.childrenLen = numChildren; \
-	varName.children = ALLOC_CHILDREN_ARRAY(numChildren); \
+	SET_CHILDREN_ARRAY(varName,numChildren) \
 	varName.parent = &parentNode; \
 	varName.dataModelType = OBJECT; \
 	varName.typeInfo = ALLOC(sizeof(Object_t)); \
 	((Object_t*)varName.typeInfo)->identifierType = idType; \
 	((Object_t*)varName.typeInfo)->activate = regFunc; \
-	((Object_t*)varName.typeInfo)->deactivate = unregFunc;
+	((Object_t*)varName.typeInfo)->deactivate = unregFunc; \
+	INIT_QUERY_ARRAY(((Object_t*)varName.typeInfo)->queries,MAX_QUERIES_PER_DM);
 
 #define INIT_EVENT_POD(varName,nodeName,parentNode,evtType,regFunc, unregFunc)	strncpy((char*)&varName.name,nodeName,MAX_NAME_LEN); \
 	varName.childrenLen = 0; \
@@ -160,7 +170,8 @@ int getDataModelSize(DataModelElement_t *rootDM, DataModelElement_t *elem, int i
 	((Event_t*)varName.typeInfo)->returnType = evtType; \
 	memset(&((Event_t*)varName.typeInfo)->returnName,0,MAX_NAME_LEN); \
 	((Event_t*)varName.typeInfo)->activate = regFunc; \
-	((Event_t*)varName.typeInfo)->deactivate = unregFunc;
+	((Event_t*)varName.typeInfo)->deactivate = unregFunc; \
+	INIT_QUERY_ARRAY(((Event_t*)varName.typeInfo)->queries,MAX_QUERIES_PER_DM)
 
 #define INIT_EVENT_COMPLEX(varName,nodeName,parentNode,returnTypeName,regFunc, unregFunc)	strncpy((char*)&varName.name,nodeName,MAX_NAME_LEN); \
 	varName.childrenLen = 0; \
@@ -171,11 +182,12 @@ int getDataModelSize(DataModelElement_t *rootDM, DataModelElement_t *elem, int i
 	((Event_t*)varName.typeInfo)->returnType = COMPLEX; \
 	strncpy((char*)&((Event_t*)varName.typeInfo)->returnName,returnTypeName,MAX_NAME_LEN); \
 	((Event_t*)varName.typeInfo)->activate = regFunc; \
-	((Event_t*)varName.typeInfo)->deactivate = unregFunc;
+	((Event_t*)varName.typeInfo)->deactivate = unregFunc; \
+	INIT_QUERY_ARRAY(((Event_t*)varName.typeInfo)->queries,MAX_QUERIES_PER_DM)
 
 #define INIT_TYPE(varName,nodeName,parentNode,numChildren)	strncpy((char*)&varName.name,nodeName,MAX_NAME_LEN);\
 	varName.childrenLen = numChildren; \
-	varName.children = ALLOC_CHILDREN_ARRAY(numChildren); \
+	SET_CHILDREN_ARRAY(varName,numChildren) \
 	varName.parent = &parentNode; \
 	varName.dataModelType = TYPE; \
 	varName.typeInfo = NULL;

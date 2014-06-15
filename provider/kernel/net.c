@@ -34,7 +34,7 @@ static void* getSrc(void) {
 };
 
 static void printResult(QueryID_t id, Tupel_t *tupel) {
-	printk("Received tupel:\t");
+	printk("Received tupel@%p:\t\n",tupel);
 	printTupel(slcDataModel,tupel);
 	freeTupel(slcDataModel,tupel);
 }
@@ -72,6 +72,7 @@ static void initQuery(void) {
 }
 
 static void initDatamodel(void) {
+	int i = 0;
 	INIT_SOURCE_POD(srcSocketType,"type",objSocket,INT,getSrc)
 	INIT_SOURCE_POD(srcSocketFlags,"flags",objSocket,INT,getSrc)
 	INIT_OBJECT(objSocket,"socket",nsNet1,2,INT,activate,deactivate)
@@ -150,14 +151,12 @@ static void initDatamodel(void) {
 	ADD_CHILD(model1,2,nsUI)
 }
 
-static int __init slc_init(void)
+int __init net_init(void)
 {
 	int ret = 0;
 	initDatamodel();
 	initQuery();
 
-	slcDataModel = ALLOC(sizeof(DataModelElement_t));
-	INIT_MODEL((*slcDataModel),0);
 	if ((ret = registerProvider(&model1, &query)) < 0 ) {
 		DEBUG_MSG(1,"Register failed: %d\n",-ret);
 		return -1;
@@ -170,7 +169,7 @@ static int __init slc_init(void)
 	return 0;
 }
 
-static void __exit slc_exit(void) {
+void __exit net_exit(void) {
 	int ret = 0;
 
 	if ((ret = unregisterProvider(&model1, &query)) < 0 ) {
@@ -182,8 +181,8 @@ static void __exit slc_exit(void) {
 	DEBUG_MSG(1,"Unregistered net provider\n");
 }
 
-module_init(slc_init);
-module_exit(slc_exit);
+module_init(net_init);
+module_exit(net_exit);
 
 MODULE_AUTHOR("Alexander Lochmann (alexander.lochmann@tu-dortmund.de)");
 MODULE_DESCRIPTION("");

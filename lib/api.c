@@ -127,6 +127,7 @@ void eventOccured(char *datamodelName, Tupel_t *tupel) {
 
 	for (i = 0; i < MAX_QUERIES_PER_DM; i++) {
 		if (query[i] != NULL) {
+			DEBUG_MSG(2,"Executing query(base@%p) %d: %p\n",query,i,query[i]);
 			executeQuery(slcDataModel,query[i],&tupel);
 		}
 	}

@@ -32,7 +32,7 @@ static void unregObjectCallback(void) {
 };
 
 int main() {
-	int ret = 0;
+	int ret = 0, i = 0;
 	DataModelElement_t *errNode = NULL, *copy = NULL;
 
 	INIT_SOURCE_POD(srcSocketType,"type",objSocket,INT,getSrc)
