@@ -207,58 +207,108 @@ int getTupelSize(DataModelElement_t *rootDM, Tupel_t *tupel) {
 	
 	return size;
 }
-
-static int copyAndCollectAdditionalMem(DataModelElement_t *rootDM, void *oldValue, void *newValue, void *freeMem, DataModelElement_t *element);
-
-static int copyAndCollectIndirectMem(DataModelElement_t *rootDM, void *oldValue, void *newValue, void *freeMem, DataModelElement_t *element) {
-	int j = 0, offset = 0, size = 0;
-
-	for (j = 0; j < element->childrenLen; j++) {
-		offset = getOffset(element,element->children[j]->name);
-		size += copyAndCollectAdditionalMem(rootDM,oldValue + offset, newValue + offset,freeMem,element->children[j]);
-	}
-	
-	return size;
-}
-
 static int copyAndCollectAdditionalMem(DataModelElement_t *rootDM, void *oldValue, void *newValue, void *freeMem, DataModelElement_t *element) {
-	int k = 0, len = 0, size = 0, ret = 0, type = 0;
-	
-	GET_TYPE_FROM_DM(element,type);
-	if ((type & (STRING | ARRAY)) == (STRING | ARRAY)) {
-		*((PTR_TYPE*)newValue) = (PTR_TYPE)freeMem;
-		len = size = *(int*)(*((PTR_TYPE*)(oldValue)));
-		size *= SIZE_STRING;
-		size += sizeof(int);
-		memcpy(freeMem,(void*)*((PTR_TYPE*)(oldValue)),size);
-		freeMem += size;
-		DEBUG_MSG(2,"Copied string array (name=%s) with %d strings to %p\n",element->name,len, (void*)(*(PTR_TYPE*)newValue));
-		
-		for (k = 0; k < len; k++) {
-			ret = strlen(*(char**)((*(PTR_TYPE*)oldValue) + sizeof(int) + k * SIZE_STRING)) + 1;
-			*(char**)((*(PTR_TYPE*)newValue) + sizeof(int) + k * SIZE_STRING) = freeMem;
-			memcpy(*(char**)((*(PTR_TYPE*)newValue) + sizeof(int) + k * SIZE_STRING),*(char**)((*(PTR_TYPE*)oldValue) + sizeof(int) + k * SIZE_STRING),ret);
-			DEBUG_MSG(2,"Copied %d string of array (%s) to %p\n",k,element->name,*(char**)((*(PTR_TYPE*)newValue) + sizeof(int) + k * SIZE_STRING));
-			freeMem += ret;
-			size += ret;
+	int i = 0, j = 0, k = 0, type = 0, len = 0, size = 0, temp = 0, curOffset = 0, prevOffset = 0, steppedDown = 0;
+	DataModelElement_t *curNode = NULL, *parentNode = NULL;
+	void *curValueOld = NULL, *curValueNew = NULL;
+
+	curNode = element;
+	curValueOld = oldValue;
+	curValueNew = newValue;
+	do {
+		steppedDown = 0;
+		temp = 0;
+		GET_TYPE_FROM_DM(curNode,type);
+		//printf("curNode=%s@%d\n",curNode->name,curOffset);
+		if ((type & (STRING | ARRAY)) == (STRING | ARRAY)) {
+			*((PTR_TYPE*)curValueNew) = (PTR_TYPE)freeMem;
+			len = temp = *(int*)(*((PTR_TYPE*)(curValueOld)));
+			temp *= SIZE_STRING;
+			temp += sizeof(int);
+			// First, copy the length information and all pointers.
+			memcpy(freeMem,(void*)*((PTR_TYPE*)(curValueOld)),temp);
+			freeMem += temp;
+			size += temp;
+			DEBUG_MSG(2,"Copied string array (name=%s) with %d strings to %p\n",curNode->name,len, (void*)(*(PTR_TYPE*)curValueNew));
+			// Second, go across the string array and copy all strings to the new memory area and store a pointer to each string in the pointer array at curValueNew
+			for (k = 0; k < len; k++) {
+				temp = strlen(*(char**)((*(PTR_TYPE*)curValueOld) + sizeof(int) + k * SIZE_STRING)) + 1;
+				*(char**)((*(PTR_TYPE*)curValueNew) + sizeof(int) + k * SIZE_STRING) = freeMem;
+				memcpy(*(char**)((*(PTR_TYPE*)curValueNew) + sizeof(int) + k * SIZE_STRING),*(char**)((*(PTR_TYPE*)curValueOld) + sizeof(int) + k * SIZE_STRING),temp);
+				DEBUG_MSG(2,"Copied %d string of array (%s) to %p\n",k,curNode->name,*(char**)((*(PTR_TYPE*)curValueNew) + sizeof(int) + k * SIZE_STRING));
+				freeMem += temp;
+				size += temp;
+			}
+		} else if (type & ARRAY) {
+			*((PTR_TYPE*)curValueNew) = (PTR_TYPE)freeMem;
+			len = *(int*)(*((PTR_TYPE*)curValueOld));
+			if ((temp = getDataModelSize(rootDM,curNode,1)) == -1) {
+				return -1;
+			}
+			temp = len * temp + sizeof(int);
+			// In contrast to a string array this one can be copied in one operation.
+			memcpy(freeMem,(void*)*((PTR_TYPE*)curValueOld),temp);
+			DEBUG_MSG(2,"Copied an array (%s) with %d elemetns to %p\n",curNode->name,len,(void*)*((PTR_TYPE*)curValueNew));
+			size += temp;
+			freeMem += temp;
+		} else if (type & STRING) {
+			*((PTR_TYPE*)curValueNew) = (PTR_TYPE)freeMem;
+			temp = strlen((char*)(*(PTR_TYPE*)curValueOld)) + 1;
+			memcpy(freeMem,(char*)(*(PTR_TYPE*)curValueOld),temp);
+			DEBUG_MSG(2,"Copied string (%s='%s'@%p) to %p with size %d\n",curNode->name,(char*)(*(PTR_TYPE*)curValueOld),(char*)(*(PTR_TYPE*)curValueOld),freeMem,size);
+			size += temp;
+			freeMem += temp;
+		} else if ((type & TYPE) || (type & COMPLEX)) {
+			curNode = curNode->children[0];
+			prevOffset = 0;
+			curOffset = 0;
+			steppedDown = 1;
+			//printf("down: offset=%d\n",curOffset);
 		}
-	} else if (type & ARRAY) {
-		*((PTR_TYPE*)newValue) = (PTR_TYPE)freeMem;
-		len = *(int*)(*((PTR_TYPE*)oldValue));
-		if ((ret = getDataModelSize(rootDM,element,1)) == -1) {
-			return -1;
+		if (steppedDown == 0) {
+			// look for the current nodes sibling.
+			while(curNode != element) {
+				j = -1;
+				parentNode = curNode->parent;
+				for (i = 0; i < parentNode->childrenLen; i++) {
+					if (parentNode->children[i] == curNode) {
+						j = i;
+						break;
+					}
+				}
+				if (j == parentNode->childrenLen - 1) {
+					// If there is none, go one level up and look for this nodes sibling.
+					curNode = parentNode;
+					// curValue 
+					curValueNew -= curOffset;
+					curValueOld -= curOffset;
+					if ((curOffset = getOffset(curNode->parent,curNode->name)) == -1) {
+						return -1;
+					}
+					prevOffset = curOffset;
+					//printf("up: offset=%d\n",curOffset);
+				} else {
+					// At least one sibling left. Go for it.
+					j++;
+					// Get the offset in bytes within the current struct
+					if ((curOffset = getOffset(parentNode,parentNode->children[j]->name)) == -1) {
+						return -1;
+					}
+					/*
+					 * curOffset represents the offset from beginnging of the struct.
+					 * Hence, we have to remember the previous offset to just add the margin.
+					 */
+					curNode = parentNode->children[j];
+					curValueNew = curValueNew + (curOffset - prevOffset);
+					curValueOld = curValueOld + (curOffset - prevOffset);
+					prevOffset = curOffset;
+					break;
+				}
+			// Stop, if the root node is reached.
+			};
 		}
-		size = len * ret + sizeof(int);
-		memcpy(freeMem,(void*)*((PTR_TYPE*)oldValue),size);
-		DEBUG_MSG(2,"Copied an array (%s) with %d elemetns to %p, %p\n",element->name,len,(void*)*((PTR_TYPE*)newValue),newValue);
-	} else if (type & STRING) {
-		*((PTR_TYPE*)newValue) = (PTR_TYPE)freeMem;
-		size = strlen((char*)(*(PTR_TYPE*)oldValue)) + 1;
-		memcpy(freeMem,(char*)(*(PTR_TYPE*)oldValue),size);
-		DEBUG_MSG(2,"Copied string (%s='%s'@%p) to %p with size %d\n",element->name,(char*)(*(PTR_TYPE*)oldValue),(char*)(*(PTR_TYPE*)oldValue),freeMem,size);
-	} else if ((type & TYPE) || (type & COMPLEX)) {
-		size = copyAndCollectIndirectMem(rootDM,oldValue,newValue,freeMem,element);
-	}
+	} while(curNode != element);
+
 	return size;
 }
 
