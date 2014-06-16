@@ -1,5 +1,12 @@
 #include <resultset.h>
 
+/**
+ * Frees the values stored at {@link value}. In order to do this, it searches the datamodel from {@link element} downwards for indirect allocated memory.
+ * This could be a string, an array or an string array.
+ * @param rootDM a pointer to the slc datamodel
+ * @param value a pointer to an instance of {@link element}
+ * @param element a pointer to the datamodel element, which describes the layout of the memory {@link value} points to
+ */
 static void freeItem(DataModelElement_t *rootDM, void *value, DataModelElement_t *element) {
 	int i = 0, j = 0, k = 0, type = 0, len = 0, curOffset = 0, prevOffset = 0, steppedDown = 0;
 	DataModelElement_t *curNode = NULL, *parentNode = NULL;
@@ -10,6 +17,10 @@ static void freeItem(DataModelElement_t *rootDM, void *value, DataModelElement_t
 	do {
 		steppedDown = 0;
 		GET_TYPE_FROM_DM(curNode,type);
+		/*
+		 * If the current node is a string array, it needs a special treatment.
+		 * The code must iterate over all array elements and free them as well.
+		 */
 		if ((type & (STRING | ARRAY)) == (STRING | ARRAY)) {
 			DEBUG_MSG(2,"Freeing string array: %s@%p, offset=%d\n",curNode->name,(void*)*(PTR_TYPE*)curValue,curOffset);
 			len = *(int*)(*((PTR_TYPE*)curValue));
@@ -18,15 +29,17 @@ static void freeItem(DataModelElement_t *rootDM, void *value, DataModelElement_t
 			}
 			FREE((char*)(*(PTR_TYPE*)curValue));
 		} else if (type & ARRAY || type & STRING) {
+			// If the element is a string or an array, curValue points to one memory chunk. Therefore, it can be freed with one single call.
 			DEBUG_MSG(2,"Freeing array/string: %s@%p, offset=%d\n",curNode->name,(void*)*(PTR_TYPE*)curValue,curOffset);
 			FREE((void*)*(PTR_TYPE*)curValue);
 		} else if ((type & TYPE) || (type & COMPLEX)) {
+			// Oh no. Element is complex datatype. It is necessary to step down and look for further arrays or strings.
 			curNode = curNode->children[0];
 			prevOffset = 0;
 			steppedDown = 1;
 		}
 		if (steppedDown == 0) {
-			// Second, look for the current nodes sibling.
+			// Look for the current nodes sibling.
 			while(curNode != element) {
 				j = -1;
 				parentNode = curNode->parent;
@@ -47,10 +60,15 @@ static void freeItem(DataModelElement_t *rootDM, void *value, DataModelElement_t
 				} else {
 					// At least one sibling left. Go for it.
 					j++;
+					// Get the offset in bytes within the current struct
 					if ((curOffset = getOffset(parentNode,parentNode->children[j]->name)) == -1) {
 						return;
 					}
 					curNode = parentNode->children[j];
+					/*
+					 * curOffset represents the offset from beginnging of the struct.
+					 * Hence, we have to remember the previous offset to just add the margin.
+					 */
 					curValue = curValue + (curOffset - prevOffset);
 					prevOffset = curOffset;
 					break;
@@ -61,11 +79,16 @@ static void freeItem(DataModelElement_t *rootDM, void *value, DataModelElement_t
 	} while(curNode != element);
 	FREE(value);
 }
-
+/**
+ * Frees the tupel, all its items and the memory the items value pointers points to.
+ * @param rootDM a pointer to the slc datamodel
+ * @param tupel a pointer to Tupel
+ * @see freeItem()
+ */
 void freeTupel(DataModelElement_t *rootDM, Tupel_t *tupel) {
 	DataModelElement_t *element = NULL;
 	int i = 0;
-	
+	// The tupel is compact. Just one free is needed.
 	if (IS_COMPACT(tupel)) {
 		FREE(tupel);
 		return;
@@ -91,7 +114,13 @@ void freeTupel(DataModelElement_t *rootDM, Tupel_t *tupel) {
 #ifdef __KERNEL__
 EXPORT_SYMBOL(freeTupel);
 #endif
-
+/**
+ * Deletes one item at index {@link slot} from {@link tupel} and frees every memory allocated for it.
+ * The item pointer (Tupel_t->items[slot]) is set to NULL. The items array will not be resized.
+ * @param rootDM a pointer to the slc datamodel
+ * @param tupel a pointer to Tupel
+ * @param slot the index of the item
+ */
 void deleteItem(DataModelElement_t *rootDM, Tupel_t *tupel, int slot) {
 	DataModelElement_t *dm = NULL;
 	
@@ -102,7 +131,13 @@ void deleteItem(DataModelElement_t *rootDM, Tupel_t *tupel, int slot) {
 	}
 	tupel->items[slot] = NULL;
 }
-
+/**
+ * Calculates the size in bytes of the instance of {@link element} stored at {@link value}.
+ * This includes all indirect allocated memory, e.g. arrays, strings ....
+ * @param rootDM a pointer to the slc datamodel
+ * @param value a pointer to an instance of {@link element}
+ * @param element a pointer to the datamodel element, which describes the layout of the memory {@link value} points to
+ */
 static int getItemSize(DataModelElement_t *rootDM, void *value, DataModelElement_t *element) {
 	int i = 0, j = 0, k = 0, type = 0, len = 0, size = 0, temp = 0, curOffset = 0, prevOffset = 0, steppedDown = 0;
 	DataModelElement_t *curNode = NULL, *parentNode = NULL;
@@ -143,7 +178,7 @@ static int getItemSize(DataModelElement_t *rootDM, void *value, DataModelElement
 			//printf("down: offset=%d\n",curOffset);
 		}
 		if (steppedDown == 0) {
-			// Second, look for the current nodes sibling.
+			// look for the current nodes sibling.
 			while(curNode != element) {
 				j = -1;
 				parentNode = curNode->parent;
@@ -156,6 +191,7 @@ static int getItemSize(DataModelElement_t *rootDM, void *value, DataModelElement
 				if (j == parentNode->childrenLen - 1) {
 					// If there is none, go one level up and look for this nodes sibling.
 					curNode = parentNode;
+					// curValue 
 					curValue -= curOffset;
 					if ((curOffset = getOffset(curNode->parent,curNode->name)) == -1) {
 						return -1;
@@ -165,9 +201,14 @@ static int getItemSize(DataModelElement_t *rootDM, void *value, DataModelElement
 				} else {
 					// At least one sibling left. Go for it.
 					j++;
+					// Get the offset in bytes within the current struct
 					if ((curOffset = getOffset(parentNode,parentNode->children[j]->name)) == -1) {
 						return -1;
 					}
+					/*
+					 * curOffset represents the offset from beginnging of the struct.
+					 * Hence, we have to remember the previous offset to just add the margin.
+					 */
 					curNode = parentNode->children[j];
 					curValue = curValue + (curOffset - prevOffset);
 					prevOffset = curOffset;
@@ -180,9 +221,11 @@ static int getItemSize(DataModelElement_t *rootDM, void *value, DataModelElement
 
 	return size;
 }
-
-
-
+/**
+ * Calculates the size in bytes of {@link tupel}, its items, the values and all indirect allocated memory.
+ * @param rootDM a pointer to the slc datamodel
+ * @param tupel a pointer to a Tupel_t
+ */
 int getTupelSize(DataModelElement_t *rootDM, Tupel_t *tupel) {
 	DataModelElement_t *element = NULL;
 	int i = 0, ret = 0, size = 0;
@@ -207,6 +250,15 @@ int getTupelSize(DataModelElement_t *rootDM, Tupel_t *tupel) {
 	
 	return size;
 }
+/**
+ * Copies all indirectly used memory for {@link element} to {@link freeMem} and sets the length information and all pointers in {@link newValue} appropriatly.
+ * @param rootDM a pointer to the slc datamodel
+ * @param oldValue a pointer to the old instance of {@link element}
+ * @param newValue a pointer to the new instance of {@link element}
+ * @param freeMem a pointer to the remaining free memory
+ * @param element a pointer to the datamodel element, which describes the layout of the memory {@link oldValue} points to
+ * @return 0, if all memory was successfully copied. -1, otherwise.
+ */
 static int copyAndCollectAdditionalMem(DataModelElement_t *rootDM, void *oldValue, void *newValue, void *freeMem, DataModelElement_t *element) {
 	int i = 0, j = 0, k = 0, type = 0, len = 0, size = 0, temp = 0, curOffset = 0, prevOffset = 0, steppedDown = 0;
 	DataModelElement_t *curNode = NULL, *parentNode = NULL;
@@ -311,7 +363,14 @@ static int copyAndCollectAdditionalMem(DataModelElement_t *rootDM, void *oldValu
 
 	return size;
 }
-
+/**
+ * Calculates the size in bytes of {@link tupel} and all its indirect memory. Allocates one large chunk.
+ * Finally, it copies the tupel, its items, their values and all indirect memory to the new area.
+ * @param rootDM a pointer to the slc datamodel
+ * @param tupel a pointer to Tupel
+ * @return a pointer to the new tupel on success. NULL otherwise
+ * @see copyAndCollectAdditionalMem()
+ */
 Tupel_t* copyAndCollectTupel(DataModelElement_t *rootDM, Tupel_t *tupel) {
 	int size = 0, i = 0, j = 0, numItems = 0;
 	Tupel_t *ret = NULL;
@@ -325,13 +384,16 @@ Tupel_t* copyAndCollectTupel(DataModelElement_t *rootDM, Tupel_t *tupel) {
 		return NULL;
 	}
 	memcpy(ret,tupel,sizeof(Tupel_t));
+	// Mark it as compact and store its size
 	ret->isCompact = (size << 8) | 0x1;
 	ret->items = (Item_t**)(((void*)ret) + sizeof(Tupel_t));
+	// First, count the number of really present items. Due to delete operations one or more items might be deleted.
 	for (i = 0; i < tupel->itemLen; i++) {
 		if (tupel->items[i] != NULL) {
 			numItems++;
 		}
 	}
+	// Second, copy the item poitner array
 	memcpy(ret->items,tupel->items,sizeof(Item_t**) * numItems);
 	ret->itemLen = numItems;
 	newValue = ((void*)ret) + sizeof(Tupel_t) + sizeof(Item_t**) * numItems;
@@ -341,19 +403,22 @@ Tupel_t* copyAndCollectTupel(DataModelElement_t *rootDM, Tupel_t *tupel) {
 		if (tupel->items[i] == NULL) {
 			continue;
 		}
+		// Third, copy each item
 		memcpy(newValue,tupel->items[i],sizeof(Item_t));
 		ret->items[j] = newValue;
+		// For now, the j-th item has no value.
 		ret->items[j]->value = NULL;
 		DEBUG_MSG(2,"Copied %d (->%d) item (%s) to %p\n",i,j,ret->items[j]->name,ret->items[j]);
 		newValue += sizeof(Item_t);
-		
+		// Fourth, get the size of element and copy the directly used memory.
 		element = getDescription(rootDM,tupel->items[i]->name);
 		size = getDataModelSize(rootDM,element,0);
 		memcpy(newValue,tupel->items[i]->value,size);
 		ret->items[j]->value = newValue;
-		DEBUG_MSG(1,"Copied %d (->%d) items (%s) value bytes (%d) to %p\n",i,j,ret->items[j]->name,size,ret->items[j]->value);
-	
+		DEBUG_MSG(2,"Copied %d (->%d) items (%s) value bytes (%d) to %p\n",i,j,ret->items[j]->name,size,ret->items[j]->value);
+		// Finally, copy all indrectly used memory
 		size += copyAndCollectAdditionalMem(rootDM,tupel->items[i]->value,newValue,newValue+size,element);
+		DEBUG_MSG(2,"Copied %d additional bytes for item %s\n",size,ret->items[j]->name);
 		newValue += size;
 		j++;
 	}

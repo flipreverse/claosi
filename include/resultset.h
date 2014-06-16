@@ -14,6 +14,22 @@
 
 #define ALLOC_ITEM_ARRAY(size)	(Item_t**)ALLOC(sizeof(Item_t**) * size)
 
+/**
+ * This algorithm is the basis for each operation on a tupel.
+ * First, it tries to find an item which name (tupelVar->items[i]->name) matches the first part of the provided element name.
+ * This element name is provided by a user as a string (typeName) containing the path to the node in the datamodel.
+ * If the algorithm finds a suitable item, it strips the first part (childName += strlen(tupelVar->items[i]->name);) off. Otherwise it will abort.
+ * If the remaining name is not empty, the algorithm will tokenize the string and walk down the datamodel. In addition to that, the pointer
+ * to the memory area, where the values resides, will be set as well during the walk down.
+ * After terminating the datamodelElementVar variable will hold a pointer to a DataModelElement_t* describing the element and the valuePtrVar points to
+ * the memory area, where its value resides.
+ * 
+ * The macro may be used in a function returning non-void. Thus, it has to return a value, if it has to abort.
+ * This value will be provided by the user via a macro called DEFAULT_RETURN_VALUE. It has to set right before the macro und unset right after it.
+ * #define DEFAULT_RETURN_VALUE "PFERD"
+ * GET_MEMBER_POINTER_ALGO_ONLY(...)
+ * #undef DEFAULT_RETURN_VALUE
+ */
 #define GET_MEMBER_POINTER_ALGO_ONLY(tupelVar, rootDatamodelVar, typeName, datamodelElementVar, valuePtrVar) int ret = 0, i = 0; \
 char *token = NULL, *tokInput = NULL, *tokInput_ = NULL, *childName = NULL; \
 for (i = 0; i < tupelVar->itemLen; i++) { \
@@ -60,11 +76,19 @@ if (strlen(childName) > 0) { \
 	} \
 	FREE(tokInput_); \
 }
-
+/**
+ * This macro does the same as GET_MEMBER_POINTER_ALGO_ONLY besides it declares
+ * the datamodelElementVar and the valuePtrVar.
+ * This macro is used in all get and set methods.
+ */
 #define GET_MEMBER_POINTER(tupelVar,rootDatamodel,typeName) DataModelElement_t *dm = NULL; \
 void *valuePtr = NULL; \
 GET_MEMBER_POINTER_ALGO_ONLY(tupelVar, rootDatamodel, typeName, dm, valuePtr)
-
+/**
+ * Sometimes a path specifitcations leads to a Source, Object or an Event.
+ * If so, it is necessary to resolve the actual type by interpreting the type-specific information stored in
+ * typeInfo.
+ */
 #define GET_TYPE_FROM_DM(varName,varType) if (varName->dataModelType == SOURCE) { \
 	varType = ((Source_t*)varName->typeInfo)->returnType; \
 } else if (varName->dataModelType == EVENT) { \
@@ -76,17 +100,23 @@ GET_MEMBER_POINTER_ALGO_ONLY(tupelVar, rootDatamodel, typeName, dm, valuePtr)
 }
 
 typedef struct __attribute__((packed)) Item {
-	DECLARE_BUFFER(name)
-	void *value;
+	DECLARE_BUFFER(name)						// A path describing the way down to the datamodel element stored at value, e.g. "net.packetType" and value points to the first element of packetType.
+	void *value;								// A pointer to a memory area where the values resides
 } Item_t;
 
 typedef struct __attribute__((packed)) Tupel {
-	unsigned long long timestamp;
-	unsigned short itemLen;
-	unsigned int isCompact;
+	unsigned long long timestamp;				// The current time since 1-1-1970 in ms
+	unsigned short itemLen;						// Number of items
+	unsigned int isCompact;						// If the first byte contains an one, the tupel and its items are stored in one large memory area. If so, the remaining bytes contain the size of thie area in bytes.
 	Item_t **items;
 } Tupel_t;
 
+/**
+ * The following functions should help to access a tupel.
+ * They can be used to set value within a flat memory area. Flat means that the datamodel does not contain
+ * any array, but is a allowed to have nested struct, e.g. packetType { int first; complext second; }.
+ * The typeName parameter describes to the path to the desired element, e.g. "packetType.second".
+ */
 static inline void setItemInt(DataModelElement_t *rootDM, Tupel_t *tupel, char *typeName, int value) {
 	#define DEFAULT_RETURN_VALUE	
 	GET_MEMBER_POINTER(tupel,rootDM,typeName);
@@ -118,42 +148,17 @@ static inline void setItemString(DataModelElement_t *rootDM, Tupel_t *tupel, cha
 	*(PTR_TYPE*)valuePtr = (PTR_TYPE)value;
 	#undef DEFAULT_RETURN_VALUE
 }
-
-static inline int getItemInt(DataModelElement_t *rootDM, Tupel_t *tupel, char *typeName) {
-	#define DEFAULT_RETURN_VALUE 0
-	GET_MEMBER_POINTER(tupel,rootDM,typeName);
-	return *(int*)valuePtr;
-	#undef DEFAULT_RETURN_VALUE
-}
-
-static inline char getItemByte(DataModelElement_t *rootDM, Tupel_t *tupel, char *typeName) {
-	#define DEFAULT_RETURN_VALUE '\0'
-	GET_MEMBER_POINTER(tupel,rootDM,typeName);
-	return *(char*)valuePtr;
-	#undef DEFAULT_RETURN_VALUE
-}
-#ifndef __KERNEL__
-static inline double getItemFloat(DataModelElement_t *rootDM, Tupel_t *tupel, char *typeName) {
-	#define DEFAULT_RETURN_VALUE 0
-	GET_MEMBER_POINTER(tupel,rootDM,typeName);
-	return *(double*)valuePtr;
-	#undef DEFAULT_RETURN_VALUE
-}
-#endif
-static inline char* getItemString(DataModelElement_t *rootDM, Tupel_t *tupel, char *typeName) {
-	#define DEFAULT_RETURN_VALUE NULL
-	GET_MEMBER_POINTER(tupel,rootDM,typeName);
-	return (char*)*(PTR_TYPE*)valuePtr;
-	#undef DEFAULT_RETURN_VALUE
-}
-
+/**
+ * Allocates an array with {@link num} elements at {@link typeName}.
+ * If the tupel is compact, the function refueses access to the tupel, because its sized is fixed.
+ */
 static inline void setItemArray(DataModelElement_t *rootDM, Tupel_t *tupel, char *typeName, int num) {
 	#define DEFAULT_RETURN_VALUE
 	int size = 0;
 	GET_MEMBER_POINTER(tupel,rootDM,typeName);
 	size = getSize(rootDM,dm);
 	if (IS_COMPACT(tupel)) {
-		DEBUG_MSG(1,"Refusing access (%s) to an item, because to tupel is compact.\n",__FUNCTION__);
+		DEBUG_MSG(1,"Refusing access (%s) to an item, because tupel is compact.\n",__FUNCTION__);
 		return;
 	}
 	if ((*((PTR_TYPE*)valuePtr) = (PTR_TYPE)ALLOC(num * size + sizeof(int))) == 0) {
@@ -202,6 +207,34 @@ static inline void setArraySlotString(DataModelElement_t *rootDM,Tupel_t *tupel,
 		return;
 	}
 	*(char**)((*(PTR_TYPE*)(valuePtr)) + sizeof(int) + arraySlot * SIZE_STRING) = value;
+	#undef DEFAULT_RETURN_VALUE
+}
+
+static inline int getItemInt(DataModelElement_t *rootDM, Tupel_t *tupel, char *typeName) {
+	#define DEFAULT_RETURN_VALUE 0
+	GET_MEMBER_POINTER(tupel,rootDM,typeName);
+	return *(int*)valuePtr;
+	#undef DEFAULT_RETURN_VALUE
+}
+
+static inline char getItemByte(DataModelElement_t *rootDM, Tupel_t *tupel, char *typeName) {
+	#define DEFAULT_RETURN_VALUE '\0'
+	GET_MEMBER_POINTER(tupel,rootDM,typeName);
+	return *(char*)valuePtr;
+	#undef DEFAULT_RETURN_VALUE
+}
+#ifndef __KERNEL__
+static inline double getItemFloat(DataModelElement_t *rootDM, Tupel_t *tupel, char *typeName) {
+	#define DEFAULT_RETURN_VALUE 0
+	GET_MEMBER_POINTER(tupel,rootDM,typeName);
+	return *(double*)valuePtr;
+	#undef DEFAULT_RETURN_VALUE
+}
+#endif
+static inline char* getItemString(DataModelElement_t *rootDM, Tupel_t *tupel, char *typeName) {
+	#define DEFAULT_RETURN_VALUE NULL
+	GET_MEMBER_POINTER(tupel,rootDM,typeName);
+	return (char*)*(PTR_TYPE*)valuePtr;
 	#undef DEFAULT_RETURN_VALUE
 }
 
@@ -278,9 +311,16 @@ static inline int allocItem(DataModelElement_t *rootDM, Tupel_t *tupel, int slot
 	return 0;
 }
 
+/**
+ * Grows the tupel by {@link newItems} items.
+ */
 static inline int addItem(Tupel_t **tupel, int newItems) {
 	Tupel_t *temp = NULL;
 	
+	if (IS_COMPACT((*tupel))) {
+		DEBUG_MSG(1,"Refusing access (%s) to an item, because to tupel is compact.\n",__FUNCTION__);
+		return -1;
+	}
 	if ((temp = REALLOC(*tupel,sizeof(Tupel_t) + sizeof(Item_t**) * ((*tupel)->itemLen + newItems))) == NULL) {
 		return -1;
 	}

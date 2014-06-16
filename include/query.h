@@ -5,6 +5,9 @@
 #include <datamodel.h>
 #include <resultset.h>
 
+/**
+ * Generates an unique query which will be assigned to Query_t.queryID
+ */
 #define MAKE_QUERY_ID(globalID,localID)	((globalID << 8) | (localID & 0xf))
 #define GET_LOCAL_QUERY_ID(queryID)		(queryID & 0xf)
 #define GET_GLOBAL_QUERY_ID(queryID)	(queryID >> 8)
@@ -106,16 +109,24 @@ enum SizeUnit {
 
 typedef void (*queryCompletedFunction)(QueryID_t,Tupel_t*);
 
+/**
+ * Baseclass for a query. Each element of a query uses this struct.
+ */
 typedef struct Operator {
 	unsigned short type;
 	struct Operator *child;	
 } Operator_t;
-
+/**
+ * Used to describe the left-hand and right-hand side of a predicate
+ */
 typedef struct Operand {
 	unsigned short type;
 	DECLARE_BUFFER(value)
 } Operand_t;
-
+/**
+ * Describes a single element of the datamodel.
+ * For now, it just contains a string holding the complete path to the desired element.
+ */
 typedef struct Element {
 	DECLARE_BUFFER(name)
 } Element_t;
@@ -171,12 +182,6 @@ typedef struct Select {
 	unsigned short elementsLen;
 	Element_t **elements;
 } Select_t;
-/**
- * für alle elements: ist i-tes element vorhanden?
- * 				ja: merken/makieren
- * 				nein: -
- * alle makierten elements in ein neues Tupel gießen
- */
 
 typedef struct Sort {
 	Operator_t base;
@@ -225,11 +230,11 @@ typedef struct Aggregate {
  */
 
 typedef struct __attribute__((packed)) Query {
-	struct Query *next;
-	Operator_t *root;
-	unsigned short queryType;
-	QueryID_t queryID;
-	queryCompletedFunction onQueryCompleted;
+	struct Query *next;								// Since a provider can issue more than one query at a time the next pointer holds the address of the next query. The user has to set it to NULL, if the current instance is the last one.
+	Operator_t *root;								// Points to the first element of the actual query, which in fact is of type GEN_{OBJECT,SOURCE,EVENT}.
+	unsigned short queryType;						// Indicates an synchronous or synchronoues query. The letter one will be executed immediately. Therefore it can only be a source or object-status query. TODO: This member may be obsolete.
+	QueryID_t queryID;								// An unique identifier for this query. The first byte is used to address the queries array of a node in the datamodel. The upper bytes contain a global id, which is incremented each time a new query is registered.
+	queryCompletedFunction onQueryCompleted;		// A function being called, if a query completes *and* the tupel is not rejected. The called code has to free the tupel!
 } Query_t;
 
 int checkQuerySyntax(DataModelElement_t *rootDM, Operator_t *rootQuery, Operator_t **errOperator);

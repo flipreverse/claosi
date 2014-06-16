@@ -10,18 +10,18 @@
 #include <stdio.h>
 #endif
 
-#define MAX_NAME_LEN	40
-#define DECLARE_BUFFER(name)	char name[MAX_NAME_LEN + 1];
+#define MAX_NAME_LEN						40
+#define DECLARE_BUFFER(name)				char name[MAX_NAME_LEN + 1];
 
 #ifdef __KERNEL__
-#define PRINT_MSG(args...)	printk(KERN_INFO args);
+#define PRINT_MSG(args...)					printk(KERN_INFO args);
 #define	ALLOC(size)							kmalloc(size,GFP_KERNEL)
 #define	FREE(ptr)							kfree(ptr)
 #define REALLOC(ptr,size)					krealloc(ptr,size,GFP_KERNEL)
 #define STRTOINT(strVar,intVar)				kstrtos32(strVar,10,&intVar)
 #define STRTOCHAR(strVar,charVar)			kstrtos8(strVar,10,&charVar)
 #else
-#define PRINT_MSG(args...)	printf(args);
+#define PRINT_MSG(args...)					printf(args);
 #define	ALLOC(size)							malloc(size)
 #define	FREE(ptr)							free(ptr)
 #define REALLOC(ptr,size)					realloc(ptr,size)
@@ -54,10 +54,10 @@ enum {
 	ENOFERQ,						// No frequency provided
 	ENOOBJSTATUS,					// No valid bitmask for an objects status were provided
 	EWRONGSTREAMTYPE,				// The provided stream origin and the corresponding element in the datamodel does not have the same type
-	EPARAM,
-	ERESULTFUNCPTR,
-	EQUERYTYPE,
-	EMAXQUERIES
+	EPARAM,							// At least one parameter has a wrong value
+	ERESULTFUNCPTR,					// At least one of the provided queries have no onCompletedFunction pointer set
+	EQUERYTYPE,						// 
+	EMAXQUERIES						// The maximum number of queries assigned to a node is reached
 };
 
 #endif // __COMMON_H__
