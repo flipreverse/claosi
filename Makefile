@@ -143,6 +143,10 @@ kernel: $(DIRS_KERN) $(LIB_KERNEL_SRC) $(BUILD_KERN)/Kbuild $(BUILD_KERN)/Makefi
 	
 kernel-clean:
 	$(MAKE) -C $(KDIR) KBUILD_EXTMOD=$$PWD/$(BUILD_KERN) KBUILD_SRC=$(KDIR) clean
+	$(RM) $(LIB_KERNEL_SRC)
+	$(RM) $(PROVIDER_KERNEL_SRC)
+	$(RM) $(BUILD_KERN)/Kbuild
+	$(RM) $(BUILD_KERN)/Makefile
 
 git_version.h:
 	@echo "Generating version information"
@@ -165,8 +169,6 @@ $(BUILD_PATH)/%:
 	$(OUTPUT)mkdir -p $@
 
 clean: kernel-clean clean-dep clean-obj 
-	$(RM) $(LIB_KERNEL_SRC)
-	$(RM) $(PROVIDER_KERNEL_SRC)
 
 clean-dep:
 	$(RM) $(DEP)
