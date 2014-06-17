@@ -138,7 +138,7 @@ $(BUILD_USER)/%.d: %.c
 	@echo $(DEB_TEXT)
 	$(OUTPUT)$(call make-depend,$<,$(subst .d,.o,$@),$(subst .o,.d,$@))
 
-kernel: $(DIRS) $(LIB_KERNEL_SRC) $(BUILD_KERN)/Kbuild $(BUILD_KERN)/Makefile $(PROVIDER_KERNEL_SRC)
+kernel: $(DIRS_KERN) $(LIB_KERNEL_SRC) $(BUILD_KERN)/Kbuild $(BUILD_KERN)/Makefile $(PROVIDER_KERNEL_SRC)
 	$(MAKE) -C $(KDIR) KBUILD_EXTMOD=$$PWD/$(BUILD_KERN) KBUILD_SRC=$(KDIR)
 	
 kernel-clean:
