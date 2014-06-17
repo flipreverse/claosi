@@ -77,6 +77,7 @@ int unregisterProvider(DataModelElement_t *dm, Query_t *queries) {
 		if ((ret = deleteSubtree(&slcDataModel,dm)) < 0) {
 			return ret;
 		}
+		// If deleteSubtree removes even the root node, it is necessary to reinitialize the global datamodel
 		if (slcDataModel == NULL) {
 			initSLC();
 		}

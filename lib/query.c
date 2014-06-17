@@ -4,6 +4,13 @@
 
 static QueryID_t globalQueryID = 1;
 
+/**
+ * Applies a certain {@link predicate} to a {@link tupel}.
+ * @param rootDM a pointer to the slc datamodel
+ * @param predicate the predicate which should be applied
+ * @param tupel a pointer to the tupel
+ * @return 1 on success. 0 otherwise.
+ */
 static int applyPredicate(DataModelElement_t *rootDM, Predicate_t *predicate, Tupel_t *tupel) {
 	int type = STRING, leftI = 0, rightI = 0;
 	char leftC = 0, rightC = 0;
@@ -13,6 +20,7 @@ static int applyPredicate(DataModelElement_t *rootDM, Predicate_t *predicate, Tu
 	void *valueLeft = NULL, *valueRight = NULL;
 	DataModelElement_t *dm = NULL;
 
+	// Resolve the memory location where the value is stored we want to compare
 	#define DEFAULT_RETURN_VALUE 0
 	if (predicate->left.type == STREAM) {
 		GET_MEMBER_POINTER_ALGO_ONLY(tupel, rootDM, (char*)&predicate->left.value, dm, valueLeft);
@@ -23,7 +31,7 @@ static int applyPredicate(DataModelElement_t *rootDM, Predicate_t *predicate, Tu
 		GET_TYPE_FROM_DM(dm,type);
 	}
 	#undef DEFAULT_RETURN_VALUE
-
+	// For now, comparison of arrays is forbidden
 	if (type & ARRAY) {
 		return 0;
 	}
@@ -66,6 +74,7 @@ static int applyPredicate(DataModelElement_t *rootDM, Predicate_t *predicate, Tu
 			break;
 
 		case FLOAT:
+			// It is not easy to compare a double inside the kernel. It will be rejected. TODO
 			#ifdef __KERNEL__
 			return 0;
 			#else
@@ -123,11 +132,18 @@ static int applyFilter(DataModelElement_t *rootDM, Filter_t *filterOperator, Tup
 	}
 	return 1;
 }
-
+/**
+ * Deletes all items from {@link tupel} which are *not* listed in {@link selectOperator}.
+ * @param rootDM a pointer to the slc datamodel
+ * @param selectOperator the select statement which should be applied
+ * @param tupel a pointer to the tupel
+ * @return 0
+ */
 static int applySelect(DataModelElement_t *rootDM, Select_t *selectOperator, Tupel_t *tupel) {
 	int i = 0, j = 0, found = 0;
 	
 	for (i = 0; i < tupel->itemLen; i++) {
+		// Ommit nonexistent items
 		if (tupel->items[i] == NULL) {
 			continue;
 		}
@@ -144,7 +160,14 @@ static int applySelect(DataModelElement_t *rootDM, Select_t *selectOperator, Tup
 	
 	return 1;
 }
-
+/**
+ * Executes {@link query}. If one of the operators do not aplly to the {@link tupel}, the {@link tuple} will be freed.
+ * Therefore the caller has to provide a pointer to the pointer of tupel. In the letter case the pointer will be set to NULL.
+ * If the tupel passes all operatores, a queries onQueryCompleted function will be called.
+ * @param rootDM a pointer to the slc datamodel
+ * @param query the query to be executed
+ * @param tupel 
+ */
 void executeQuery(DataModelElement_t *rootDM, Query_t *query, Tupel_t **tupel) {
 	Operator_t *cur = NULL;
 
@@ -194,7 +217,12 @@ void executeQuery(DataModelElement_t *rootDM, Query_t *query, Tupel_t **tupel) {
 		query->onQueryCompleted(query->queryID,*tupel);
 	}
 }
-
+/**
+ * By default the function will just the memory which is definitely allocated by a *malloc, e.g.
+ * a predicates pointer array. If {@link freeOperator} is not zero, the operator itself will be freed, too.
+ * @param op a pointer to the first operator which should be freed
+ * @param freeOperator indicates, if an operator should be freed as well
+ */
 void freeQuery(Operator_t *op, int freeOperator) {
 	Operator_t *cur = op, *prev = NULL;
 
@@ -320,7 +348,15 @@ EXPORT_SYMBOL(freeQuery);
 		return -ENOELEMENT; \
 	} \
 }
-
+/**
+ * Does a rudimental syntax checking. Abort on error and {@link errOperator}, if not NULL, will point 
+ * to the faulty operator.
+ * There definitely more work to do, but for now this will do.
+ * @param rootDM a pointer to the slc datamodel
+ * @param rootQuery the root operator of this query
+ * @param errOperator will point to the faulty operator, if not NULL
+ * @return 0 on success and a value below zero, if an error was discovered.
+ */
 int checkQuerySyntax(DataModelElement_t *rootDM, Operator_t *rootQuery, Operator_t **errOperator) {
 	int i = 0, j = 0;
 	Operator_t *cur = rootQuery;
@@ -470,7 +506,14 @@ int checkQuerySyntax(DataModelElement_t *rootDM, Operator_t *rootQuery, Operator
 
 	return 0;
 }
-
+/**
+ * Checks each query of the query list provided by the user. Each list entry should have an associated operator, a onCompleted function pointer
+ * and the query syntax should be correct.
+ * @param rootDM a pointer to the slc datamodelquery
+ * @param query a pointer to the first query in that list
+ * @param errOperator will point to the faulty operator, if not NULL
+ * @return 0 on success and a value below zero, if an error was discovered.
+ */
 int checkQueries(DataModelElement_t *rootDM, Query_t *queries, Operator_t **errOperator, int syncAllowed) {
 	int ret = 0;
 	Query_t *cur = queries;
@@ -493,7 +536,13 @@ int checkQueries(DataModelElement_t *rootDM, Query_t *queries, Operator_t **errO
 	
 	return 0;
 }
-
+/**
+ * Adds all queries in that list to the corresponding nodes in the global datamodel.
+ * If it is the first query added to a node, the activate function for that node gets called.
+ * @param rootDM a pointer to the slc datamodelquery
+ * @param query a pointer to the first query in that list
+ * @return 0 on success and a value below zero, if an error was discovered.
+ */
 int addQueries(DataModelElement_t *rootDM, Query_t *queries) {
 	DataModelElement_t *dm = NULL;
 	Query_t *cur = queries, **regQueries = NULL;
@@ -510,6 +559,8 @@ int addQueries(DataModelElement_t *rootDM, Query_t *queries) {
 		}
 
 		dm = getDescription(rootDM,name);
+		// This function just gets called from an api method. Hence, the lock is already acquired.
+		// We can safely operate on the numQueries var.
 		switch (dm->dataModelType) {
 			case EVENT:
 				regQueries = ((Event_t*)dm->typeInfo)->queries;
@@ -540,7 +591,13 @@ int addQueries(DataModelElement_t *rootDM, Query_t *queries) {
 
 	return 0;
 }
-
+/**
+ * Removes all queries in that list from the corresponding nodes in the global datamodel.
+ * If it is the last query removed from a node, the deactivate function for that node gets called.
+ * @param rootDM a pointer to the slc datamodelquery
+ * @param query a pointer to the first query in that list
+ * @return 0 on success and a value below zero, if an error was discovered.
+ */
 int delQueries(DataModelElement_t *rootDM, Query_t *queries) {
 	DataModelElement_t *dm = NULL;
 	Query_t *cur = queries, **regQueries = NULL;

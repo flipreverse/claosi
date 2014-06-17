@@ -113,9 +113,10 @@ typedef struct __attribute__((packed)) Tupel {
 
 /**
  * The following functions should help to access a tupel.
- * They can be used to set value within a flat memory area. Flat means that the datamodel does not contain
- * any array, but is a allowed to have nested struct, e.g. packetType { int first; complext second; }.
- * The typeName parameter describes to the path to the desired element, e.g. "packetType.second".
+ * They can be used to set values within a flat memory area. Flat means that the datamodel does not contain
+ * any array, but it is allowed to have nested structs, e.g. packetType { int first; complext second; }.
+ * The typeName parameter describes the path to the desired element, e.g. "packetType.second".
+ * Arrays are just allowed as an endpoint of a path.
  */
 static inline void setItemInt(DataModelElement_t *rootDM, Tupel_t *tupel, char *typeName, int value) {
 	#define DEFAULT_RETURN_VALUE	
@@ -151,6 +152,10 @@ static inline void setItemString(DataModelElement_t *rootDM, Tupel_t *tupel, cha
 /**
  * Allocates an array with {@link num} elements at {@link typeName}.
  * If the tupel is compact, the function refueses access to the tupel, because its sized is fixed.
+ * @param rootDM a pointer to the slc datamodel
+ * @param tupel a pointer to the tupel
+ * @param typeName a path specification to describe the wy through the datamodel
+ * @param num array size
  */
 static inline void setItemArray(DataModelElement_t *rootDM, Tupel_t *tupel, char *typeName, int num) {
 	#define DEFAULT_RETURN_VALUE
@@ -169,7 +174,13 @@ static inline void setItemArray(DataModelElement_t *rootDM, Tupel_t *tupel, char
 	DEBUG_MSG(2,"Allocated %ld@%p bytes for array %s\n",(long)(num * size + sizeof(int)),(void*)*((PTR_TYPE*)valuePtr),dm->name);
 	#undef DEFAULT_RETURN_VALUE
 }
-
+/**
+ * The following functions should help to access an array inside a tupel.
+ * They can be used to set values within a flat memory area. Flat means that the datamodel does not contain
+ * any array, but it is allowed to have nested structs, e.g. packetType { int first; complext second; }.
+ * The typeName parameter describes the path to the desired element, e.g. "packetType.second".
+ * Arrays are just allowed as an endpoint of a path.
+ */
 static inline void setArraySlotByte(DataModelElement_t *rootDM,Tupel_t *tupel,char *arrayTypeName,int arraySlot,char value) {
 	#define DEFAULT_RETURN_VALUE
 	GET_MEMBER_POINTER(tupel,rootDM,arrayTypeName);
@@ -209,7 +220,15 @@ static inline void setArraySlotString(DataModelElement_t *rootDM,Tupel_t *tupel,
 	*(char**)((*(PTR_TYPE*)(valuePtr)) + sizeof(int) + arraySlot * SIZE_STRING) = value;
 	#undef DEFAULT_RETURN_VALUE
 }
-
+/**
+ * Copies the array {@link valueArray} with {@link n} elements to the array described by{@link arrayTypeName}. Starting at {@link startingSlot}.
+ * If {@link n} is larger than the array size, just array size - {@link startingSlot} bytes will be copied from {@link valueArrays}.
+ * @param rootDM a pointer to the slc datamodel
+ * @param tupel a pointer to the tupel
+ * @param arrayTypeName a path specification to describe the wy through the datamodel
+ * @param startingSlot the first element in the target array that should be written
+ * @param valueArray a pointer to an array where the values will be copied from
+ */
 static inline void copyArrayByte(DataModelElement_t *rootDM,Tupel_t *tupel,char *arrayTypeName,int startingSlot, char *valueArray, int n) {
 	int size = 0, toCopy = 0;
 	#define DEFAULT_RETURN_VALUE
@@ -289,6 +308,12 @@ static inline char* getArraySlotString(DataModelElement_t *rootDM,Tupel_t *tupel
 	return (char*)((*(PTR_TYPE*)(valuePtr)) + sizeof(int) + arraySlot * SIZE_STRING);
 	#undef DEFAULT_RETURN_VALUE
 }
+/**
+ * Allocates a tupel and the item pointer array. It initializes the tupel and item pointer arrray.
+ * @param timestamp time in millisecond the tupel was created
+ * @param numItmes the number of items
+ * @return a pointer to a newly allocated tupel or NULL if allocation fails.
+ */
 static inline Tupel_t* initTupel(unsigned long long timestamp, int numItems) {
 	int i = 0;
 	Tupel_t *ret = NULL;
@@ -304,7 +329,15 @@ static inline Tupel_t* initTupel(unsigned long long timestamp, int numItems) {
 	}
 	return ret;
 }
-
+/**
+ * Allocates a new item and assigns its pointer to the {@link tupel}. Its name will be set to {@link itemTypeName}.
+ * Furthermore, {@link itemTypeName} is used to determine the number of bytes allocated and assigned to the items value pointer.
+ * @param rootDM a pointer to the slc datamodel
+ * @param tupel a pointer to the tupel
+ * @param slot the position within the item pointer array
+ * @param itemTypeName a path description for the datatype which should be allocated
+ * @return 0 on success. -1 otherwise.
+ */
 static inline int allocItem(DataModelElement_t *rootDM, Tupel_t *tupel, int slot, char *itemTypeName) {
 	DataModelElement_t *dm = NULL;
 	char *mem = NULL;
@@ -331,7 +364,11 @@ static inline int allocItem(DataModelElement_t *rootDM, Tupel_t *tupel, int slot
 }
 
 /**
- * Grows the tupel by {@link newItems} items.
+ * Grows the tupel by {@link newItems} items. {@link tupel} is a pointer pointer, because a realloc may allocate a new
+ * memory area and copy the contents to the new location.
+ * @param tupel a pointer to the tupel pointer
+ * @param newItems number of new items the tupel will be grown by
+ * @return 0 on success. -1 otherwise.
  */
 static inline int addItem(Tupel_t **tupel, int newItems) {
 	Tupel_t *temp = NULL;
