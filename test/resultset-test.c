@@ -17,7 +17,7 @@ static void initDatamodel(void);
 
 int main() {
 	Tupel_t *tupel = NULL, *tupelCompact = NULL;
-	char *string = NULL;
+	char *string = NULL, values[] = {5,4,3,2,1};
 	clock_t startClock, endClock;
 
 	startClock = clock();
@@ -28,11 +28,10 @@ int main() {
 	setItemInt(&model1,tupel,"net.device.txBytes",4711);
 
 	allocItem(&model1,tupel,1,"net.packetType");
-	setItemArray(&model1,tupel,"net.packetType.macHdr",4);
+	setItemArray(&model1,tupel,"net.packetType.macHdr",5);
 	setArraySlotByte(&model1,tupel,"net.packetType.macHdr",0,1);
 	setArraySlotByte(&model1,tupel,"net.packetType.macHdr",1,2);
-	setArraySlotByte(&model1,tupel,"net.packetType.macHdr",2,3);
-	setArraySlotByte(&model1,tupel,"net.packetType.macHdr",3,4);
+	copyArrayByte(&model1,tupel,"net.packetType.macHdr",4,values,5);
 	setItemByte(&model1,tupel,"net.packetType.macProtocol",65);
 
 	string = (char*)malloc(6);

@@ -210,6 +210,21 @@ static inline void setArraySlotString(DataModelElement_t *rootDM,Tupel_t *tupel,
 	#undef DEFAULT_RETURN_VALUE
 }
 
+static inline void copyArrayByte(DataModelElement_t *rootDM,Tupel_t *tupel,char *arrayTypeName,int startingSlot, char *valueArray, int n) {
+	int size = 0, toCopy = 0;
+	#define DEFAULT_RETURN_VALUE
+	GET_MEMBER_POINTER(tupel,rootDM,arrayTypeName);
+	size = *(int*)(*(PTR_TYPE*)valuePtr);
+	if (startingSlot >= size) {
+		return;
+	}
+	toCopy = ((size - startingSlot) > n ? n : (size - startingSlot));
+	for (i = 0; i < toCopy; i++) {
+		*(char*)((*(PTR_TYPE*)(valuePtr)) + sizeof(int) + (startingSlot + i) * SIZE_BYTE) = valueArray[i];
+	}
+	#undef DEFAULT_RETURN_VALUE
+}
+
 static inline int getItemInt(DataModelElement_t *rootDM, Tupel_t *tupel, char *typeName) {
 	#define DEFAULT_RETURN_VALUE 0
 	GET_MEMBER_POINTER(tupel,rootDM,typeName);
