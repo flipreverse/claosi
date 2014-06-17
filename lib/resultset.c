@@ -77,7 +77,7 @@ static void freeItem(DataModelElement_t *rootDM, void *value, DataModelElement_t
 			};
 		}
 	} while(curNode != element);
-	FREE(value);
+	//FREE(value);
 }
 /**
  * Frees the tupel, all its items and the memory the items value pointers points to.

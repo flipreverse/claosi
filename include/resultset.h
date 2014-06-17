@@ -289,10 +289,6 @@ static inline char* getArraySlotString(DataModelElement_t *rootDM,Tupel_t *tupel
 	return (char*)((*(PTR_TYPE*)(valuePtr)) + sizeof(int) + arraySlot * SIZE_STRING);
 	#undef DEFAULT_RETURN_VALUE
 }
-
-static inline int initTupel(Tupel_t **tupel,unsigned long long timestamp, int numItems) {
-	if ((*tupel = (Tupel_t*)ALLOC(sizeof(Tupel_t) + numItems * sizeof(Item_t**))) == NULL) {
-		return -1;
 static inline Tupel_t* initTupel(unsigned long long timestamp, int numItems) {
 	int i = 0;
 	Tupel_t *ret = NULL;
@@ -311,6 +307,7 @@ static inline Tupel_t* initTupel(unsigned long long timestamp, int numItems) {
 
 static inline int allocItem(DataModelElement_t *rootDM, Tupel_t *tupel, int slot, char *itemTypeName) {
 	DataModelElement_t *dm = NULL;
+	char *mem = NULL;
 	int ret = 0;
 
 	if (IS_COMPACT(tupel)) {
@@ -323,12 +320,11 @@ static inline int allocItem(DataModelElement_t *rootDM, Tupel_t *tupel, int slot
 	if ((ret = getSize(rootDM,dm)) == -1) {
 		return -1;
 	}
-	if ((tupel->items[slot] = ALLOC(sizeof(Item_t))) == NULL) {
+	if ((mem = ALLOC(sizeof(Item_t) + ret)) == NULL) {
 		return -1;
 	}
-	if ((tupel->items[slot]->value = ALLOC(ret)) == NULL) {
-		return -1;
-	}
+	tupel->items[slot] = (Item_t*)mem;
+	tupel->items[slot]->value = mem + sizeof(Item_t);
 	strncpy((char*)&tupel->items[slot]->name,itemTypeName,MAX_NAME_LEN);
 	DEBUG_MSG(2,"Allocated %d@%p bytes for %s\n",ret,tupel->items[slot]->value,dm->name);
 	return 0;
