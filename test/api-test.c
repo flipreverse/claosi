@@ -87,7 +87,7 @@ static void unregObjectCallback(void) {
 };
 
 static void issueEvent(void) {
-	initTupel(&tupel,20140530,2);
+	tupel = initTupel(20140530,2);
 
 	allocItem(slcDataModel,tupel,0,"net.device.txBytes");
 	setItemInt(slcDataModel,tupel,"net.device.txBytes",4711);

@@ -22,7 +22,7 @@ int main() {
 
 	startClock = clock();
 	initDatamodel();
-	initTupel(&tupel,20140530,3);
+	tupel = initTupel(20140530,3);
 
 	allocItem(&model1,tupel,0,"net.device.txBytes");
 	setItemInt(&model1,tupel,"net.device.txBytes",4711);

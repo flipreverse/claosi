@@ -293,12 +293,20 @@ static inline char* getArraySlotString(DataModelElement_t *rootDM,Tupel_t *tupel
 static inline int initTupel(Tupel_t **tupel,unsigned long long timestamp, int numItems) {
 	if ((*tupel = (Tupel_t*)ALLOC(sizeof(Tupel_t) + numItems * sizeof(Item_t**))) == NULL) {
 		return -1;
+static inline Tupel_t* initTupel(unsigned long long timestamp, int numItems) {
+	int i = 0;
+	Tupel_t *ret = NULL;
+	if ((ret = (Tupel_t*)ALLOC(sizeof(Tupel_t) + numItems * sizeof(Item_t**))) == NULL) {
+		return NULL;
 	}
-	(*tupel)->isCompact = 0;
-	(*tupel)->timestamp = timestamp;
-	(*tupel)->itemLen = numItems;
-	(*tupel)->items = (Item_t**)(*tupel + 1);
-	return 0;
+	ret->isCompact = 0;
+	ret->timestamp = timestamp;
+	ret->itemLen = numItems;
+	ret->items = (Item_t**)(ret + 1);
+	for (i = 0; i < numItems; i++) {
+		ret->items[i] = NULL;
+	}
+	return ret;
 }
 
 static inline int allocItem(DataModelElement_t *rootDM, Tupel_t *tupel, int slot, char *itemTypeName) {
