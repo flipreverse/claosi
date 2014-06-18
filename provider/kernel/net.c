@@ -1,5 +1,6 @@
 #include <linux/module.h>
-
+#include <linux/kprobes.h>
+#include <linux/if_ether.h>
 #include <datamodel.h>
 #include <query.h>
 #include <api.h>
@@ -12,21 +13,64 @@ DECLARE_ELEMENTS(objSocket, objDevice, srcSocketType, srcSocketFlags, typePacket
 DECLARE_ELEMENTS(typeMacHdr, typeMacProt, typeNetHdr, typeNetProt, typeTranspHdr, typeTransProt, typeDataLen)
 static void initDatamodel(void);
 static void initQuery(void);
-static void issueEvent(void);
 static EventStream_t txStream;
 static Predicate_t filterTXPredicate;
 static Filter_t filter;
 static Select_t selectTest;
 static Query_t query;
 static Element_t elemPacket;
-static Tupel_t *tupel = NULL;
+static int handler_pre(struct kprobe *p, struct pt_regs *regs);
+
+static struct kprobe rxKP = {
+	.symbol_name	= "__netif_receive_skb",
+	.pre_handler = handler_pre
+};
+
+static int handler_pre(struct kprobe *p, struct pt_regs *regs) {
+	struct sk_buff *skb = NULL;
+	Tupel_t *tupel = NULL;
+	struct timeval time;
+
+#if defined(__i386__)
+skb = (struct sk_buff*)regs->ax;
+#elif defined(__x86_64__)
+skb = (struct sk_buff*)regs->ax;
+#elif defined(__arm__)
+skb = (struct sk_buff*)regs->ARM_r0;
+#else
+#error Unknown architecture
+#endif
+
+	do_gettimeofday(&time);
+	if ((tupel = initTupel(time.tv_sec + time.tv_usec / USEC_PER_MSEC,2)) == NULL) {
+		return 0;
+	}
+
+	allocItem(slcDataModel,tupel,0,"net.device.txBytes");
+	setItemInt(slcDataModel,tupel,"net.device.txBytes",4711);
+	allocItem(slcDataModel,tupel,1,"net.packetType");
+	setItemArray(slcDataModel,tupel,"net.packetType.macHdr",ETH_HLEN);
+	copyArrayByte(slcDataModel,tupel,"net.packetType.macHdr",0,skb->data,ETH_HLEN);
+	setItemByte(slcDataModel,tupel,"net.packetType.macProtocol",42);
+	PRINT_MSG("Received paket at %lu us\n",time.tv_sec * USEC_PER_MSEC + time.tv_usec);
+	eventOccured("net.device.onTx",tupel);
+
+	return 0;
+}
 
 static void activate(void) {
+	int ret = 0;
 	
+	if ((ret = register_kprobe(&rxKP)) < 0) {
+		DEBUG_MSG(1,",register_kprobe failed. Reason: %d\n",ret);
+		return;
+	}
+	DEBUG_MSG(1,"Registered kprobe at %s\n",rxKP.symbol_name);
 }
 
 static void deactivate(void) {
-	
+	unregister_kprobe(&rxKP);
+	DEBUG_MSG(1,"Unregistered kprobes at %s\n",rxKP.symbol_name);
 }
 
 static void* getSrc(void) {
@@ -34,26 +78,11 @@ static void* getSrc(void) {
 };
 
 static void printResult(QueryID_t id, Tupel_t *tupel) {
-	printk("Received tupel@%p:\t\n",tupel);
-	printTupel(slcDataModel,tupel);
+	struct timeval time;
+	//printTupel(slcDataModel,tupel);
 	freeTupel(slcDataModel,tupel);
-}
-
-static void issueEvent(void) {
-	initTupel(&tupel,20140530,2);
-
-	allocItem(slcDataModel,tupel,0,"net.device.txBytes");
-	setItemInt(slcDataModel,tupel,"net.device.txBytes",4711);
-
-	allocItem(slcDataModel,tupel,1,"net.packetType");
-	setItemArray(slcDataModel,tupel,"net.packetType.macHdr",4);
-	setArraySlotByte(slcDataModel,tupel,"net.packetType.macHdr",0,1);
-	setArraySlotByte(slcDataModel,tupel,"net.packetType.macHdr",1,2);
-	setArraySlotByte(slcDataModel,tupel,"net.packetType.macHdr",2,3);
-	setArraySlotByte(slcDataModel,tupel,"net.packetType.macHdr",3,4);
-	setItemByte(slcDataModel,tupel,"net.packetType.macProtocol",65);
-	
-	eventOccured("net.device.onTx",tupel);
+	do_gettimeofday(&time);
+	printk("Received tupel with %d items at memory addres %p at %lu us\n",tupel->itemLen,tupel,time.tv_sec * USEC_PER_MSEC + time.tv_usec);
 }
 
 static void initQuery(void) {
@@ -66,7 +95,7 @@ static void initQuery(void) {
 	INIT_EVT_STREAM(txStream,"net.device.onTx",0,GET_BASE(filter))
 	INIT_FILTER(filter,GET_BASE(selectTest),1)
 	ADD_PREDICATE(filter,0,filterTXPredicate)
-	SET_PREDICATE(filterTXPredicate,EQUAL, STREAM, "net.packetType.macProtocol", POD, "65")
+	SET_PREDICATE(filterTXPredicate,EQUAL, STREAM, "net.packetType.macProtocol", POD, "42")
 	INIT_SELECT(selectTest,NULL,1)
 	ADD_ELEMENT(selectTest,0,elemPacket,"net.packetType")
 }
@@ -161,10 +190,9 @@ int __init net_init(void)
 		DEBUG_MSG(1,"Register failed: %d\n",-ret);
 		return -1;
 	}
-	PRINT_MSG("Sucessfully registered datamodel and query. Query has id: 0x%x\n",query.queryID);
+	DEBUG_MSG(1,"Sucessfully registered datamodel and query. Query has id: 0x%x\n",query.queryID);
 	DEBUG_MSG(1,"Registered net provider\n");
 
-	issueEvent();
 
 	return 0;
 }
