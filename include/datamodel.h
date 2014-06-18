@@ -76,6 +76,7 @@ typedef struct Event {
 	activateEventCallback activate;
 	deactivateEventCallback deactivate;
 	struct Query *queries[MAX_QUERIES_PER_DM];
+	int numQueries;
 } Event_t;
 
 typedef void* (*getSource)(void);
@@ -95,6 +96,7 @@ typedef struct Object {
 	activateObject activate;
 	deactivateObject deactivate;
 	struct Query *queries[MAX_QUERIES_PER_DM];
+	int numQueries;
 } Object_t;
 
 void printDatamodel(DataModelElement_t *root);
@@ -159,6 +161,7 @@ int getDataModelSize(DataModelElement_t *rootDM, DataModelElement_t *elem, int i
 	((Object_t*)varName.typeInfo)->identifierType = idType; \
 	((Object_t*)varName.typeInfo)->activate = regFunc; \
 	((Object_t*)varName.typeInfo)->deactivate = unregFunc; \
+	((Object_t*)varName.typeInfo)->numQueries = 0; \
 	INIT_QUERY_ARRAY(((Object_t*)varName.typeInfo)->queries,MAX_QUERIES_PER_DM);
 
 #define INIT_EVENT_POD(varName,nodeName,parentNode,evtType,regFunc, unregFunc)	strncpy((char*)&varName.name,nodeName,MAX_NAME_LEN); \
@@ -171,6 +174,7 @@ int getDataModelSize(DataModelElement_t *rootDM, DataModelElement_t *elem, int i
 	memset(&((Event_t*)varName.typeInfo)->returnName,0,MAX_NAME_LEN); \
 	((Event_t*)varName.typeInfo)->activate = regFunc; \
 	((Event_t*)varName.typeInfo)->deactivate = unregFunc; \
+	((Event_t*)varName.typeInfo)->numQueries = 0; \
 	INIT_QUERY_ARRAY(((Event_t*)varName.typeInfo)->queries,MAX_QUERIES_PER_DM)
 
 #define INIT_EVENT_COMPLEX(varName,nodeName,parentNode,returnTypeName,regFunc, unregFunc)	strncpy((char*)&varName.name,nodeName,MAX_NAME_LEN); \
@@ -183,6 +187,7 @@ int getDataModelSize(DataModelElement_t *rootDM, DataModelElement_t *elem, int i
 	strncpy((char*)&((Event_t*)varName.typeInfo)->returnName,returnTypeName,MAX_NAME_LEN); \
 	((Event_t*)varName.typeInfo)->activate = regFunc; \
 	((Event_t*)varName.typeInfo)->deactivate = unregFunc; \
+	((Event_t*)varName.typeInfo)->numQueries = 0; \
 	INIT_QUERY_ARRAY(((Event_t*)varName.typeInfo)->queries,MAX_QUERIES_PER_DM)
 
 #define INIT_TYPE(varName,nodeName,parentNode,numChildren)	strncpy((char*)&varName.name,nodeName,MAX_NAME_LEN);\

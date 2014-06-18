@@ -564,10 +564,18 @@ int addQueries(DataModelElement_t *rootDM, Query_t *queries) {
 		switch (dm->dataModelType) {
 			case EVENT:
 				regQueries = ((Event_t*)dm->typeInfo)->queries;
+				if (((Event_t*)dm->typeInfo)->numQueries == 0) {
+					((Event_t*)dm->typeInfo)->activate();
+				}
+				((Event_t*)dm->typeInfo)->numQueries++;
 				break;
 
 			case OBJECT:
 				regQueries = ((Object_t*)dm->typeInfo)->queries;
+				if (((Object_t*)dm->typeInfo)->numQueries == 0) {
+					((Object_t*)dm->typeInfo)->activate();
+				}
+				((Object_t*)dm->typeInfo)->numQueries++;
 				break;
 
 			case SOURCE:
@@ -617,10 +625,18 @@ int delQueries(DataModelElement_t *rootDM, Query_t *queries) {
 		switch (dm->dataModelType) {
 			case EVENT:
 				regQueries = ((Event_t*)dm->typeInfo)->queries;
+				((Event_t*)dm->typeInfo)->numQueries--;
+				if (((Event_t*)dm->typeInfo)->numQueries == 0) {
+					((Event_t*)dm->typeInfo)->deactivate();
+				}
 				break;
 
 			case OBJECT:
 				regQueries = ((Object_t*)dm->typeInfo)->queries;
+				((Object_t*)dm->typeInfo)->numQueries--;
+				if (((Object_t*)dm->typeInfo)->numQueries == 0) {
+					((Object_t*)dm->typeInfo)->deactivate();
+				}
 				break;
 
 			case SOURCE:
