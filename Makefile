@@ -1,6 +1,8 @@
 # Author: A. Lochmann C 2010
 # Based on a makefile found at: http://ubuntuforums.org/showthread.php?t=1204739
 KDIR?=/lib/modules/`uname -r`/build
+KARCH?=`uname -i`
+KCROSS?=
 INCLUDE_PATH:= ./include
 BUILD_PATH:=build
 BUILD_KERN:=$(BUILD_PATH)/kern
@@ -28,8 +30,7 @@ OUTPUT=
 endif
 
 # COMPILER AND LINKER FLAGS
-#CROSS_COMPILE=/opt/arm-linux-androideabi-4.6/bin/arm-linux-androideabi-
-CROSS_COMPILE=
+CROSS_COMPILE?=
 CC:=$(CROSS_COMPILE)gcc
 CFLAGS := -Wall -Werror -c -g -I$(INCLUDE_PATH)
 LDFLAGS :=
@@ -139,10 +140,10 @@ $(BUILD_USER)/%.d: %.c
 	$(OUTPUT)$(call make-depend,$<,$(subst .d,.o,$@),$(subst .o,.d,$@))
 
 kernel: $(DIRS_KERN) $(LIB_KERNEL_SRC) $(BUILD_KERN)/Kbuild $(BUILD_KERN)/Makefile $(PROVIDER_KERNEL_SRC)
-	$(MAKE) -C $(KDIR) KBUILD_EXTMOD=$$PWD/$(BUILD_KERN) KBUILD_SRC=$(KDIR)
+	$(MAKE) -C $(KDIR) ARCH=$(KARCH) CROSS_COMPILE=$(KCROSS) KBUILD_EXTMOD=$$PWD/$(BUILD_KERN) KBUILD_SRC=$(KDIR)
 	
 kernel-clean:
-	$(MAKE) -C $(KDIR) KBUILD_EXTMOD=$$PWD/$(BUILD_KERN) KBUILD_SRC=$(KDIR) clean
+	$(MAKE) -C $(KDIR) ARCH=$(KARCH) CROSS_COMPILE=$(KCROSS) KBUILD_EXTMOD=$$PWD/$(BUILD_KERN) KBUILD_SRC=$(KDIR) clean
 	$(RM) $(LIB_KERNEL_SRC)
 	$(RM) $(PROVIDER_KERNEL_SRC)
 	$(RM) $(BUILD_KERN)/Kbuild
