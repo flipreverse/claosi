@@ -15,7 +15,7 @@
 
 #ifdef __KERNEL__
 #define PRINT_MSG(args...)					printk(KERN_INFO args);
-#define	ALLOC(size)							kmalloc(size,GFP_KERNEL)
+#define	ALLOC(size)							kmalloc(size,GFP_KERNEL & ~__GFP_WAIT)
 #define	FREE(ptr)							kfree(ptr)
 #define REALLOC(ptr,size)					krealloc(ptr,size,GFP_KERNEL)
 #define STRTOINT(strVar,intVar)				kstrtos32(strVar,10,&intVar)
