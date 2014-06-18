@@ -31,8 +31,14 @@ int main() {
 	setItemArray(&model1,tupel,"net.packetType.macHdr",5);
 	setArraySlotByte(&model1,tupel,"net.packetType.macHdr",0,1);
 	setArraySlotByte(&model1,tupel,"net.packetType.macHdr",1,2);
+	setArraySlotByte(&model1,tupel,"net.packetType.macHdr",2,3);
+	setArraySlotByte(&model1,tupel,"net.packetType.macHdr",3,4);
+	setArraySlotByte(&model1,tupel,"net.packetType.macHdr",4,5);
 	copyArrayByte(&model1,tupel,"net.packetType.macHdr",4,values,5);
 	setItemByte(&model1,tupel,"net.packetType.macProtocol",65);
+	setItemByte(&model1,tupel,"net.packetType.networkProtocol",42);
+	setItemByte(&model1,tupel,"net.packetType.transportProtocol",21);
+	setItemByte(&model1,tupel,"net.packetType.dataLength",2);
 
 	string = (char*)malloc(6);
 	strcpy(string,"PFERD");
@@ -59,10 +65,8 @@ int main() {
 	string = (char*)malloc(3);
 	strcpy(string,"Ü");
 	setArraySlotString(&model1,tupel,"process.process.stime",2,string);
-	endClock = clock();
-	printf("Start: %ld, end: %ld, diff: %ld\n",startClock, endClock, (endClock - startClock));
-
 	printTupel(&model1,tupel);
+
 	printf("Deleting an item...\n");
 	deleteItem(&model1,tupel,0);
 	printTupel(&model1,tupel);
@@ -71,9 +75,10 @@ int main() {
 
 	tupelCompact = copyAndCollectTupel(&model1,tupel);
 	freeTupel(&model1,tupel);
-	setItemString(&model1,tupelCompact,"net.device.rxBytes","LOOOOL");
 
+	setItemString(&model1,tupelCompact,"net.device.rxBytes","LOOOOL");
 	printTupel(&model1,tupelCompact);
+
 	printf("Deleting an item...\n");
 	deleteItem(&model1,tupelCompact,0);
 	printTupel(&model1,tupelCompact);
@@ -120,7 +125,7 @@ static void initDatamodel(void) {
 	INIT_PLAINTYPE(typeNetHdr,"networkHdr",typePacketType,(BYTE | ARRAY))
 	INIT_PLAINTYPE(typeNetProt,"networkProtocol",typePacketType,BYTE)
 	INIT_PLAINTYPE(typeTranspHdr,"transportHdr",typePacketType,(BYTE | ARRAY))
-	INIT_PLAINTYPE(typeTransProt,"transportProtocl",typePacketType,BYTE)
+	INIT_PLAINTYPE(typeTransProt,"transportProtocol",typePacketType,BYTE)
 	INIT_PLAINTYPE(typeDataLen,"dataLength",typePacketType,BYTE)
 	INIT_REF(typeSockRef,"socket",typePacketType,"process.process.sockets")
 
