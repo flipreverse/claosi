@@ -60,6 +60,7 @@ if (strlen(childName) > 0) { \
 	token = strsep(&tokInput,"."); \
 	while (token) { \
 		if ((ret = getOffset(datamodelElementVar,token)) == -1) { \
+			FREE(tokInput_); \
 			return DEFAULT_RETURN_VALUE; \
 		} \
 		valuePtrVar = valuePtrVar + ret; \
@@ -69,6 +70,7 @@ if (strlen(childName) > 0) { \
 			} \
 		} \
 		if (i >= datamodelElementVar->childrenLen) { \
+			FREE(tokInput_); \
 			return DEFAULT_RETURN_VALUE; \
 		} \
 		datamodelElementVar = datamodelElementVar->children[i]; \
