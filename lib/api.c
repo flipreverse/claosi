@@ -1,9 +1,23 @@
 #include <api.h>
 
 DataModelElement_t *slcDataModel = NULL;
+DECLARE_LOCK(slcLock);
+
 #ifdef __KERNEL__
 EXPORT_SYMBOL(slcDataModel);
+EXPORT_SYMBOL(slcLock);
 #endif
+/**
+ * Initializes the global datamodel.
+ */
+static int initDatamodel(void) {
+	if ((slcDataModel = ALLOC(sizeof(DataModelElement_t))) == NULL) {
+		return -1;
+	}
+	INIT_MODEL((*slcDataModel),0);
+	return 0;
+}
+
 /**
  * Tries to register a new datamodel {@link dm} and {@link queries}.
  * First, it checks, if {@link dm}s syntax is correct and if it is mergeable. If so, it will be merged
@@ -15,31 +29,38 @@ EXPORT_SYMBOL(slcDataModel);
  */
 int registerProvider(DataModelElement_t *dm, Query_t *queries) {
 	int ret = 0;
+	ACQUIRE_WRITE_LOCK(slcLock);
 
 	if (dm == NULL && queries == NULL) {
 		return -EPARAM;
 	}
 	if (dm != NULL) {
 		if ((ret = checkDataModelSyntax(slcDataModel,dm,NULL)) < 0) {
+			RELEASE_WRITE_LOCK(slcLock);
 			return ret;
 		}
 		// First, check if the datamodel is mergable
 		if ((ret = mergeDataModel(1,slcDataModel,dm)) < 0) {
+			RELEASE_WRITE_LOCK(slcLock);
 			return ret;
 		}
 		// Now merge it.
 		if ((ret = mergeDataModel(0,slcDataModel,dm)) < 0) {
+			RELEASE_WRITE_LOCK(slcLock);
 			return ret;
 		}
 	}
 	if (queries != NULL) {
 		if ((ret = checkQueries(slcDataModel,queries,NULL,0)) < 0) {
+			RELEASE_WRITE_LOCK(slcLock);
 			return ret;
 		}
 		if ((ret = addQueries(slcDataModel,queries)) < 0) {
+			RELEASE_WRITE_LOCK(slcLock);
 			return ret;
 		}
 	}
+	RELEASE_WRITE_LOCK(slcLock);
 
 	return 0;
 }
@@ -56,32 +77,40 @@ EXPORT_SYMBOL(registerProvider);
  */
 int unregisterProvider(DataModelElement_t *dm, Query_t *queries) {
 	int ret = 0;
+	ACQUIRE_WRITE_LOCK(slcLock);
 
 	if (dm == NULL && queries == NULL) {
+		RELEASE_WRITE_LOCK(slcLock);
 		return -EPARAM;
 	}
 	if (queries != NULL) {
 		if ((ret = checkQueries(slcDataModel,queries,NULL,1)) < 0) {
+			RELEASE_WRITE_LOCK(slcLock);
 			return ret;
 		}
 		if ((ret = delQueries(slcDataModel,queries)) < 0) {
+			RELEASE_WRITE_LOCK(slcLock);
 			return ret;
 		}
 	} else {
+		RELEASE_WRITE_LOCK(slcLock);
 		return -EPARAM;
 	}
 	if (dm != NULL) {
 		if ((ret = checkDataModelSyntax(slcDataModel,dm,NULL)) < 0) {
+			RELEASE_WRITE_LOCK(slcLock);
 			return ret;
 		}
 		if ((ret = deleteSubtree(&slcDataModel,dm)) < 0) {
+			RELEASE_WRITE_LOCK(slcLock);
 			return ret;
 		}
 		// If deleteSubtree removes even the root node, it is necessary to reinitialize the global datamodel
 		if (slcDataModel == NULL) {
-			initSLC();
+			initDatamodel();
 		}
 	}
+	RELEASE_WRITE_LOCK(slcLock);
 	return 0;
 }
 #ifdef __KERNEL__
@@ -94,17 +123,22 @@ EXPORT_SYMBOL(unregisterProvider);
  */
 int registerQuery(Query_t *queries) {
 	int ret = 0;
+	ACQUIRE_WRITE_LOCK(slcLock);
 
 	if (queries != NULL) {
 		if ((ret = checkQueries(slcDataModel,queries,NULL,1)) < 0) {
+			RELEASE_WRITE_LOCK(slcLock);
 			return ret;
 		}
 		if ((ret = addQueries(slcDataModel,queries)) < 0) {
+			RELEASE_WRITE_LOCK(slcLock);
 			return ret;
 		}
 	} else {
+		RELEASE_WRITE_LOCK(slcLock);
 		return -EPARAM;
 	}
+	RELEASE_WRITE_LOCK(slcLock);
 	return 0;
 }
 #ifdef __KERNEL__
@@ -117,17 +151,22 @@ EXPORT_SYMBOL(registerQuery);
  */
 int unregisterQuery(Query_t *queries) {
 	int ret = 0;
+	ACQUIRE_WRITE_LOCK(slcLock);
 
 	if (queries != NULL) {
 		if ((ret = checkQueries(slcDataModel,queries,NULL,1)) < 0) {
+			RELEASE_WRITE_LOCK(slcLock);
 			return ret;
 		}
 		if ((ret = delQueries(slcDataModel,queries)) < 0) {
+			RELEASE_WRITE_LOCK(slcLock);
 			return ret;
 		}
 	} else {
+		RELEASE_WRITE_LOCK(slcLock);
 		return -EPARAM;
 	}
+	RELEASE_WRITE_LOCK(slcLock);
 	return 0;
 }
 #ifdef __KERNEL__
@@ -144,16 +183,20 @@ void eventOccured(char *datamodelName, Tupel_t *tupel) {
 	DataModelElement_t *dm = NULL;
 	Query_t **query = NULL;
 	int i = 0;
+	ACQUIRE_WRITE_LOCK(slcLock);
 
 	if (tupel == NULL) {
+		RELEASE_WRITE_LOCK(slcLock);
 		return;
 	}
 	if ((dm = getDescription(slcDataModel,datamodelName)) == NULL) {
+		RELEASE_WRITE_LOCK(slcLock);
 		return;
 	}
 	if (dm->dataModelType == EVENT) {
 		query = ((Event_t*)dm->typeInfo)->queries;
 	} else {
+		RELEASE_WRITE_LOCK(slcLock);
 		return;
 	}
 
@@ -163,6 +206,7 @@ void eventOccured(char *datamodelName, Tupel_t *tupel) {
 			executeQuery(slcDataModel,query[i],&tupel);
 		}
 	}
+	RELEASE_WRITE_LOCK(slcLock);
 }
 #ifdef __KERNEL__
 EXPORT_SYMBOL(eventOccured);
@@ -179,16 +223,20 @@ void objectChanged(char *datamodelName, Tupel_t *tupel, int event) {
 	DataModelElement_t *dm = NULL;
 	Query_t **query = NULL;
 	int i = 0;
+	ACQUIRE_WRITE_LOCK(slcLock);
 
 	if (tupel == NULL) {
+		RELEASE_WRITE_LOCK(slcLock);
 		return;
 	}
 	if ((dm = getDescription(slcDataModel,datamodelName)) == NULL) {
+		RELEASE_WRITE_LOCK(slcLock);
 		return;
 	}
 	if (dm->dataModelType == OBJECT) {
 		query = ((Object_t*)dm->typeInfo)->queries;
 	} else {
+		RELEASE_WRITE_LOCK(slcLock);
 		return;
 	}
 
@@ -197,6 +245,7 @@ void objectChanged(char *datamodelName, Tupel_t *tupel, int event) {
 			executeQuery(slcDataModel,query[i],&tupel);
 		}
 	}
+	RELEASE_WRITE_LOCK(slcLock);
 }
 #ifdef __KERNEL__
 EXPORT_SYMBOL(objectChanged);
@@ -205,10 +254,12 @@ EXPORT_SYMBOL(objectChanged);
  * Does all common initialization stuff
  */
 int initSLC(void) {
-	if ((slcDataModel = ALLOC(sizeof(DataModelElement_t))) == NULL) {
-		return -1;
+	int ret = 0;
+
+	INIT_LOCK(slcLock);
+	if ((ret = initDatamodel()) < 0) {
+		return ret;
 	}
-	INIT_MODEL((*slcDataModel),0);
 	return 0;
 }
 /**

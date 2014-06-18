@@ -12,8 +12,9 @@ int initSLC(void);
 void destroySLC(void);
 
 extern DataModelElement_t *slcDataModel;
+DECLARE_LOCK_EXTERN(slcLock);
 
 void eventOccured(char *datamodelName, Tupel_t *tupel);
-void objectChanged(char *datamodelName, Tupel_t *tupel);
+void objectChanged(char *datamodelName, Tupel_t *tupel, int event);
 
 #endif // __API_H__
