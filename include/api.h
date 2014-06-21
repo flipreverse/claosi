@@ -10,6 +10,7 @@ int registerQuery(Query_t *queries);
 int unregisterQuery(Query_t *queries);
 int initSLC(void);
 void destroySLC(void);
+void enqueueQuery(Query_t *query, Tupel_t *tuple);
 
 extern DataModelElement_t *slcDataModel;
 DECLARE_LOCK_EXTERN(slcLock);

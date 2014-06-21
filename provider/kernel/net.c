@@ -82,7 +82,7 @@ static void printResult(QueryID_t id, Tupel_t *tupel) {
 	//printTupel(slcDataModel,tupel);
 	freeTupel(slcDataModel,tupel);
 	do_gettimeofday(&time);
-	printk("Received tupel with %d items at memory addres %p at %lu us\n",tupel->itemLen,tupel,time.tv_sec * USEC_PER_MSEC + time.tv_usec);
+	printk("Received tupel with %d items at memory address %p at %lu us\n",tupel->itemLen,tupel,time.tv_sec * USEC_PER_MSEC + time.tv_usec);
 }
 
 static void initQuery(void) {

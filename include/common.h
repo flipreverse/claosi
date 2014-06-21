@@ -6,6 +6,7 @@
 #include <linux/string.h>
 #include <linux/rwlock.h>
 #include <linux/module.h>
+#include <linux/list.h>
 #else
 #include <stdlib.h>
 #include <string.h>
@@ -25,11 +26,9 @@
 #define DECLARE_LOCK(varName)				rwlock_t varName
 #define DECLARE_LOCK_EXTERN(varName)		extern rwlock_t varName
 #define INIT_LOCK(varName)					rwlock_init(&varName)
-#define ACQUIRE_READ_LOCK(varName)			unsigned long flags; \
-read_lock_irqsave(&varName,flags)
+#define ACQUIRE_READ_LOCK(varName)			read_lock_irqsave(&varName,flags)
 #define RELEASE_READ_LOCK(varName)			read_unlock_irqrestore(&varName,flags)
-#define ACQUIRE_WRITE_LOCK(varName)			unsigned long flags; \
-write_lock_irqsave(&varName,flags)
+#define ACQUIRE_WRITE_LOCK(varName)			write_lock_irqsave(&varName,flags)
 #define RELEASE_WRITE_LOCK(varName)			write_unlock_irqrestore(&varName,flags)
 #else
 #define PRINT_MSG(args...)					printf(args);

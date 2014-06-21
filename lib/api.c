@@ -29,6 +29,9 @@ static int initDatamodel(void) {
  */
 int registerProvider(DataModelElement_t *dm, Query_t *queries) {
 	int ret = 0;
+	#ifdef __KERNEL__
+	unsigned long flags;
+	#endif
 	ACQUIRE_WRITE_LOCK(slcLock);
 
 	if (dm == NULL && queries == NULL) {
@@ -77,6 +80,9 @@ EXPORT_SYMBOL(registerProvider);
  */
 int unregisterProvider(DataModelElement_t *dm, Query_t *queries) {
 	int ret = 0;
+	#ifdef __KERNEL__
+	unsigned long flags;
+	#endif
 	ACQUIRE_WRITE_LOCK(slcLock);
 
 	if (dm == NULL && queries == NULL) {
@@ -123,6 +129,9 @@ EXPORT_SYMBOL(unregisterProvider);
  */
 int registerQuery(Query_t *queries) {
 	int ret = 0;
+	#ifdef __KERNEL__
+	unsigned long flags;
+	#endif
 	ACQUIRE_WRITE_LOCK(slcLock);
 
 	if (queries != NULL) {
@@ -151,6 +160,9 @@ EXPORT_SYMBOL(registerQuery);
  */
 int unregisterQuery(Query_t *queries) {
 	int ret = 0;
+	#ifdef __KERNEL__
+	unsigned long flags;
+	#endif
 	ACQUIRE_WRITE_LOCK(slcLock);
 
 	if (queries != NULL) {
@@ -183,6 +195,9 @@ void eventOccured(char *datamodelName, Tupel_t *tupel) {
 	DataModelElement_t *dm = NULL;
 	Query_t **query = NULL;
 	int i = 0;
+	#ifdef __KERNEL__
+	unsigned long flags;
+	#endif
 	ACQUIRE_WRITE_LOCK(slcLock);
 
 	if (tupel == NULL) {
@@ -203,7 +218,7 @@ void eventOccured(char *datamodelName, Tupel_t *tupel) {
 	for (i = 0; i < MAX_QUERIES_PER_DM; i++) {
 		if (query[i] != NULL) {
 			DEBUG_MSG(2,"Executing query(base@%p) %d: %p\n",query,i,query[i]);
-			executeQuery(slcDataModel,query[i],&tupel);
+			enqueueQuery(query[i],tupel);
 		}
 	}
 	RELEASE_WRITE_LOCK(slcLock);
@@ -223,6 +238,9 @@ void objectChanged(char *datamodelName, Tupel_t *tupel, int event) {
 	DataModelElement_t *dm = NULL;
 	Query_t **query = NULL;
 	int i = 0;
+	#ifdef __KERNEL__
+	unsigned long flags;
+	#endif
 	ACQUIRE_WRITE_LOCK(slcLock);
 
 	if (tupel == NULL) {
@@ -242,7 +260,8 @@ void objectChanged(char *datamodelName, Tupel_t *tupel, int event) {
 
 	for (i = 0; i < MAX_QUERIES_PER_DM; i++) {
 		if (query[i] != NULL) {
-			executeQuery(slcDataModel,query[i],&tupel);
+			DEBUG_MSG(2,"Executing query(base@%p) %d: %p\n",query,i,query[i]);
+			enqueueQuery(query[i],tupel);
 		}
 	}
 	RELEASE_WRITE_LOCK(slcLock);
@@ -270,3 +289,9 @@ void destroySLC(void) {
 		FREE(slcDataModel);
 	}
 }
+
+#ifndef __KERNEL__ //TODO: Will be removed as soon as the userspace part is implemented
+void enqueueQuery(Query_t *query, Tupel_t *tuple) {
+
+}
+#endif
