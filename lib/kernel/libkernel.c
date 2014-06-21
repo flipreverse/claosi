@@ -85,8 +85,7 @@ static int queryExecutorWork(void *data) {
 			break;
 		}
 	}
-	do_exit(0);
-	
+
 	return 0;
 }
 
@@ -113,7 +112,7 @@ static void __exit slc_exit(void) {
 	
 	// Signal the query execution thread to terminate and wait for it
 	kthread_stop(queryExecThread);
-	FREE(queryExecThread);
+	queryExecThread = NULL;
 
 	DEBUG_MSG(1,"Destroyed SLC\n");
 }
