@@ -76,10 +76,10 @@ static void* getSrc(void) {
 
 static void printResult(QueryID_t id, Tupel_t *tupel) {
 	struct timeval time;
-	//printTupel(slcDataModel,tupel);
-	freeTupel(slcDataModel,tupel);
+
 	do_gettimeofday(&time);
 	printk("Received tupel with %d items at memory address %p at %lu us\n",tupel->itemLen,tupel,time.tv_sec * USEC_PER_MSEC + time.tv_usec);
+	freeTupel(slcDataModel,tupel);
 }
 
 static void initQuery(void) {
