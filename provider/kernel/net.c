@@ -27,6 +27,7 @@ static int handler_pre(struct kprobe *p, struct pt_regs *regs) {
 	struct sk_buff *skb = NULL;
 	Tupel_t *tupel = NULL;
 	struct timeval time;
+	unsigned long flags;
 
 #if defined(__i386__)
 skb = (struct sk_buff*)regs->ax;
@@ -43,12 +44,15 @@ skb = (struct sk_buff*)regs->ARM_r0;
 		return 0;
 	}
 
+	// Acquire the slcLock to avoid change in the datamodel while creating the tuple
+	ACQUIRE_READ_LOCK(slcLock);
 	allocItem(slcDataModel,tupel,0,"net.device.txBytes");
 	setItemInt(slcDataModel,tupel,"net.device.txBytes",4711);
 	allocItem(slcDataModel,tupel,1,"net.packetType");
 	setItemArray(slcDataModel,tupel,"net.packetType.macHdr",ETH_HLEN);
 	copyArrayByte(slcDataModel,tupel,"net.packetType.macHdr",0,skb->data,ETH_HLEN);
 	setItemByte(slcDataModel,tupel,"net.packetType.macProtocol",42);
+	RELEASE_READ_LOCK(slcLock);
 	PRINT_MSG("Received paket at %lu us\n",time.tv_sec * USEC_PER_MSEC + time.tv_usec);
 	eventOccured("net.device.onTx",tupel);
 
@@ -68,6 +72,10 @@ static void activate(void) {
 static void deactivate(void) {
 	unregister_kprobe(&rxKP);
 	DEBUG_MSG(1,"Unregistered kprobes at %s\n",rxKP.symbol_name);
+}
+
+static Tupel_t* generateStatusObject(void) {
+	return NULL;
 }
 
 static void* getSrc(void) {
@@ -101,7 +109,7 @@ static void initDatamodel(void) {
 	int i = 0;
 	INIT_SOURCE_POD(srcSocketType,"type",objSocket,INT,getSrc)
 	INIT_SOURCE_POD(srcSocketFlags,"flags",objSocket,INT,getSrc)
-	INIT_OBJECT(objSocket,"socket",nsNet,2,INT,activate,deactivate)
+	INIT_OBJECT(objSocket,"socket",nsNet,2,INT,activate,deactivate,generateStatusObject)
 	ADD_CHILD(objSocket,0,srcSocketFlags)
 	ADD_CHILD(objSocket,1,srcSocketType)
 	
@@ -129,7 +137,7 @@ static void initDatamodel(void) {
 	INIT_EVENT_COMPLEX(evtOnRX,"onRx",objDevice,"net.packetType",activate,deactivate)
 	INIT_EVENT_COMPLEX(evtOnTX,"onTx",objDevice,"net.packetType",activate,deactivate)
 
-	INIT_OBJECT(objDevice,"device",nsNet,4,STRING,activate,deactivate)
+	INIT_OBJECT(objDevice,"device",nsNet,4,STRING,activate,deactivate,generateStatusObject)
 	ADD_CHILD(objDevice,0,srcTXBytes)
 	ADD_CHILD(objDevice,1,srcRXBytes)
 	ADD_CHILD(objDevice,2,evtOnRX)
