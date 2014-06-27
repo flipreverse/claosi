@@ -88,13 +88,17 @@ typedef struct Source {
 	struct Query *queries[MAX_QUERIES_PER_DM];
 } Source_t;
 
+typedef struct Tupel Tupel_t;
+
 typedef void (*activateObject)(void);
 typedef void (*deactivateObject)(void);
+typedef Tupel_t* (*generateStatus)(void);
 
 typedef struct Object {
 	unsigned short identifierType;
 	activateObject activate;
 	deactivateObject deactivate;
+	generateStatus status;
 	struct Query *queries[MAX_QUERIES_PER_DM];
 	int numQueries;
 } Object_t;
@@ -152,15 +156,16 @@ int getDataModelSize(DataModelElement_t *rootDM, DataModelElement_t *elem, int i
 	strncpy((char*)&((Source_t*)varName.typeInfo)->returnName,returnTypeName,MAX_NAME_LEN); \
 	((Source_t*)varName.typeInfo)->returnType = COMPLEX;
 
-#define INIT_OBJECT(varName,nodeName,parentNode,numChildren,idType,regFunc, unregFunc)	strncpy((char*)&varName.name,nodeName,MAX_NAME_LEN); \
+#define INIT_OBJECT(varName,nodeName,parentNode,numChildren,idType,activateFunc, deactivateFunc, statusFunc)	strncpy((char*)&varName.name,nodeName,MAX_NAME_LEN); \
 	varName.childrenLen = numChildren; \
 	SET_CHILDREN_ARRAY(varName,numChildren) \
 	varName.parent = &parentNode; \
 	varName.dataModelType = OBJECT; \
 	varName.typeInfo = ALLOC(sizeof(Object_t)); \
 	((Object_t*)varName.typeInfo)->identifierType = idType; \
-	((Object_t*)varName.typeInfo)->activate = regFunc; \
-	((Object_t*)varName.typeInfo)->deactivate = unregFunc; \
+	((Object_t*)varName.typeInfo)->activate = activateFunc; \
+	((Object_t*)varName.typeInfo)->deactivate = deactivateFunc; \
+	((Object_t*)varName.typeInfo)->status = statusFunc; \
 	((Object_t*)varName.typeInfo)->numQueries = 0; \
 	INIT_QUERY_ARRAY(((Object_t*)varName.typeInfo)->queries,MAX_QUERIES_PER_DM);
 

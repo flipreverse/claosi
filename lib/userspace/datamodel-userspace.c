@@ -90,7 +90,7 @@ void printDatamodel(DataModelElement_t *root) {
 
 			case OBJECT:
 				obj = (Object_t*)curNode->typeInfo;
-				printf("object %s[%s] @ activate = %p, deactivate = %p {\n", curNode->name, typeToString(obj->identifierType), obj->activate, obj->deactivate);
+				printf("object %s[%s] @ activate = %p, deactivate = %p, status = %p {\n", curNode->name, typeToString(obj->identifierType), obj->activate, obj->deactivate, obj->status);
 				break;
 
 			case TYPE:

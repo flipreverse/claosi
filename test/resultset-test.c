@@ -112,11 +112,15 @@ static void unregObjectCallback(void) {
 	
 };
 
+static Tupel_t* generateStatusObject(void) {
+	return NULL;
+}
+
 static void initDatamodel(void) {
 	int i = 0;
 	INIT_SOURCE_POD(srcSocketType,"type",objSocket,INT,getSrc)
 	INIT_SOURCE_POD(srcSocketFlags,"flags",objSocket,INT,getSrc)
-	INIT_OBJECT(objSocket,"socket",nsNet1,2,INT,regObjectCallback,unregObjectCallback)
+	INIT_OBJECT(objSocket,"socket",nsNet1,2,INT,regObjectCallback,unregObjectCallback,generateStatusObject)
 	ADD_CHILD(objSocket,0,srcSocketFlags)
 	ADD_CHILD(objSocket,1,srcSocketType)
 	
@@ -147,7 +151,7 @@ static void initDatamodel(void) {
 	INIT_EVENT_COMPLEX(evtOnRX,"onRx",objDevice,"net.packetType",regEventCallback,unregEventCallback)
 	INIT_EVENT_COMPLEX(evtOnTX,"onTx",objDevice,"net.packetType",regEventCallback,unregEventCallback)
 
-	INIT_OBJECT(objDevice,"device",nsNet1,4,STRING,regObjectCallback,unregObjectCallback)
+	INIT_OBJECT(objDevice,"device",nsNet1,4,STRING,regObjectCallback,unregObjectCallback,generateStatusObject)
 	ADD_CHILD(objDevice,0,srcTXBytes)
 	ADD_CHILD(objDevice,1,srcRXBytes)
 	ADD_CHILD(objDevice,2,evtOnRX)
@@ -161,7 +165,7 @@ static void initDatamodel(void) {
 	INIT_SOURCE_POD(srcUTime,"utime",objProcess,FLOAT,getSrc)
 	INIT_SOURCE_POD(srcSTime,"stime",objProcess,STRING|ARRAY,getSrc)
 	INIT_SOURCE_COMPLEX(srcProcessSockets,"sockets",objProcess,"net.socket",getSrc) //TODO: Should be an array
-	INIT_OBJECT(objProcess,"process",nsProcess,3,INT,regObjectCallback,unregObjectCallback)
+	INIT_OBJECT(objProcess,"process",nsProcess,3,INT,regObjectCallback,unregObjectCallback,generateStatusObject)
 	ADD_CHILD(objProcess,0,srcUTime)
 	ADD_CHILD(objProcess,1,srcSTime)
 	ADD_CHILD(objProcess,2,srcProcessSockets)
@@ -172,7 +176,7 @@ static void initDatamodel(void) {
 	INIT_EVENT_COMPLEX(evtDisplay,"display",nsUI,"ui.eventType",regEventCallback,unregEventCallback)
 	INIT_SOURCE_COMPLEX(srcProcessess,"processes",objApp,"process.process",getSrc) //TODO: should be an array as well
 	
-	INIT_OBJECT(objApp,"app",nsUI,1,STRING,regObjectCallback,unregObjectCallback)
+	INIT_OBJECT(objApp,"app",nsUI,1,STRING,regObjectCallback,unregObjectCallback,generateStatusObject)
 	ADD_CHILD(objApp,0,srcProcessess)
 
 	INIT_SOURCE_COMPLEX(srcForegroundApp,"foregroundApp",nsUI,"ui.app",getSrc)

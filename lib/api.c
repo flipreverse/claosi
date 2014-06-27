@@ -58,7 +58,11 @@ int registerProvider(DataModelElement_t *dm, Query_t *queries) {
 			RELEASE_WRITE_LOCK(slcLock);
 			return ret;
 		}
+		#ifdef __KERNEL__
+		if ((ret = addQueries(slcDataModel,queries,&flags)) < 0) {
+		#else
 		if ((ret = addQueries(slcDataModel,queries)) < 0) {
+		#endif
 			RELEASE_WRITE_LOCK(slcLock);
 			return ret;
 		}
@@ -98,9 +102,6 @@ int unregisterProvider(DataModelElement_t *dm, Query_t *queries) {
 			RELEASE_WRITE_LOCK(slcLock);
 			return ret;
 		}
-	} else {
-		RELEASE_WRITE_LOCK(slcLock);
-		return -EPARAM;
 	}
 	if (dm != NULL) {
 		if ((ret = checkDataModelSyntax(slcDataModel,dm,NULL)) < 0) {
@@ -139,7 +140,11 @@ int registerQuery(Query_t *queries) {
 			RELEASE_WRITE_LOCK(slcLock);
 			return ret;
 		}
+		#ifdef __KERNEL__
+		if ((ret = addQueries(slcDataModel,queries,&flags)) < 0) {
+		#else
 		if ((ret = addQueries(slcDataModel,queries)) < 0) {
+		#endif
 			RELEASE_WRITE_LOCK(slcLock);
 			return ret;
 		}
@@ -235,12 +240,13 @@ EXPORT_SYMBOL(eventOccured);
  * @param event a bitmask describing the event type
  */
 void objectChanged(char *datamodelName, Tupel_t *tupel, int event) {
-	DataModelElement_t *dm = NULL;
-	Query_t **query = NULL;
 	int i = 0;
 	#ifdef __KERNEL__
 	unsigned long flags;
 	#endif
+	DataModelElement_t *dm = NULL;
+	Query_t **query = NULL;
+	ObjectStream_t *objStream = NULL;
 	ACQUIRE_WRITE_LOCK(slcLock);
 
 	if (tupel == NULL) {
@@ -260,8 +266,18 @@ void objectChanged(char *datamodelName, Tupel_t *tupel, int event) {
 
 	for (i = 0; i < MAX_QUERIES_PER_DM; i++) {
 		if (query[i] != NULL) {
-			DEBUG_MSG(2,"Executing query(base@%p) %d: %p\n",query,i,query[i]);
-			enqueueQuery(query[i],tupel);
+			if (query[i]->root->type == GEN_OBJECT) {
+				objStream = (ObjectStream_t*)query[i]->root;
+			} else {
+				DEBUG_MSG(1,"Weird! This should not happen! The root operator of a query registered to an object is not of type GEN_OBJECT!\n");
+				continue;
+			}
+			if ((objStream->objectEvents & event) == event) {
+				DEBUG_MSG(3,"Executing %d-th query (base@%p) %p\n",i,query,query[i]);
+				enqueueQuery(query[i],tupel);
+			} else {
+				DEBUG_MSG(3,"Not executing %d-th query(base@%p) %p, because the event does not match the one the query was registered for (%d != %d).\n",i,query,query[i],objStream->objectEvents,event);
+			}
 		}
 	}
 	RELEASE_WRITE_LOCK(slcLock);
@@ -293,5 +309,9 @@ void destroySLC(void) {
 #ifndef __KERNEL__ //TODO: Will be removed as soon as the userspace part is implemented
 void enqueueQuery(Query_t *query, Tupel_t *tuple) {
 
+}
+
+void startObjStatusThread(Query_t *query, generateStatus statusFn) {
+	
 }
 #endif

@@ -31,13 +31,17 @@ static void unregObjectCallback(void) {
 	
 };
 
+static Tupel_t* generateStatusObject(void) {
+	return NULL;
+}
+
 int main() {
 	int ret = 0, i = 0;
 	DataModelElement_t *errNode = NULL, *copy = NULL;
 
 	INIT_SOURCE_POD(srcSocketType,"type",objSocket,INT,getSrc)
 	INIT_SOURCE_POD(srcSocketFlags,"flags",objSocket,INT,getSrc)
-	INIT_OBJECT(objSocket,"socket",nsNet1,2,INT,regObjectCallback,unregObjectCallback)
+	INIT_OBJECT(objSocket,"socket",nsNet1,2,INT,regObjectCallback,unregObjectCallback,generateStatusObject)
 	ADD_CHILD(objSocket,0,srcSocketFlags)
 	ADD_CHILD(objSocket,1,srcSocketType)
 	
@@ -65,7 +69,7 @@ int main() {
 	INIT_EVENT_COMPLEX(evtOnRX,"onRx",objDevice,"net.packetType",regEventCallback,unregEventCallback)
 	INIT_EVENT_COMPLEX(evtOnTX,"onTx",objDevice,"net.packetType",regEventCallback,unregEventCallback)
 
-	INIT_OBJECT(objDevice,"device",nsNet1,4,STRING,regObjectCallback,unregObjectCallback)
+	INIT_OBJECT(objDevice,"device",nsNet1,4,STRING,regObjectCallback,unregObjectCallback,generateStatusObject)
 	ADD_CHILD(objDevice,0,srcTXBytes)
 	ADD_CHILD(objDevice,1,srcRXBytes)
 	ADD_CHILD(objDevice,2,evtOnRX)
@@ -79,7 +83,7 @@ int main() {
 	INIT_SOURCE_POD(srcUTime,"utime",objProcess,INT,getSrc)
 	INIT_SOURCE_POD(srcSTime,"stime",objProcess,INT,getSrc)
 	INIT_SOURCE_COMPLEX(srcProcessSockets,"sockets",objProcess,"net.socket",getSrc) //TODO: Should be an array
-	INIT_OBJECT(objProcess,"process",nsProcess,3,INT,regObjectCallback,unregObjectCallback)
+	INIT_OBJECT(objProcess,"process",nsProcess,3,INT,regObjectCallback,unregObjectCallback,generateStatusObject)
 	ADD_CHILD(objProcess,0,srcUTime)
 	ADD_CHILD(objProcess,1,srcSTime)
 	ADD_CHILD(objProcess,2,srcProcessSockets)
@@ -90,7 +94,7 @@ int main() {
 	INIT_EVENT_COMPLEX(evtDisplay,"display",nsUI,"ui.eventType",regEventCallback,unregEventCallback)
 	INIT_SOURCE_COMPLEX(srcProcessess,"processes",objApp,"process.process",getSrc) //TODO: should be an array as well
 	
-	INIT_OBJECT(objApp,"app",nsUI,1,STRING,regObjectCallback,unregObjectCallback)
+	INIT_OBJECT(objApp,"app",nsUI,1,STRING,regObjectCallback,unregObjectCallback,generateStatusObject)
 	ADD_CHILD(objApp,0,srcProcessess)
 
 	INIT_SOURCE_COMPLEX(srcForegroundApp,"foregroundApp",nsUI,"ui.app",getSrc)
@@ -114,7 +118,7 @@ int main() {
 
 	INIT_SOURCE_POD(srcDelayTolerance,"delayTolerance",nsNet2,INT,getSrc)
 	INIT_SOURCE_POD(srcState,"state",objDevice2,INT,getSrc)
-	INIT_OBJECT(objDevice2,"device",nsNet2,1,STRING,regObjectCallback,unregObjectCallback)
+	INIT_OBJECT(objDevice2,"device",nsNet2,1,STRING,regObjectCallback,unregObjectCallback,generateStatusObject)
 	ADD_CHILD(objDevice2,0,srcState)
 	
 	INIT_TYPE(typePacketType2,"packetType",nsNet2,0)

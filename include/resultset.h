@@ -9,6 +9,8 @@
 #include <datamodel.h>
 #include <debug.h>
 
+DECLARE_LOCK_EXTERN(slcLock);
+
 #define IS_COMPACT(tupelVar)	((tupelVar->isCompact & 0x1) == 0x1)
 #define COMPACT_SIZE(tupelVar)	(tupelVar->isCompact >> 8)
 
@@ -107,6 +109,7 @@ typedef struct __attribute__((packed)) Item {
 } Item_t;
 
 typedef struct __attribute__((packed)) Tupel {
+	struct Tupel *next;
 	unsigned long long timestamp;				// The current time since 1-1-1970 in ms
 	unsigned short itemLen;						// Number of items
 	unsigned int isCompact;						// If the first byte contains an one, the tupel and its items are stored in one large memory area. If so, the remaining bytes contain the size of thie area in bytes.
@@ -121,7 +124,7 @@ typedef struct __attribute__((packed)) Tupel {
  * Arrays are just allowed as an endpoint of a path.
  */
 static inline void setItemInt(DataModelElement_t *rootDM, Tupel_t *tupel, char *typeName, int value) {
-	#define DEFAULT_RETURN_VALUE	
+	#define DEFAULT_RETURN_VALUE
 	GET_MEMBER_POINTER(tupel,rootDM,typeName);
 	*(int*)valuePtr = value;
 	#undef DEFAULT_RETURN_VALUE
@@ -323,6 +326,7 @@ static inline Tupel_t* initTupel(unsigned long long timestamp, int numItems) {
 		return NULL;
 	}
 	ret->isCompact = 0;
+	ret->next = NULL;
 	ret->timestamp = timestamp;
 	ret->itemLen = numItems;
 	ret->items = (Item_t**)(ret + 1);

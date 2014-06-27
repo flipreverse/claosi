@@ -78,9 +78,9 @@ enum OperatorType {
 };
 
 enum ObjectEvents {
-	OBJECT_CREATE	=	0x0,
-	OBJECT_DELETE	=	0x1,
-	OBJECT_STATUS	=	0x2
+	OBJECT_CREATE	=	0x1,
+	OBJECT_DELETE	=	0x2,
+	OBJECT_STATUS	=	0x4
 };
 
 enum PredicateType {
@@ -239,7 +239,11 @@ typedef struct __attribute__((packed)) Query {
 
 int checkQuerySyntax(DataModelElement_t *rootDM, Operator_t *rootQuery, Operator_t **errOperator);
 int checkQueries(DataModelElement_t *rootDM, Query_t *queries, Operator_t **errOperator, int syncAllowed);
+#ifdef __KERNEL__
+int addQueries(DataModelElement_t *rootDM, Query_t *queries, unsigned long *flags);
+#else
 int addQueries(DataModelElement_t *rootDM, Query_t *queries);
+#endif
 int delQueries(DataModelElement_t *rootDM, Query_t *queries);
 int checkAndSanitizeElementPath(char *elemPath, char **elemPathSani, char **objId);
 void printQuery(Operator_t *root);

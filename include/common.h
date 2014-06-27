@@ -26,8 +26,12 @@
 #define DECLARE_LOCK(varName)				rwlock_t varName
 #define DECLARE_LOCK_EXTERN(varName)		extern rwlock_t varName
 #define INIT_LOCK(varName)					rwlock_init(&varName)
-#define ACQUIRE_READ_LOCK(varName)			read_lock_irqsave(&varName,flags)
-#define RELEASE_READ_LOCK(varName)			read_unlock_irqrestore(&varName,flags)
+//#define ACQUIRE_READ_LOCK(varName)			printk("%s:%d\n",__FUNCTION__,read_can_lock(&varName));read_lock_irqsave(&varName,flags)
+//#define ACQUIRE_READ_LOCK(varName)			read_lock_irqsave(&varName,flags)
+//#define RELEASE_READ_LOCK(varName)			read_unlock_irqrestore(&varName,flags)
+#define ACQUIRE_READ_LOCK(varName)			write_lock_irqsave(&varName,flags)
+#define RELEASE_READ_LOCK(varName)			write_unlock_irqrestore(&varName,flags)
+//#define ACQUIRE_WRITE_LOCK(varName)			printk("%s:%d\n",__FUNCTION__,write_can_lock(&varName));write_lock_irqsave(&varName,flags)
 #define ACQUIRE_WRITE_LOCK(varName)			write_lock_irqsave(&varName,flags)
 #define RELEASE_WRITE_LOCK(varName)			write_unlock_irqrestore(&varName,flags)
 #else

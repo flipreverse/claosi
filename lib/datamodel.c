@@ -719,7 +719,7 @@ int checkDataModelSyntax(DataModelElement_t *rootCurrent,DataModelElement_t *roo
 				if (!(obj->identifierType & (INT | STRING | FLOAT | BYTE))) {
 					return -ERETURNTYPE;
 				} 
-				if (obj->activate == NULL || obj->deactivate == NULL) {
+				if (obj->activate == NULL || obj->deactivate == NULL || obj->status == NULL) {
 					return -ECALLBACK;
 				}
 				break;

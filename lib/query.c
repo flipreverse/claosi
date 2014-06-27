@@ -1,6 +1,7 @@
 #include <common.h>
 #include <resultset.h>
 #include <query.h>
+#include <api.h>
 
 static QueryID_t globalQueryID = 1;
 
@@ -543,56 +544,73 @@ int checkQueries(DataModelElement_t *rootDM, Query_t *queries, Operator_t **errO
  * @param query a pointer to the first query in that list
  * @return 0 on success and a value below zero, if an error was discovered.
  */
+#ifdef __KERNEL__
+int addQueries(DataModelElement_t *rootDM, Query_t *queries, unsigned long *flags) {
+#else
 int addQueries(DataModelElement_t *rootDM, Query_t *queries) {
+#endif
 	DataModelElement_t *dm = NULL;
 	Query_t *cur = queries, **regQueries = NULL;
 	char *name = NULL;
-	int i = 0;
+	int i = 0, addQuery = 1, events = 0;
 	
 	do {
+		addQuery = 1;
 		switch (cur->root->type) {
-			case GEN_EVENT:
 			case GEN_OBJECT:
+				events = ((ObjectStream_t*)cur->root)->objectEvents;
+				if ((events & (OBJECT_CREATE | OBJECT_DELETE)) == 0 && events & OBJECT_STATUS) {
+					addQuery = 0;
+				}
+			case GEN_EVENT:
 			case GEN_SOURCE:
 				name = ((GenStream_t*)cur->root)->name;
 				break;
 		}
 
 		dm = getDescription(rootDM,name);
-		// This function just gets called from an api method. Hence, the lock is already acquired.
-		// We can safely operate on the numQueries var.
-		switch (dm->dataModelType) {
-			case EVENT:
-				regQueries = ((Event_t*)dm->typeInfo)->queries;
-				if (((Event_t*)dm->typeInfo)->numQueries == 0) {
-					((Event_t*)dm->typeInfo)->activate();
-				}
-				((Event_t*)dm->typeInfo)->numQueries++;
-				break;
+		if (addQuery) {
+			// This function just gets called from an api method. Hence, the lock is already acquired.
+			// We can safely operate on the numQueries var.
+			switch (dm->dataModelType) {
+				case EVENT:
+					regQueries = ((Event_t*)dm->typeInfo)->queries;
+					if (((Event_t*)dm->typeInfo)->numQueries == 0) {
+						((Event_t*)dm->typeInfo)->activate();
+					}
+					((Event_t*)dm->typeInfo)->numQueries++;
+					break;
 
-			case OBJECT:
-				regQueries = ((Object_t*)dm->typeInfo)->queries;
-				if (((Object_t*)dm->typeInfo)->numQueries == 0) {
-					((Object_t*)dm->typeInfo)->activate();
-				}
-				((Object_t*)dm->typeInfo)->numQueries++;
-				break;
+				case OBJECT:
+					regQueries = ((Object_t*)dm->typeInfo)->queries;
+					if (((Object_t*)dm->typeInfo)->numQueries == 0) {
+						((Object_t*)dm->typeInfo)->activate();
+					}
+					((Object_t*)dm->typeInfo)->numQueries++;
+					break;
 
-			case SOURCE:
-				regQueries = ((Source_t*)dm->typeInfo)->queries;
-				break;
-		}
-		for (i = 0; i < MAX_QUERIES_PER_DM; i++) {
-			if (regQueries[i] == NULL) {
-				break;
+				case SOURCE:
+					regQueries = ((Source_t*)dm->typeInfo)->queries;
+					break;
 			}
+			for (i = 0; i < MAX_QUERIES_PER_DM; i++) {
+				if (regQueries[i] == NULL) {
+					break;
+				}
+			}
+			if (i >= MAX_QUERIES_PER_DM) {
+				return -EMAXQUERIES;
+			}
+			regQueries[i] = cur;
+			cur->queryID = MAKE_QUERY_ID(globalQueryID,i);
+			globalQueryID++;
+		} else {
+			#ifdef __KERNEL__
+			startObjStatusThread(cur,((Object_t*)dm->typeInfo)->status,flags);
+			#else
+			startObjStatusThread(cur,((Object_t*)dm->typeInfo)->status);
+			#endif
 		}
-		if (i >= MAX_QUERIES_PER_DM) {
-			return -EMAXQUERIES;
-		}
-		regQueries[i] = cur;
-		cur->queryID = MAKE_QUERY_ID(globalQueryID,i);
-		globalQueryID++;
 
 		cur = cur->next;
 	} while(cur != NULL);
