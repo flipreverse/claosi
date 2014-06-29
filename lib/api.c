@@ -98,7 +98,11 @@ int unregisterProvider(DataModelElement_t *dm, Query_t *queries) {
 			RELEASE_WRITE_LOCK(slcLock);
 			return ret;
 		}
+		#ifdef __KERNEL__
+		if ((ret = delQueries(slcDataModel,queries,&flags)) < 0) {
+		#else
 		if ((ret = delQueries(slcDataModel,queries)) < 0) {
+		#endif
 			RELEASE_WRITE_LOCK(slcLock);
 			return ret;
 		}
@@ -175,7 +179,11 @@ int unregisterQuery(Query_t *queries) {
 			RELEASE_WRITE_LOCK(slcLock);
 			return ret;
 		}
+		#ifdef __KERNEL__
+		if ((ret = delQueries(slcDataModel,queries,&flags)) < 0) {
+		#else
 		if ((ret = delQueries(slcDataModel,queries)) < 0) {
+		#endif
 			RELEASE_WRITE_LOCK(slcLock);
 			return ret;
 		}

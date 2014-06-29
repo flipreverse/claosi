@@ -545,7 +545,7 @@ int checkQueries(DataModelElement_t *rootDM, Query_t *queries, Operator_t **errO
  * @return 0 on success and a value below zero, if an error was discovered.
  */
 #ifdef __KERNEL__
-int addQueries(DataModelElement_t *rootDM, Query_t *queries, unsigned long *flags) {
+int addQueries(DataModelElement_t *rootDM, Query_t *queries, unsigned long *__flags) {
 #else
 int addQueries(DataModelElement_t *rootDM, Query_t *queries) {
 #endif
@@ -553,7 +553,10 @@ int addQueries(DataModelElement_t *rootDM, Query_t *queries) {
 	Query_t *cur = queries, **regQueries = NULL;
 	char *name = NULL;
 	int i = 0, addQuery = 1, events = 0, statusQuery = 0;
-	
+	#ifdef __KERNEL__
+	unsigned long flags = *__flags;
+	#endif
+
 	do {
 		addQuery = 1;
 		statusQuery = 0;
@@ -581,7 +584,22 @@ int addQueries(DataModelElement_t *rootDM, Query_t *queries) {
 				case EVENT:
 					regQueries = ((Event_t*)dm->typeInfo)->queries;
 					if (((Event_t*)dm->typeInfo)->numQueries == 0) {
+						/*
+						 * The slc-core component does *not* know, which steps are necessary to 'activate'
+						 * an event. Therefore, the write lock will be released to avoid any kind of race conditions.
+						 * For example, if the kernel has to register a kprobe it may sleep or call schedule, which
+						 * is *not* allowed in an atomic context.
+						 * Moreover it is safe to release the lock, because there are no onging modifications. One may argue that
+						 * during this short period of time without a lock held someone else deletes this particular node (dm)
+						 * from the datamodel and the following code will explode.
+						 * Well.... for now, we don't care. :-D This would be a rare corner case. :-)
+						 */
+						RELEASE_WRITE_LOCK(slcLock);
 						((Event_t*)dm->typeInfo)->activate();
+						ACQUIRE_WRITE_LOCK(slcLock);
+						#ifdef __KERNEL__
+						*__flags = flags;
+						#endif
 					}
 					((Event_t*)dm->typeInfo)->numQueries++;
 					break;
@@ -589,7 +607,13 @@ int addQueries(DataModelElement_t *rootDM, Query_t *queries) {
 				case OBJECT:
 					regQueries = ((Object_t*)dm->typeInfo)->queries;
 					if (((Object_t*)dm->typeInfo)->numQueries == 0) {
+						// Same applies here for an object.
+						RELEASE_WRITE_LOCK(slcLock);
 						((Object_t*)dm->typeInfo)->activate();
+						ACQUIRE_WRITE_LOCK(slcLock);
+						#ifdef __KERNEL__
+						*__flags = flags;
+						#endif
 					}
 					((Object_t*)dm->typeInfo)->numQueries++;
 					break;
@@ -612,7 +636,7 @@ int addQueries(DataModelElement_t *rootDM, Query_t *queries) {
 		}
 		if (statusQuery) {
 			#ifdef __KERNEL__
-			startObjStatusThread(cur,((Object_t*)dm->typeInfo)->status,flags);
+			startObjStatusThread(cur,((Object_t*)dm->typeInfo)->status,__flags);
 			#else
 			startObjStatusThread(cur,((Object_t*)dm->typeInfo)->status);
 			#endif
@@ -630,12 +654,19 @@ int addQueries(DataModelElement_t *rootDM, Query_t *queries) {
  * @param query a pointer to the first query in that list
  * @return 0 on success and a value below zero, if an error was discovered.
  */
+#ifdef __KERNEL__
+int delQueries(DataModelElement_t *rootDM, Query_t *queries, unsigned long *__flags) {
+#else
 int delQueries(DataModelElement_t *rootDM, Query_t *queries) {
+#endif 
 	DataModelElement_t *dm = NULL;
 	Query_t *cur = queries, **regQueries = NULL;
 	char *name = NULL;
 	int id = 0;
-	
+	#ifdef __KERNEL__
+	unsigned long flags = *__flags;
+	#endif
+
 	do {
 		switch (cur->root->type) {
 			case GEN_EVENT:
@@ -651,7 +682,23 @@ int delQueries(DataModelElement_t *rootDM, Query_t *queries) {
 				regQueries = ((Event_t*)dm->typeInfo)->queries;
 				((Event_t*)dm->typeInfo)->numQueries--;
 				if (((Event_t*)dm->typeInfo)->numQueries == 0) {
+					/*
+					 * The slc-core component does *not* know, which steps are necessary to 'deactivate'
+					 * an event. Therefore, the write lock will be released to avoid any kind of race conditions.
+					 * For example, if the kernel has to unregister a kprobe it may sleep or call schedule, which
+					 * is *not* allowed in an atomic context.
+					 * Moreover it is safe to release the lock, because there are no onging modifications. One may argue that
+					 * during this short period of time without a lock held someone else deletes this particular node (dm)
+					 * from the datamodel and the following code will explode.
+					 * Well.... for now, we don't care. :-D This would be a rare corner case. :-)
+					 */
+					RELEASE_WRITE_LOCK(slcLock);
 					((Event_t*)dm->typeInfo)->deactivate();
+					ACQUIRE_WRITE_LOCK(slcLock);
+					#ifdef __KERNEL__
+					*__flags = flags;
+					#endif
+
 				}
 				break;
 
@@ -659,7 +706,13 @@ int delQueries(DataModelElement_t *rootDM, Query_t *queries) {
 				regQueries = ((Object_t*)dm->typeInfo)->queries;
 				((Object_t*)dm->typeInfo)->numQueries--;
 				if (((Object_t*)dm->typeInfo)->numQueries == 0) {
+					// Same applies here for an object.
+					RELEASE_WRITE_LOCK(slcLock);
 					((Object_t*)dm->typeInfo)->deactivate();
+					ACQUIRE_WRITE_LOCK(slcLock);
+					#ifdef __KERNEL__
+					*__flags = flags;
+					#endif
 				}
 				break;
 

@@ -244,7 +244,11 @@ int addQueries(DataModelElement_t *rootDM, Query_t *queries, unsigned long *flag
 #else
 int addQueries(DataModelElement_t *rootDM, Query_t *queries);
 #endif
+#ifdef __KERNEL__
+int delQueries(DataModelElement_t *rootDM, Query_t *queries, unsigned long *__flags);
+#else
 int delQueries(DataModelElement_t *rootDM, Query_t *queries);
+#endif
 int checkAndSanitizeElementPath(char *elemPath, char **elemPathSani, char **objId);
 void printQuery(Operator_t *root);
 void freeQuery(Operator_t *op, int freeOperator);
