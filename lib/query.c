@@ -552,14 +552,19 @@ int addQueries(DataModelElement_t *rootDM, Query_t *queries) {
 	DataModelElement_t *dm = NULL;
 	Query_t *cur = queries, **regQueries = NULL;
 	char *name = NULL;
-	int i = 0, addQuery = 1, events = 0;
+	int i = 0, addQuery = 1, events = 0, statusQuery = 0;
 	
 	do {
 		addQuery = 1;
+		statusQuery = 0;
 		switch (cur->root->type) {
 			case GEN_OBJECT:
 				events = ((ObjectStream_t*)cur->root)->objectEvents;
+				// Need to start the generate status thread?
+				statusQuery = events & OBJECT_STATUS;
+				// Status only query?
 				if ((events & (OBJECT_CREATE | OBJECT_DELETE)) == 0 && events & OBJECT_STATUS) {
+					// Oh yes. No need to remember this query.
 					addQuery = 0;
 				}
 			case GEN_EVENT:
@@ -604,7 +609,8 @@ int addQueries(DataModelElement_t *rootDM, Query_t *queries) {
 			regQueries[i] = cur;
 			cur->queryID = MAKE_QUERY_ID(globalQueryID,i);
 			globalQueryID++;
-		} else {
+		}
+		if (statusQuery) {
 			#ifdef __KERNEL__
 			startObjStatusThread(cur,((Object_t*)dm->typeInfo)->status,flags);
 			#else
