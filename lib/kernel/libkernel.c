@@ -4,6 +4,7 @@
 #include <linux/mutex.h>
 #include <linux/spinlock.h>
 #include <linux/wait.h>
+#include <linux/ktime.h>
 #include <datamodel.h>
 #include <resultset.h>
 #include <query.h>
@@ -17,7 +18,7 @@ static DECLARE_WAIT_QUEUE_HEAD(waitQueue);
 /*
  * Using list_empty() as a condition for wait_event() may lead to a race condition, especially on a smp system.
  * One processor executes enqueueQuery() while another one checks the condition '!list_empty(queriesToExecList)'.
- * So, we have to use a datatype which allows us atomically acess *and* represents the lists status.
+ * So, we have to use a datatype which allows us atomically acesses *and* represents the lists status.
  * The waitingQueries variable holds the number of outstanding queries.
  */ 
 static atomic_t waitingQueries;
@@ -32,6 +33,30 @@ typedef struct QueryStatusJob {
 	Query_t *query;
 	generateStatus statusFn;
 } QueryStatusJob_t;
+/**
+ * An instance of QueryTimerJob_t holds any information needed by the 
+ * kernel-specific code to maintain the timer for a certain source.
+ * Relation between a source and QueryTimerJob_t: 1:n .
+ */
+typedef struct QueryTimerJob {
+	/**
+	 * Easier access to the period. Needed to reschedule the hrtimer.
+	 * It is accessible through query->root->period, which is more expensive.
+	 */
+	int period;
+	/**
+	 * A pointer to the query a module registered on node {@link dm}.
+	 */
+	Query_t *query;
+	/**
+	 * Access the datamodel node to acquire/release the lock and call the status function.
+	 */
+	DataModelElement_t *dm;
+	/**
+	 * The actual timer :-)
+	 */
+	struct hrtimer timer;
+} QueryTimerJob_t;
 
 void enqueueQuery(Query_t *query, Tupel_t *tuple) {
 	QueryJob_t *job = NULL;
@@ -113,6 +138,69 @@ void startObjStatusThread(Query_t *query, generateStatus statusFn, unsigned long
 	// Re-acquire the lock and pass the flags upwards to the caller
 	ACQUIRE_WRITE_LOCK(slcLock);
 	*__flags = flags;
+}
+
+static enum hrtimer_restart hrtimerHandler(struct hrtimer *curTimer) {
+	// Obtain the surrounding datatype
+	QueryTimerJob_t *timerJob = container_of(curTimer,QueryTimerJob_t,timer);
+	Source_t *src = (Source_t*)timerJob->dm->typeInfo;
+	Tupel_t *tuple= NULL;
+	unsigned long flags;
+
+	DEBUG_MSG(2,"%s: Creating tuple\n",__FUNCTION__);
+	// Only one timer at a time is allowed to access this source
+	ACQUIRE_WRITE_LOCK(src->lock);
+	tuple = src->callback();
+	RELEASE_WRITE_LOCK(src->lock);
+	if (tuple != NULL) {
+		DEBUG_MSG(2,"%s: Enqueue tuple\n",__FUNCTION__);
+		enqueueQuery(timerJob->query,tuple);
+	}
+	/*
+	 * Restart the timer. Do *not* return HRTIMER_RESTART. It will force the kernel to *immediately* restart this timer and 
+	 * will block at least one core. It will slow down the whole system.
+	 */
+	hrtimer_start(&timerJob->timer,ms_to_ktime(timerJob->period),HRTIMER_MODE_REL);
+
+	return HRTIMER_NORESTART;
+}
+
+void startSourceTimer(DataModelElement_t *dm, Query_t *query) {
+	SourceStream_t *srcStream = (SourceStream_t*)query->root;
+	QueryTimerJob_t *timerJob = NULL;
+	// Allocate memory for the job-specific information; job-specific = (query,datamodel,period)
+	timerJob = ALLOC(sizeof(QueryTimerJob_t));
+	if (timerJob == NULL) {
+		DEBUG_MSG(1,"%s: Cannot allocate QueryTimerJob_t\n", __FUNCTION__);
+		return;
+	}
+
+	DEBUG_MSG(2,"%s: Init hrtimer for node %s\n",__FUNCTION__,srcStream->st_name);
+	// Setup the timer using timing information relative to the current clock which will be the monotonic one.
+	hrtimer_init(&timerJob->timer, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
+	timerJob->period = srcStream->period;
+	timerJob->query = query;
+	timerJob->dm = dm;
+	timerJob->timer.function = &hrtimerHandler;
+	srcStream->timerInfo = timerJob;
+
+	DEBUG_MSG(2,"%s: Starting hrtimer for node %s. Will fire in %u ms.\n",__FUNCTION__,srcStream->st_name,srcStream->period);
+	// Fire it up.... :-)
+	hrtimer_start(&timerJob->timer,ms_to_ktime(srcStream->period),HRTIMER_MODE_REL);
+}
+
+void stopSourceTimer(Query_t *query) {
+	int ret = 0;
+	SourceStream_t *srcStream = (SourceStream_t*)query->root;
+	QueryTimerJob_t *timerJob = (QueryTimerJob_t*)srcStream->timerInfo;
+
+	DEBUG_MSG(2,"%s: Canceling hrtimer for node %s...\n",__FUNCTION__,srcStream->st_name);
+	// Cancel the timer. Blocks until the timer handler terminates.
+	ret = hrtimer_cancel(&timerJob->timer);
+	DEBUG_MSG(2,"%s: hrtimer for node %s canceled. Was active: %d\n",__FUNCTION__,srcStream->st_name,ret);
+	// Free the timer information
+	FREE(timerJob);
+	srcStream->timerInfo = NULL;
 }
 
 static int queryExecutorWork(void *data) {

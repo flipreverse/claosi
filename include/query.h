@@ -17,11 +17,12 @@
 #define ADD_ELEMENT(varOperator,slot,elementVar,elementName)	varOperator.elements[slot] = &elementVar; \
 	strncpy((char*)&elementVar.name,elementName,MAX_NAME_LEN);
 
-#define INIT_SRC_STREAM(varName,srcName,isUrgent,childVar,srcFrequency)	strncpy((char*)&varName.st_name,srcName,MAX_NAME_LEN); \
+#define INIT_SRC_STREAM(varName,srcName,isUrgent,childVar,srcPeriod)	strncpy((char*)&varName.st_name,srcName,MAX_NAME_LEN); \
 	varName.st_type = GEN_SOURCE; \
 	varName.st_child = childVar; \
 	varName.st_urgent = isUrgent; \
-	varName.frequency = srcFrequency;
+	varName.period = srcPeriod; \
+	varName.timerInfo = NULL;
 
 #define INIT_OBJ_STREAM(varName,objName,isUrgent,childVar,listObjEvents)	strncpy((char*)&varName.st_name,objName,MAX_NAME_LEN); \
 	varName.st_type = GEN_OBJECT; \
@@ -151,7 +152,8 @@ typedef struct SourceStream {
 	GenStream_t streamBase;
 	#define st_urgent streamBase.urgent
 	#define st_name streamBase.name
-	int frequency;
+	int period;
+	void *timerInfo;
 } SourceStream_t;
 
 typedef struct ObjectStream {

@@ -40,6 +40,19 @@ void startObjStatusThread(Query_t *query, generateStatus status,unsigned long *f
 #else
 void startObjStatusThread(Query_t *query, generateStatus status);
 #endif
-
+/**
+ * Setups and starts an layer-specific timer firing every query->root->period ms.
+ * The layer-specific code has to call the datamodel nodes status' function and enqueue the returned tuple including the {@link query} for execution.
+ * @param dm a pointer to the datamodel node representing the source {@link query} should be executed on
+ * @param query a pointer to the query which should be executed query x ms
+ */
+void startSourceTimer(DataModelElement_t *dm, Query_t *query);
+/**
+ * Stops (and destroys) the layer-specific timer.
+ * Each instance of SourceStream_t holds a timerInfo pointer. It points to a memory location where layer-specific information for a timer is stored.
+ * Hence, this function needs a pointer to the query in order to reach the instance of SourceStream_t.
+ * @param query a pointer to the query which should be executed query x ms
+ */
+void stopSourceTimer(Query_t *query);
 
 #endif // __API_H__

@@ -394,8 +394,8 @@ int checkQuerySyntax(DataModelElement_t *rootDM, Operator_t *rootQuery, Operator
 						return -EWRONGSTREAMTYPE;
 					}
 					srcStream = (SourceStream_t*)cur;
-					if (srcStream->frequency == 0) {
-						return -ENOFERQ;
+					if (srcStream->period == 0) {
+						return -ENOPERIOD;
 					}
 				} else if (cur->type == GEN_EVENT) {
 					if (dm->dataModelType != EVENT) {
@@ -583,6 +583,30 @@ int addQueries(DataModelElement_t *rootDM, Query_t *queries) {
 			switch (dm->dataModelType) {
 				case EVENT:
 					regQueries = ((Event_t*)dm->typeInfo)->queries;
+					break;
+
+				case OBJECT:
+					regQueries = ((Object_t*)dm->typeInfo)->queries;
+					break;
+
+				case SOURCE:
+					regQueries = ((Source_t*)dm->typeInfo)->queries;
+					break;
+			}
+			for (i = 0; i < MAX_QUERIES_PER_DM; i++) {
+				if (regQueries[i] == NULL) {
+					break;
+				}
+			}
+			if (i >= MAX_QUERIES_PER_DM) {
+				return -EMAXQUERIES;
+			}
+			regQueries[i] = cur;
+			cur->queryID = MAKE_QUERY_ID(globalQueryID,i);
+			globalQueryID++;
+			
+			switch (dm->dataModelType) {
+				case EVENT:
 					if (((Event_t*)dm->typeInfo)->numQueries == 0) {
 						/*
 						 * The slc-core component does *not* know, which steps are necessary to 'activate'
@@ -605,7 +629,6 @@ int addQueries(DataModelElement_t *rootDM, Query_t *queries) {
 					break;
 
 				case OBJECT:
-					regQueries = ((Object_t*)dm->typeInfo)->queries;
 					if (((Object_t*)dm->typeInfo)->numQueries == 0) {
 						// Same applies here for an object.
 						RELEASE_WRITE_LOCK(slcLock);
@@ -619,20 +642,13 @@ int addQueries(DataModelElement_t *rootDM, Query_t *queries) {
 					break;
 
 				case SOURCE:
-					regQueries = ((Source_t*)dm->typeInfo)->queries;
+					if (((Source_t*)dm->typeInfo)->numQueries == 0) {
+						INIT_LOCK(((Source_t*)dm->typeInfo)->lock);
+					}
+					((Source_t*)dm->typeInfo)->numQueries++;
+					startSourceTimer(dm,cur);
 					break;
 			}
-			for (i = 0; i < MAX_QUERIES_PER_DM; i++) {
-				if (regQueries[i] == NULL) {
-					break;
-				}
-			}
-			if (i >= MAX_QUERIES_PER_DM) {
-				return -EMAXQUERIES;
-			}
-			regQueries[i] = cur;
-			cur->queryID = MAKE_QUERY_ID(globalQueryID,i);
-			globalQueryID++;
 		}
 		if (statusQuery) {
 			#ifdef __KERNEL__
@@ -717,6 +733,8 @@ int delQueries(DataModelElement_t *rootDM, Query_t *queries) {
 				break;
 
 			case SOURCE:
+				stopSourceTimer(cur);
+				((Source_t*)dm->typeInfo)->numQueries--;
 				regQueries = ((Source_t*)dm->typeInfo)->queries;
 				break;
 		}

@@ -74,7 +74,7 @@ static void unregEventCallback(void) {
 	
 }
 
-static void* getSrc(void) {
+static Tupel_t* getSrc(void) {
 	return NULL;
 };
 

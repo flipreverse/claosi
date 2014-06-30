@@ -69,6 +69,7 @@ typedef void (*activateEventCallback)(void);
 typedef void (*deactivateEventCallback)(void);
 
 struct Query;
+typedef struct Tupel Tupel_t;
 
 typedef struct Event {
 	unsigned short returnType;
@@ -79,13 +80,15 @@ typedef struct Event {
 	int numQueries;
 } Event_t;
 
-typedef void* (*getSource)(void);
+typedef Tupel_t* (*getSource)(void);
 
 typedef struct Source {
 	unsigned short returnType;
 	DECLARE_BUFFER(returnName);
 	getSource callback;
 	struct Query *queries[MAX_QUERIES_PER_DM];
+	int numQueries;
+	DECLARE_LOCK(lock);
 } Source_t;
 
 typedef struct Tupel Tupel_t;
@@ -146,6 +149,7 @@ int getDataModelSize(DataModelElement_t *rootDM, DataModelElement_t *elem, int i
 	varName.dataModelType = SOURCE; \
 	varName.typeInfo = ALLOC(sizeof(Source_t)); \
 	((Source_t*)varName.typeInfo)->callback = cbFunc; \
+	((Source_t*)varName.typeInfo)->numQueries = 0; \
 	INIT_QUERY_ARRAY(((Source_t*)varName.typeInfo)->queries,MAX_QUERIES_PER_DM);
 
 #define INIT_SOURCE_POD(varName,nodeName,parentNode,srcType,cbFunc)	INIT_SOURCE_BASIC(varName,nodeName,parentNode,cbFunc) \

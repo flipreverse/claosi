@@ -7,6 +7,7 @@
 #include <linux/rwlock.h>
 #include <linux/module.h>
 #include <linux/list.h>
+#include <linux/hrtimer.h>
 #else
 #include <stdlib.h>
 #include <string.h>
@@ -26,12 +27,10 @@
 #define DECLARE_LOCK(varName)				rwlock_t varName
 #define DECLARE_LOCK_EXTERN(varName)		extern rwlock_t varName
 #define INIT_LOCK(varName)					rwlock_init(&varName)
-//#define ACQUIRE_READ_LOCK(varName)			printk("%s:%d\n",__FUNCTION__,read_can_lock(&varName));read_lock_irqsave(&varName,flags)
 //#define ACQUIRE_READ_LOCK(varName)			read_lock_irqsave(&varName,flags)
 //#define RELEASE_READ_LOCK(varName)			read_unlock_irqrestore(&varName,flags)
 #define ACQUIRE_READ_LOCK(varName)			write_lock_irqsave(&varName,flags)
 #define RELEASE_READ_LOCK(varName)			write_unlock_irqrestore(&varName,flags)
-//#define ACQUIRE_WRITE_LOCK(varName)			printk("%s:%d\n",__FUNCTION__,write_can_lock(&varName));write_lock_irqsave(&varName,flags)
 #define ACQUIRE_WRITE_LOCK(varName)			write_lock_irqsave(&varName,flags)
 #define RELEASE_WRITE_LOCK(varName)			write_unlock_irqrestore(&varName,flags)
 #else
@@ -72,7 +71,7 @@ enum {
 	EJOINTYPE,						// Either the joined element does not exist or it has not the correct type
 	ENOTCOMPARABLE,					// One or more types used as an operand in a predicate are not comparable. Mostly, this apply for COMPLEX datatypes
 	ENOOPERAND,						// At least one operand does not name an element present in the datamodel
-	ENOFERQ,						// No frequency provided
+	ENOPERIOD,						// No period provided
 	ENOOBJSTATUS,					// No valid bitmask for an objects status were provided
 	EWRONGSTREAMTYPE,				// The provided stream origin and the corresponding element in the datamodel does not have the same type
 	EPARAM,							// At least one parameter has a wrong value

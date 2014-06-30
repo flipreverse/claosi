@@ -78,7 +78,7 @@ static Tupel_t* generateStatusObject(void) {
 	return NULL;
 }
 
-static void* getSrc(void) {
+static Tupel_t* getSrc(void) {
 	return NULL;
 };
 

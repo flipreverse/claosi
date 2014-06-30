@@ -14,7 +14,8 @@ static void initDatamodel(void);
 #ifdef REGISTER_QUERIES
 static void initQuery(void);
 static ObjectStream_t processObjCreate, processObjExit, processObjStatus;
-static Query_t queryFork, queryExit, queryStatus;
+static SourceStream_t processUTimeStr;
+static Query_t queryFork, queryExit, queryStatus, querySrc;
 #endif
 
 static int fork_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
@@ -22,9 +23,11 @@ static int fork_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
 	Tupel_t *tupel = NULL;
 	struct timeval time;
 	unsigned long flags;
+	unsigned long long timeMS = 0;
 
 	do_gettimeofday(&time);
-	if ((tupel = initTupel(time.tv_sec * USEC_PER_MSEC + time.tv_usec,1)) == NULL) {
+	timeMS = (long long)time.tv_sec * (long long)USEC_PER_MSEC + (long long)time.tv_usec;
+	if ((tupel = initTupel(timeMS,1)) == NULL) {
 		return 0;
 	}
 
@@ -42,9 +45,11 @@ static int exit_handler(struct kprobe *p, struct pt_regs *regs) {
 	Tupel_t *tupel = NULL;
 	struct timeval time;
 	unsigned long flags;
+	unsigned long long timeMS = 0;
 
 	do_gettimeofday(&time);
-	if ((tupel = initTupel(time.tv_sec * USEC_PER_MSEC + time.tv_usec,1)) == NULL) {
+	timeMS = (long long)time.tv_sec * (long long)USEC_PER_MSEC + (long long)time.tv_usec;
+	if ((tupel = initTupel(timeMS,1)) == NULL) {
 		return 0;
 	}
 
@@ -99,7 +104,7 @@ static Tupel_t* generateStatusObject(void) {
 	unsigned long flags;
 
 	do_gettimeofday(&time);
-	timeMS = time.tv_sec * USEC_PER_MSEC + time.tv_usec;
+	timeMS = (long long)time.tv_sec * (long long)USEC_PER_MSEC + (long long)time.tv_usec;
 
 	for_each_process(curTask) {
 		if ((curTuple = initTupel(timeMS,1)) == NULL) {
@@ -122,32 +127,65 @@ static Tupel_t* generateStatusObject(void) {
 	return head;
 }
 
-static void* getSrc(void) {
-	return NULL;
+static Tupel_t* getSrc(void) {
+	Tupel_t *tuple = NULL;
+	struct timeval time;
+	unsigned long flags;
+	unsigned long long timeMS = 0;
+
+	do_gettimeofday(&time);
+	timeMS = (long long)time.tv_sec * (long long)USEC_PER_MSEC + (long long)time.tv_usec;
+	tuple = initTupel(timeMS,1);
+	if (tuple == NULL) {
+		return NULL;
+	}
+
+	ACQUIRE_READ_LOCK(slcLock);
+	allocItem(slcDataModel,tuple,0,"process.process.utime");
+	setItemInt(slcDataModel,tuple,"process.process.utime",4711);
+	RELEASE_READ_LOCK(slcLock);
+
+	return tuple;
 };
 
 #ifdef REGISTER_QUERIES
 static void printResultFork(QueryID_t id, Tupel_t *tupel) {
 	struct timeval time;
+	unsigned long long timeMS;
 
 	do_gettimeofday(&time);
-	printk("Received tupel with %d items at memory address %p at %lu us: task %d created\n",tupel->itemLen,tupel,time.tv_sec * USEC_PER_MSEC + time.tv_usec, getItemInt(slcDataModel,tupel,"process.process"));
+	timeMS = (long long)time.tv_sec * (long long)USEC_PER_MSEC + (long long)time.tv_usec;
+	printk("Received tupel with %d items at memory address %p (processing duration: %llu ms): task %d created\n",tupel->itemLen,tupel,timeMS - tupel->timestamp, getItemInt(slcDataModel,tupel,"process.process"));
 	freeTupel(slcDataModel,tupel);
 }
 
 static void printResultExit(QueryID_t id, Tupel_t *tupel) {
 	struct timeval time;
+	unsigned long long timeMS;
 
 	do_gettimeofday(&time);
-	printk("Received tupel with %d items at memory address %p at %lu us: task %d terminated\n",tupel->itemLen,tupel,time.tv_sec * USEC_PER_MSEC + time.tv_usec, getItemInt(slcDataModel,tupel,"process.process"));
+	timeMS = (long long)time.tv_sec * (long long)USEC_PER_MSEC + (long long)time.tv_usec;
+	printk("Received tupel with %d items at memory address %p (processing duration: %llu ms): task %d terminated\n",tupel->itemLen,tupel,timeMS - tupel->timestamp, getItemInt(slcDataModel,tupel,"process.process"));
 	freeTupel(slcDataModel,tupel);
 }
 
 static void printResultStatus(QueryID_t id, Tupel_t *tupel) {
 	struct timeval time;
+	unsigned long long timeMS;
 
 	do_gettimeofday(&time);
-	printk("Received tupel with %d items at memory address %p, created at %llu, received at %lu us: task %d status\n",tupel->itemLen,tupel,tupel->timestamp,time.tv_sec * USEC_PER_MSEC + time.tv_usec, getItemInt(slcDataModel,tupel,"process.process"));
+	timeMS = (long long)time.tv_sec * (long long)USEC_PER_MSEC + (long long)time.tv_usec;
+	printk("Received tupel with %d items at memory address %p (processing duration: %llu ms): task %d status\n",tupel->itemLen,tupel,timeMS - tupel->timestamp, getItemInt(slcDataModel,tupel,"process.process"));
+	freeTupel(slcDataModel,tupel);
+}
+
+static void printResultSource(QueryID_t id, Tupel_t *tupel) {
+	struct timeval time;
+	unsigned long long timeMS;
+
+	do_gettimeofday(&time);
+	timeMS = (long long)time.tv_sec * (long long)USEC_PER_MSEC + (long long)time.tv_usec;
+	printk("Received tupel with %d items at memory address %p, created at %llu ms, received at %llu ms: task utime %d\n",tupel->itemLen,tupel,tupel->timestamp,timeMS, getItemInt(slcDataModel,tupel,"process.process.utime"));
 	freeTupel(slcDataModel,tupel);
 }
 
@@ -172,6 +210,13 @@ static void initQuery(void) {
 	queryStatus.onQueryCompleted = printResultStatus;
 	queryStatus.root = GET_BASE(processObjStatus);
 	INIT_OBJ_STREAM(processObjStatus,"process.process",0,NULL,OBJECT_STATUS);
+
+	querySrc.next = NULL;
+	querySrc.queryType = ASYNC;
+	querySrc.queryID = 0;
+	querySrc.onQueryCompleted = printResultSource;
+	querySrc.root = GET_BASE(processUTimeStr);
+	INIT_SRC_STREAM(processUTimeStr,"process.process.utime",0,NULL,1000);
 }
 #endif
 
