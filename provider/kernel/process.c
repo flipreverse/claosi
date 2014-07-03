@@ -77,13 +77,13 @@ static void activate(void) {
 	int ret = 0;
 	
 	if ((ret = register_kretprobe(&forkKP)) < 0) {
-		DEBUG_MSG(1,",register_kretprobe (%s) failed. Reason: %d\n",forkKP.kp.symbol_name,ret);
+		ERR_MSG("register_kretprobe (%s) failed. Reason: %d\n",forkKP.kp.symbol_name,ret);
 		return;
 	}
 	DEBUG_MSG(1,"Registered kretprobe at %s\n",forkKP.kp.symbol_name);
 	if ((ret = register_kprobe(&exitKP)) < 0) {
 		unregister_kretprobe(&forkKP);
-		DEBUG_MSG(1,",register_kprobe (%s) failed. Reason: %d\n",exitKP.symbol_name,ret);
+		ERR_MSG("register_kprobe (%s) failed. Reason: %d\n",exitKP.symbol_name,ret);
 		return;
 	}
 	DEBUG_MSG(1,"Registered kprobe at %s\n",exitKP.symbol_name);
@@ -246,13 +246,13 @@ int __init process_init(void)
 #endif
 
 	if ((ret = registerProvider(&model, NULL)) < 0 ) {
-		DEBUG_MSG(1,"Register provider failed: %d\n",-ret);
+		ERR_MSG("Register provider failed: %d\n",-ret);
 		return -1;
 	}
 #ifdef REGISTER_QUERIES
 	if ((ret = registerQuery(&queryFork)) < 0 ) {
 		unregisterProvider(&model, NULL);
-		DEBUG_MSG(1,"Register query fork failed: %d\n",-ret);
+		ERR_MSG("Register query fork failed: %d\n",-ret);
 		return -1;
 	}
 	DEBUG_MSG(1,"Sucessfully registered datamodel for process and queries. Query 'fork' has id: 0x%x, Query 'exit' has id: 0x%x\n",queryFork.queryID,queryExit.queryID);
@@ -267,11 +267,11 @@ void __exit process_exit(void) {
 
 #ifdef REGISTER_QUERIES
 	if ((ret = unregisterQuery(&queryFork)) < 0 ) {
-		DEBUG_MSG(1,"Unregister query fork failed: %d\n",-ret);
+		ERR_MSG("Unregister query fork failed: %d\n",-ret);
 	}
 #endif
 	if ((ret = unregisterProvider(&model, NULL)) < 0 ) {
-		DEBUG_MSG(1,"Unregister datamodel process failed: %d\n",-ret);
+		ERR_MSG("Unregister datamodel process failed: %d\n",-ret);
 	}
 
 #ifdef REGISTER_QUERIES

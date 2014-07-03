@@ -63,7 +63,7 @@ static void activate(void) {
 	int ret = 0;
 	
 	if ((ret = register_kprobe(&rxKP)) < 0) {
-		DEBUG_MSG(1,",register_kprobe failed. Reason: %d\n",ret);
+		ERR_MSG("register_kprobe failed. Reason: %d\n",ret);
 		return;
 	}
 	DEBUG_MSG(1,"Registered kprobe at %s\n",rxKP.symbol_name);
@@ -159,7 +159,7 @@ int __init net_init(void)
 	initQuery();
 
 	if ((ret = registerProvider(&model, &query)) < 0 ) {
-		DEBUG_MSG(1,"Register failed: %d\n",-ret);
+		ERR_MSG("Register failed: %d\n",-ret);
 		return -1;
 	}
 	DEBUG_MSG(1,"Sucessfully registered datamodel and query. Query has id: 0x%x\n",query.queryID);
@@ -172,7 +172,7 @@ void __exit net_exit(void) {
 	int ret = 0;
 
 	if ((ret = unregisterProvider(&model, &query)) < 0 ) {
-		DEBUG_MSG(1,"Unregister failed: %d\n",-ret);
+		ERR_MSG("Unregister failed: %d\n",-ret);
 	}
 
 	freeQuery(GET_BASE(txStream),0);

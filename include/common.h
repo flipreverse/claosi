@@ -19,7 +19,6 @@
 #define DECLARE_BUFFER(name)				char name[MAX_NAME_LEN + 1];
 
 #ifdef __KERNEL__
-#define PRINT_MSG(args...)					printk(KERN_INFO args);
 #define	ALLOC(size)							kmalloc(size,GFP_KERNEL & ~__GFP_WAIT)
 #define	FREE(ptr)							kfree(ptr)
 #define REALLOC(ptr,size)					krealloc(ptr,size,GFP_KERNEL)
@@ -35,7 +34,6 @@
 #define ACQUIRE_WRITE_LOCK(varName)			write_lock_irqsave(&varName,flags)
 #define RELEASE_WRITE_LOCK(varName)			write_unlock_irqrestore(&varName,flags)
 #else
-#define PRINT_MSG(args...)					printf(args);
 #define	ALLOC(size)							malloc(size)
 #define	FREE(ptr)							free(ptr)
 #define REALLOC(ptr,size)					realloc(ptr,size)

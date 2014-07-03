@@ -1,6 +1,7 @@
 #ifndef __QUERY_H__
 #define __QUERY_H__
 
+#include <output.h>
 #include <common.h>
 #include <datamodel.h>
 #include <resultset.h>

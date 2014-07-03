@@ -79,7 +79,7 @@ static void* queryExecutorWork(void *data) {
 				// Nothing to do
 				continue;
 			} else {
-				perror("semop");
+				ERR_MSG("Semop failed: %s\n",strerror(errno));
 				continue;
 			}
 		}
@@ -117,7 +117,7 @@ void enqueueQuery(Query_t *query, Tupel_t *tuple) {
 	 */
 	job = ALLOC(sizeof(QueryJob_t));
 	if (job == NULL) {
-		DEBUG_MSG(1,"Cannot allocate memory for QueryJob_t\n");
+		ERR_MSG("Cannot allocate memory for QueryJob_t\n");
 		return;
 	}
 	job->query = query;
@@ -129,7 +129,7 @@ void enqueueQuery(Query_t *query, Tupel_t *tuple) {
 	pthread_mutex_unlock(&listLock);
 	// Signal the execution thread a query is ready for execution
 	if (semop(waitingQueriesSemID,&operation,1) < 0) {
-		DEBUG_MSG(1,"Error executing p() von semaphore\n");
+		ERR_MSG("Error executing p() von semaphore: %s\n",strerror(errno));
 	}
 }
 
@@ -157,7 +157,7 @@ void startObjStatusThread(Query_t *query, generateStatus statusFn) {
 	// Allocate memory for the threads parameters
 	statusJob = ALLOC(sizeof(QueryStatusJob_t));
 	if (statusJob == NULL) {
-		DEBUG_MSG(1,"%s: Cannot allocate memory for QueryStatusJob_t\n",__FUNCTION__);
+		ERR_MSG("Cannot allocate memory for QueryStatusJob_t\n");
 		return;
 	}
 	// Pass the query as well as the function pointer to the query
@@ -165,7 +165,7 @@ void startObjStatusThread(Query_t *query, generateStatus statusFn) {
 	statusJob->statusFn = statusFn;
 	// In contrast to the kernel part it is *not* necessary to release and re-acquire the slc lock. Just start the pthread.
 	if (pthread_create(&objStatusThread,NULL,generateObjectStatus,statusJob) < 0) {
-		perror("pthread_create objStatusThread");
+		ERR_MSG("Cannot allocate cerate objStatusThread: %s\n",strerror(errno));
 		FREE(statusJob);
 		return;
 	}
@@ -177,7 +177,7 @@ void startSourceTimer(DataModelElement_t *dm, Query_t *query) {
 	// Allocate memory for the job-specific information; job-specific = (query,datamodel,period)
 	timerJob = ALLOC(sizeof(QueryTimerJob_t));
 	if (timerJob == NULL) {
-		DEBUG_MSG(1,"%s: Cannot allocate QueryTimerJob_t\n", __FUNCTION__);
+		ERR_MSG("Cannot allocate memory for QueryTimerJob_t\n");
 		return;
 	}
 
@@ -202,14 +202,14 @@ void startSourceTimer(DataModelElement_t *dm, Query_t *query) {
 	timerJob->timerValue.it_interval.tv_nsec = timerJob->timerValue.it_value.tv_nsec;
 	// Setup the timer using timing information relative to the current clock which will be the monotonic one.
 	if (timer_create(CLOCK_REALTIME,&timerJob->timerNotify,&timerJob->timerID) < 0) {
-		perror("timer_create");
+		ERR_MSG("timer_create failed: %s\n",strerror(errno));
 		FREE(timerJob);
 		return;
 	}
 	DEBUG_MSG(1,"%s: Starting posixtimer for node %s. Will fire in %u ms.\n",__FUNCTION__,srcStream->st_name,srcStream->period);
 	// Fire it up.... :-)
 	if (timer_settime(timerJob->timerID, 0, &timerJob->timerValue, NULL) < 0) {
-		perror("timer_settime");
+		ERR_MSG("timer_settime failed: %s\n",strerror(errno));
 		FREE(timerJob);
 		return;
 	}
@@ -228,14 +228,14 @@ void stopSourceTimer(Query_t *query) {
 	timerValue.it_interval.tv_nsec = 0;
 	// Setting the next expiration to 0 will cancel the timer
 	if (timer_settime(timerJob->timerID,0,&timerValue,NULL) < 0) {
-		perror("timer_settime - delete");
+		ERR_MSG("timer_settime - delete - failed: %s\n",strerror(errno));
 		return;
 	}
 	DEBUG_MSG(1,"%s: Canceling posix timer for node %s...\n",__FUNCTION__,srcStream->st_name);
 	// Delete the timer
 	ret = timer_delete(timerJob->timerID);
 	if (ret < 0) {
-		perror("timer_delete");
+		ERR_MSG("timer_delete failed: %s\n",strerror(errno));
 	}
 	DEBUG_MSG(1,"%s: posix timer for node %s canceled. Was active: %d\n",__FUNCTION__,srcStream->st_name,ret);
 	// Free the timer information
@@ -249,13 +249,13 @@ int initLayer(void) {
 	// Create the semaphore for the query list and ...
 	waitingQueriesSemID = semget(SEM_KEY,1,IPC_CREAT|IPC_EXCL|0600);
 	if (waitingQueriesSemID < 0) {
-		perror("semget");
+		ERR_MSG("semget failed: %s\n",strerror(errno));
 		return -1;
 	}
 	cmdval.val = 0;
 	// ... initialize it to 0.
 	if (semctl(waitingQueriesSemID,0,SETVAL,cmdval) < 0) {
-		perror("semctl");
+		ERR_MSG("semctl failed: %s\n",strerror(errno));
 		return -1;
 	}
 	// Init list lock and the list itself
@@ -266,7 +266,7 @@ int initLayer(void) {
 	pthread_attr_init(&queryExecThreadAttr);
 	pthread_attr_setdetachstate(&queryExecThreadAttr, PTHREAD_CREATE_JOINABLE);
 	if (pthread_create(&queryExecThread,&queryExecThreadAttr,queryExecutorWork,NULL) < 0) {
-		perror("pthread_create queryExecThread");
+		ERR_MSG("Cannot create queryExecThread: %s\n",strerror(errno));
 		return -1;
 	}
 	return 0;

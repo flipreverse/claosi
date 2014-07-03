@@ -210,13 +210,13 @@ int onLoad(void) {
 #endif
 
 	if ((ret = registerProvider(&model, NULL)) < 0 ) {
-		DEBUG_MSG(1,"Register provider ui failed: %d\n",-ret);
+		ERR_MSG("Register provider ui failed: %d\n",-ret);
 		return -1;
 	}
 #ifdef REGISTER_QUERIES
 	if ((ret = registerQuery(&queryDisplay)) < 0 ) {
 		unregisterProvider(&model, NULL);
-		DEBUG_MSG(1,"Query registration failed: %d\n",-ret);
+		ERR_MSG("Query registration failed: %d\n",-ret);
 		return -1;
 	}
 	DEBUG_MSG(1,"Sucessfully registered datamodel for ui and queries.\n");
@@ -232,11 +232,11 @@ int onUnload(void) {
 
 #ifdef REGISTER_QUERIES
 	if ((ret = unregisterQuery(&queryDisplay)) < 0 ) {
-		DEBUG_MSG(1,"Unregister queries failed: %d\n",-ret);
+		ERR_MSG("Unregister queries failed: %d\n",-ret);
 	}
 #endif
 	if ((ret = unregisterProvider(&model, NULL)) < 0 ) {
-		DEBUG_MSG(1,"Unregister datamodel ui failed: %d\n",-ret);
+		ERR_MSG("Unregister datamodel ui failed: %d\n",-ret);
 	}
 
 #ifdef REGISTER_QUERIES

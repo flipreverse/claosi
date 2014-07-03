@@ -37,7 +37,7 @@ void enqueueQuery(Query_t *query, Tupel_t *tuple) {
 	job = ALLOC(sizeof(QueryJob_t));
 	if (job == NULL) {
 		spin_unlock(&listLock);
-		DEBUG_MSG(1,"Cannot allocate memory for QueryJob_t\n");
+		ERR_MSG("Cannot allocate memory for QueryJob_t\n");
 		return;
 	}
 	job->query = query;
@@ -78,7 +78,7 @@ void startObjStatusThread(Query_t *query, generateStatus statusFn, unsigned long
 	// Allocate memory for the threads parameters
 	statusJob = ALLOC(sizeof(QueryStatusJob_t));
 	if (statusJob == NULL) {
-		DEBUG_MSG(1,"%s: Cannot allocate memory for QueryStatusJob_t\n",__FUNCTION__);
+		ERR_MSG("Cannot allocate memory for QueryStatusJob_t\n");
 		return;
 	}
 	// Pass the query as well as the function pointer to the query
@@ -96,7 +96,7 @@ void startObjStatusThread(Query_t *query, generateStatus statusFn, unsigned long
 		FREE(statusJob);
 		ACQUIRE_WRITE_LOCK(slcLock);
 		*__flags = flags;
-		DEBUG_MSG(1,"%s: Cannot start objStatusThread: %ld", __FUNCTION__, PTR_ERR(objStatusThread));
+		ERR_MSG("Cannot start objStatusThread: %ld",PTR_ERR(objStatusThread));
 		return;
 	}
 	wake_up_process(objStatusThread);
@@ -118,7 +118,7 @@ static enum hrtimer_restart hrtimerHandler(struct hrtimer *curTimer) {
 	tuple = src->callback();
 	RELEASE_WRITE_LOCK(src->lock);
 	if (tuple != NULL) {
-		DEBUG_MSG(2,"%s: Enqueue tuple\n",__FUNCTION__);
+		ERR_MSG("Enqueue tuple\n");
 		enqueueQuery(timerJob->query,tuple);
 	}
 	/*
@@ -136,7 +136,7 @@ void startSourceTimer(DataModelElement_t *dm, Query_t *query) {
 	// Allocate memory for the job-specific information; job-specific = (query,datamodel,period)
 	timerJob = ALLOC(sizeof(QueryTimerJob_t));
 	if (timerJob == NULL) {
-		DEBUG_MSG(1,"%s: Cannot allocate QueryTimerJob_t\n", __FUNCTION__);
+		ERR_MSG("Cannot allocate QueryTimerJob_t\n");
 		return;
 	}
 

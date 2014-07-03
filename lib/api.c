@@ -277,7 +277,7 @@ void objectChanged(char *datamodelName, Tupel_t *tupel, int event) {
 			if (query[i]->root->type == GEN_OBJECT) {
 				objStream = (ObjectStream_t*)query[i]->root;
 			} else {
-				DEBUG_MSG(1,"Weird! This should not happen! The root operator of a query registered to an object is not of type GEN_OBJECT!\n");
+				ERR_MSG("Weird! This should not happen! The root operator of a query registered to an object is not of type GEN_OBJECT!\n");
 				continue;
 			}
 			if ((objStream->objectEvents & event) == event) {

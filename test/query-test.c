@@ -3,7 +3,7 @@
 #include <datamodel.h>
 #include <resultset.h>
 #include <stdio.h>
-#include <debug.h>
+#include <output.h>
 
 DECLARE_ELEMENTS(nsNet1, nsProcess, nsUI, model1)
 DECLARE_ELEMENTS(evtDisplay, typeEventType, srcForegroundApp, srcProcessess,objApp)

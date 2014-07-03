@@ -1,6 +1,7 @@
 #ifndef __DATAMODEL_H__
 #define __DATAMODEL_H__
 
+#include <output.h>
 #include <common.h>
 
 #define MAX_QUERIES_PER_DM	8

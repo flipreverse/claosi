@@ -1,6 +1,7 @@
 #ifndef __API_H__
 #define __API_H__
 
+#include <output.h>
 #include <datamodel.h>
 #include <query.h>
 

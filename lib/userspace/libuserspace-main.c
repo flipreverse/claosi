@@ -54,20 +54,20 @@ static void* fifoWork(void *data) {
 	if (stat(FIFO_PATH,&fifo_stat) < 0) {
 		// No. Create it.
 		if (errno == ENOENT) {
-			printf("FIFO does not exist. Try to create it.\n");
+			ERR_MSG("FIFO does not exist. Try to create it.\n");
 			if (mkfifo(FIFO_PATH,0777) < 0) {
 				perror("mkfifo");
 				pthread_exit(0);
 			}
-			printf("Created fifo: %s\n",FIFO_PATH);
+			DEBUG_MSG(3,"Created fifo: %s\n",FIFO_PATH);
 		} else {
-			perror("stat");
+			ERR_MSG("Error probing for FIFO (%s): %s\n",FIFO_PATH,strerror(errno));
 			pthread_exit(0);
 		}
 	} else {
 		// The path exists, but is not a fifo --> Exit.
 		if (!S_ISFIFO(fifo_stat.st_mode)) {
-			printf("%s is not a fifo.\n",FIFO_PATH);
+			ERR_MSG("%s is not a fifo.\n",FIFO_PATH);
 			pthread_exit(0);
 		}
 	}
@@ -77,14 +77,14 @@ static void* fifoWork(void *data) {
 			if (errno == EINTR) {
 				continue;
 			}
-			perror("open");
+			ERR_MSG("Cannot open FIFO (%s): %s\n",FIFO_PATH,strerror(errno));
 			pthread_exit(0);
 		}
 		// A command from the fifo: <command> [argument]
 		read = fscanf(cmdFifo,"%4s %127s\n",cmdBuffer,pathBuffer);
 		// At least one token is necessary
 		if (read == 0 || read == EOF) {
-			perror("fscanf");
+			ERR_MSG("Cannot read from FIFO (%s): %s\n",FIFO_PATH,strerror(errno));
 			fclose(cmdFifo);
 			pthread_exit(0);
 		}
@@ -92,33 +92,33 @@ static void* fifoWork(void *data) {
 		if (strcmp(cmdBuffer,"add") == 0) {
 			curDL = dlopen(pathBuffer,RTLD_NOW);
 			if (curDL == NULL) {
-				fprintf(stderr,"Error loading dynamic library '%s': %s\n",pathBuffer,dlerror());
+				ERR_MSG("Error loading dynamic library '%s': %s\n",pathBuffer,dlerror());
 				continue;
 			}
 			// Try to resolve the entry function
 			onLoadFn = dlsym(curDL,"onLoad");
 			if (onLoadFn == NULL) {
-				fprintf(stderr,"Error resolving symbol 'onLoad' from library '%s': %s\n",pathBuffer,dlerror());
+				ERR_MSG("Error resolving symbol 'onLoad' from library '%s': %s\n",pathBuffer,dlerror());
 				dlclose(curDL);
 				continue;
 			}
 			// Found it. Allocate space for an entry in the provider list
 			curProv = ALLOC(sizeof(LoadedProvider_t));
 			if (curProv == NULL) {
-				fprintf(stderr,"Cannot allocate memory for LoadedProvider_t\n");
+				ERR_MSG("Cannot allocate memory for LoadedProvider_t\n");
 				dlclose(curDL);
 				continue;
 			}
 			curProv->libPath = ALLOC(strlen(pathBuffer) + 1);
 			if (curProv->libPath == NULL) {
-				fprintf(stderr,"Cannot allocate memory for library path\n");
+				ERR_MSG("Cannot allocate memory for library path\n");
 				dlclose(curDL);
 				FREE(curProv);
 			}
 			// Initialize the provider
 			ret = onLoadFn();
 			if (ret < 0) {
-				fprintf(stderr,"Provider %s initialization failed: %d\n",pathBuffer,-ret);
+				ERR_MSG("Provider %s initialization failed: %d\n",pathBuffer,-ret);
 				FREE(curProv->libPath);
 				FREE(curProv);
 				dlclose(curDL);
@@ -140,12 +140,12 @@ static void* fifoWork(void *data) {
 				onUnloadFn = dlsym(curDL,"onUnload");
 				// No unloadFn symbol! Refuse to unload the library.
 				if (onUnloadFn == NULL) {
-					fprintf(stderr,"Cannot find symbol 'onUnload'. Refusing to unload provider %s.\n",curProv->libPath);
+					ERR_MSG("Cannot find symbol 'onUnload'. Refusing to unload provider %s.\n",curProv->libPath);
 					continue;
 				}
 				ret = onUnloadFn();
 				if (ret < 0) {
-					fprintf(stderr,"Provider %s destruction failed: %d\n",curProv->libPath,-ret);
+					ERR_MSG("Provider %s destruction failed: %d\n",curProv->libPath,-ret);
 					continue;
 				}
 				LIST_REMOVE(curProv,listEntry);
@@ -153,12 +153,12 @@ static void* fifoWork(void *data) {
 				FREE(curProv->libPath);
 				FREE(curProv);
 			} else {
-				fprintf(stderr,"No provider loaded with library path %s\n",pathBuffer);
+				ERR_MSG("No provider loaded with library path %s\n",pathBuffer);
 			}
 		} else if (strcmp(cmdBuffer,"exit") == 0) {
 			break;
 		} else {
-			fprintf(stderr,"Unknown command!\n");
+			ERR_MSG("Unknown command!\n");
 		}
 	};
 
@@ -179,7 +179,7 @@ int main(int argc, const char *argv[]) {
 	pthread_attr_init(&fifoWorkThreadAttr);
 	pthread_attr_setdetachstate(&fifoWorkThreadAttr, PTHREAD_CREATE_JOINABLE);
 	if (pthread_create(&fifoWorkThread,&fifoWorkThreadAttr,fifoWork,NULL) < 0) {
-		perror("pthread_create fifoWorkThread");
+		ERR_MSG("Cannot create fifoWorkThread: %s\n",strerror(errno));
 		return EXIT_FAILURE;
 	}
 	// Wait for the fifo thread. It only terminates, if the user send us an exit command.

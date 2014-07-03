@@ -6,8 +6,8 @@
 #else
 #include <string.h>
 #endif
+#include <output.h>
 #include <datamodel.h>
-#include <debug.h>
 
 DECLARE_LOCK_EXTERN(slcLock);
 

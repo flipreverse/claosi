@@ -3,7 +3,7 @@
 #include <datamodel.h>
 #include <resultset.h>
 #include <stdio.h>
-#include <debug.h>
+#include <output.h>
 #include <api.h>
 #include <time.h>
 
