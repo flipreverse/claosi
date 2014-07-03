@@ -23,41 +23,6 @@ static DECLARE_WAIT_QUEUE_HEAD(waitQueue);
  */ 
 static atomic_t waitingQueries;
 
-typedef struct QueryJob {
-	struct list_head list;
-	Query_t *query;
-	Tupel_t *tuple;
-} QueryJob_t;
-
-typedef struct QueryStatusJob {
-	Query_t *query;
-	generateStatus statusFn;
-} QueryStatusJob_t;
-/**
- * An instance of QueryTimerJob_t holds any information needed by the 
- * kernel-specific code to maintain the timer for a certain source.
- * Relation between a source and QueryTimerJob_t: 1:n .
- */
-typedef struct QueryTimerJob {
-	/**
-	 * Easier access to the period. Needed to reschedule the hrtimer.
-	 * It is accessible through query->root->period, which is more expensive.
-	 */
-	int period;
-	/**
-	 * A pointer to the query a module registered on node {@link dm}.
-	 */
-	Query_t *query;
-	/**
-	 * Access the datamodel node to acquire/release the lock and call the status function.
-	 */
-	DataModelElement_t *dm;
-	/**
-	 * The actual timer :-)
-	 */
-	struct hrtimer timer;
-} QueryTimerJob_t;
-
 void enqueueQuery(Query_t *query, Tupel_t *tuple) {
 	QueryJob_t *job = NULL;
 	unsigned long flags;

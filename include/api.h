@@ -4,15 +4,93 @@
 #include <datamodel.h>
 #include <query.h>
 
+#ifdef __KERNEL__
+#include <linux/list.h>
+#else
+#include <signal.h>
+#include <sys/queue.h>
+#endif
+
+extern DataModelElement_t *slcDataModel;
+DECLARE_LOCK_EXTERN(slcLock);
+
+/**
+ * On each call to startObjStatusThread an instance of QueryStatusJob_t will be
+ * created and a pointer to it will be passed as a threads parameter.
+ * The status thread uses the function pointer {@link statusFn} to generate a list of tuples for a certain object.
+ * Afterwards it will enqueue each tuple and the query {@link query} for execution.
+ */
+typedef struct QueryStatusJob {
+	/**
+	 * A pointer to the recently registered query which first operator is a ObjectStream_t and has at least
+	 * OBJECT_STATUS set.
+	 */
+	Query_t *query;
+	/**
+	 * A pointer to the datamodel objects status function. Stored at dm->typeInfo->status.
+	 */
+	generateStatus statusFn;
+} QueryStatusJob_t;
+/**
+ * A QueryJob_t represents a job for the query execution thread.
+ * Multiple instances may references the same query or the same tuple.
+ * Only a query in conjunction with a tuple are unique.
+ */
+typedef struct QueryJob {
+	/**
+	 * Auxiliary member to maintain each query in a linked-list
+	 */
+	#ifdef __KERNEL__
+	struct list_head list;
+	#else
+	STAILQ_ENTRY(QueryJob) listEntry;
+	#endif
+	/**
+	 * A pointer to the query
+	 */
+	Query_t *query;
+	/**
+	 * A pointer to the tuple
+	 */
+	Tupel_t *tuple;
+} QueryJob_t;
+/**
+ * An instance of QueryTimerJob_t holds any information needed by the 
+ * kernel-specific code to maintain the timer for a certain source.
+ * Relation between a source and QueryTimerJob_t: 1:n .
+ */
+typedef struct QueryTimerJob {
+	/**
+	 * Easier access to the period. Needed to reschedule the hrtimer.
+	 * It is accessible through query->root->period, which is more expensive.
+	 */
+	int period;
+	/**
+	 * A pointer to the query a module registered on node {@link dm}.
+	 */
+	Query_t *query;
+	/**
+	 * Access the datamodel node to acquire/release the lock and call the status function.
+	 */
+	DataModelElement_t *dm;
+	/**
+	 * The actual timer :-)
+	 */
+	#ifdef __KERNEL__
+	struct hrtimer timer;
+	#else
+	timer_t timerID;
+	struct sigevent timerNotify;
+	struct itimerspec timerValue;
+	#endif
+} QueryTimerJob_t;
+
 int registerProvider(DataModelElement_t *dm, Query_t *queries);
 int unregisterProvider(DataModelElement_t *dm, Query_t *queries);
 int registerQuery(Query_t *queries);
 int unregisterQuery(Query_t *queries);
 int initSLC(void);
 void destroySLC(void);
-
-extern DataModelElement_t *slcDataModel;
-DECLARE_LOCK_EXTERN(slcLock);
 
 void eventOccured(char *datamodelName, Tupel_t *tupel);
 void objectChanged(char *datamodelName, Tupel_t *tupel, int event);

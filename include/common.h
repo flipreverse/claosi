@@ -12,6 +12,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+#include <pthread.h>
 #endif
 
 #define MAX_NAME_LEN						40
@@ -40,13 +41,15 @@
 #define REALLOC(ptr,size)					realloc(ptr,size)
 #define STRTOINT(strVar,intVar)				(intVar = atoi(strVar))
 #define STRTOCHAR(strVar,charVar)			(charVar = atoi(strVar))
-#define DECLARE_LOCK(varName)			
-#define DECLARE_LOCK_EXTERN(varName)		
-#define INIT_LOCK(varName)				
-#define ACQUIRE_READ_LOCK(varName)			
-#define RELEASE_READ_LOCK(varName)			
-#define ACQUIRE_WRITE_LOCK(varName)			
-#define RELEASE_WRITE_LOCK(varName)			
+#define DECLARE_LOCK(varName)				pthread_mutex_t varName
+#define DECLARE_LOCK_EXTERN(varName)		extern pthread_mutex_t varName
+#define INIT_LOCK(varName)					pthread_mutex_init(&varName,NULL)
+#define ACQUIRE_READ_LOCK(varName)			pthread_mutex_lock(&varName)
+#define RELEASE_READ_LOCK(varName)			pthread_mutex_unlock(&varName)
+#define ACQUIRE_WRITE_LOCK(varName)			pthread_mutex_lock(&varName)
+#define RELEASE_WRITE_LOCK(varName)			pthread_mutex_unlock(&varName)
+#define USEC_PER_MSEC						1000L
+#define TIMER_SIGNAL SIGRTMIN
 #endif
 
 enum {

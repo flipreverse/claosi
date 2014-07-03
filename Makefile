@@ -10,6 +10,7 @@ BUILD_USER:=$(BUILD_PATH)/user
 TEST_DIR:=test
 
 LD_TEXT = -e "LD\t$@"
+LD_SO_TEXT = -e "LD SHARED\t$@"
 CC_TEXT = -e "CC\t$<"
 DEB_TEXT= -e "DEB\t$<"
 
@@ -32,8 +33,9 @@ endif
 # COMPILER AND LINKER FLAGS
 CROSS_COMPILE?=
 CC:=$(CROSS_COMPILE)gcc
-CFLAGS := -Wall -Werror -c -g -I$(INCLUDE_PATH)
+CFLAGS := -fPIC -Wall -Werror -c -g -I$(INCLUDE_PATH)
 LDFLAGS :=
+LDLIBS := -ldl -lpthread -lrt
 
 #***************************** ADD YOUR LISTING OF SOURCE FILES FOR EACH DIRECTORY HERE *****************************
 # Example:
@@ -53,12 +55,16 @@ LIB_KERNEL_DIR:=$(LIB_COMMON_DIR)/kernel
 LIB_KERNEL_SRC_= libkernel.c
 LIB_KERNEL_SRC= $(patsubst %.c,$(BUILD_KERN)/$(LIB_KERNEL_DIR)/%.c,$(LIB_KERNEL_SRC_)) $(patsubst $(BUILD_USER)/%.c,$(BUILD_KERN)/%.c,$(LIB_COMMON_OBJ:%.o=%.c))
 
+SLC_USER_BIN_SRC= libuserspace-main.c libuserspace-layer.c
+SLC_USER_BIN_OBJ=$(patsubst %.o,$(BUILD_USER)/$(LIB_USERSPACE_DIR)/%.o,$(SLC_USER_BIN_SRC:%.c=%.o))
+
 PROVIDER_KERNEL_DIR=provider/kernel
 PROVIDER_KERNEL_SRC= $(patsubst %.c,$(BUILD_KERN)/%.c,$(shell find $(PROVIDER_KERNEL_DIR) -name "*.c"))
 
 PROVIDER_USER_DIR=provider/userspace
 PROVIDER_USER_SRC=$(shell find $(PROVIDER_USER_DIR) -name "*.c")
 PROVIDER_USER_OBJ=$(patsubst %.o,$(BUILD_USER)/%.o,$(PROVIDER_USER_SRC:%.c=%.o))
+PROVIDER_USER_SO=$(PROVIDER_USER_OBJ:%.o=%.so)
 
 #***************************** BEGIN SOURCE FILES FOR TEST APPS *****************************
 
@@ -68,26 +74,27 @@ PROVIDER_USER_OBJ=$(patsubst %.o,$(BUILD_USER)/%.o,$(PROVIDER_USER_SRC:%.c=%.o))
 #<name>_TEST_OBJ=$(patsubst %.o,$(OBJ_PATH)/$(TEST_DIR)/%.o,$(<name>_TEST_SRC:%.cpp=%.o))
 
 QUERY_TEST=query-test
-QUERY_TEST_SRC = query-test.c
+QUERY_TEST_SRC = query-test.c dummy.c
 QUERY_TEST_OBJ=$(patsubst %.o,$(BUILD_USER)/$(TEST_DIR)/%.o,$(QUERY_TEST_SRC:%.c=%.o))
 
 DATAMODEL_TEST=datamodel-test
-DATAMODEL_TEST_SRC = datamodel-test.c
+DATAMODEL_TEST_SRC = datamodel-test.c dummy.c
 DATAMODEL_TEST_OBJ=$(patsubst %.o,$(BUILD_USER)/$(TEST_DIR)/%.o,$(DATAMODEL_TEST_SRC:%.c=%.o))
 
 RESULTSET_TEST=resultset-test
-RESULTSET_TEST_SRC = resultset-test.c
+RESULTSET_TEST_SRC = resultset-test.c dummy.c
 RESULTSET_TEST_OBJ=$(patsubst %.o,$(BUILD_USER)/$(TEST_DIR)/%.o,$(RESULTSET_TEST_SRC:%.c=%.o))
 
 API_TEST=api-test
-API_TEST_SRC = api-test.c
+API_TEST_SRC = api-test.c dummy.c
 API_TEST_OBJ=$(patsubst %.o,$(BUILD_USER)/$(TEST_DIR)/%.o,$(API_TEST_SRC:%.c=%.o))
 
 #*****************************			END SOURCE FILE				*****************************
 
 # ADD YOUR NEW OBJ VAR HERE
 # Example: $(<name>_OBJ)
-OBJ = $(LIB_COMMON_OBJ) $(LIB_USERSPACE_OBJ) $(PROVIDER_USER_OBJ)
+OBJ = $(LIB_COMMON_OBJ) $(LIB_USERSPACE_OBJ) $(PROVIDER_USER_OBJ) $(SLC_USER_BIN_OBJ)
+SLC_USER_BIN = $(BUILD_USER)/slc-core
 
 # ADD HERE THE VAR FOR THE TEST APP
 # Example: $(<name>_OBJ)
@@ -104,31 +111,38 @@ DIRS_KERN = $(patsubst %,$(BUILD_KERN)/%,$(DIRS_))
 #***************************** DO NOT EDIT BELOW THIS LINE EXCEPT YOU WANT TO ADD A TEST APPLICATION (OR YOU KNOW WHAT YOU'RE DOING :-) )***************************** 
 DEP = $(subst .o,.d,$(OBJ)) $(subst .o,.d,$(TEST_OBJ))
 
-all: git_version.h $(DIRS_USER) $(DIRS_KERN) $(DEP) $(OBJ) $(TEST_BIN) $(TEST_OBJ) kernel
+all: git_version.h $(DIRS_USER) $(DIRS_KERN) $(DEP) $(OBJ) $(PROVIDER_USER_SO) $(SLC_USER_BIN) $(TEST_BIN) $(TEST_OBJ) kernel
+
+user: git_version.h $(DIRS_USER) $(DEP) $(OBJ) $(PROVIDER_USER_SO) $(SLC_USER_BIN) $(TEST_BIN) $(TEST_OBJ)
 
 #***************************** BEGIN TARGETS FOR TEST APPLICATION *****************************
 
-$(BUILD_PATH)/$(QUERY_TEST): $(QUERY_TEST_OBJ) $(OBJ)
+$(BUILD_PATH)/$(QUERY_TEST): $(QUERY_TEST_OBJ) $(LIB_COMMON_OBJ) $(LIB_USERSPACE_OBJ)
 	@echo $(LD_TEXT)
-	$(OUTPUT)$(CC) $^ $(LDFLAGS) -o $@
+	$(OUTPUT)$(CC) $^ $(LDFLAGS) $(LDLIBS) -o $@
 
-$(BUILD_PATH)/$(DATAMODEL_TEST): $(DATAMODEL_TEST_OBJ) $(OBJ)
+$(BUILD_PATH)/$(DATAMODEL_TEST): $(DATAMODEL_TEST_OBJ) $(LIB_COMMON_OBJ) $(LIB_USERSPACE_OBJ)
 	@echo $(LD_TEXT)
-	$(OUTPUT)$(CC) $^ $(LDFLAGS) -o $@
+	$(OUTPUT)$(CC) $^ $(LDFLAGS) $(LDLIBS) -o $@
 
-$(BUILD_PATH)/$(RESULTSET_TEST): $(RESULTSET_TEST_OBJ) $(OBJ)
+$(BUILD_PATH)/$(RESULTSET_TEST): $(RESULTSET_TEST_OBJ) $(LIB_COMMON_OBJ) $(LIB_USERSPACE_OBJ)
 	@echo $(LD_TEXT)
-	$(OUTPUT)$(CC) $^ $(LDFLAGS) -o $@
+	$(OUTPUT)$(CC) $^ $(LDFLAGS) $(LDLIBS) -o $@
 
-$(BUILD_PATH)/$(API_TEST): $(API_TEST_OBJ) $(OBJ)
+$(BUILD_PATH)/$(API_TEST): $(API_TEST_OBJ) $(LIB_COMMON_OBJ) $(LIB_USERSPACE_OBJ)
 	@echo $(LD_TEXT)
-	$(OUTPUT)$(CC) $^ $(LDFLAGS) -o $@
+	$(OUTPUT)$(CC) $^ $(LDFLAGS) $(LDLIBS) -o $@
 
 #***************************** END TARGETS FOR TEST APPLICATION	  *****************************
-lol:
-	@echo $(LIB_KERNEL_SRC)
 
-tests: $(TEST_BIN)
+$(SLC_USER_BIN): $(LIB_COMMON_OBJ) $(LIB_USERSPACE_OBJ) $(SLC_USER_BIN_OBJ)
+	@echo $(LD_TEXT)
+	$(OUTPUT)$(CC) $^ $(LDFLAGS) -Wl,--export-dynamic $(LDLIBS) -o $@
+
+$(BUILD_USER)/$(PROVIDER_USER_DIR)/%.so: $(BUILD_USER)/$(PROVIDER_USER_DIR)/%.o
+	@echo $(LD_SO_TEXT)
+	$(OUTPUT)$(LD) -shared -soname,lib$(patsubst $(BUILD_USER)/$(PROVIDER_USER_DIR)/%.so,%,$@).so -o $@ $< -lc
+
 # Every object file depends on its source and dependency file
 $(BUILD_USER)/%.o: %.c $(BUILD_USER)/%.d
 	@echo $(CC_TEXT)
