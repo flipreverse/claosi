@@ -4,6 +4,7 @@
 #include <resultset.h>
 #include <stdio.h>
 #include <output.h>
+#include <errno.h>
 
 DECLARE_ELEMENTS(nsNet1, nsProcess, nsUI, model1)
 DECLARE_ELEMENTS(evtDisplay, typeEventType, srcForegroundApp, srcProcessess,objApp)
@@ -39,9 +40,17 @@ int main() {
 	query.queryID = 0;
 	query.onQueryCompleted = printResult;
 
+	sharedMemoryBaseAddr = malloc(PAGE_SIZE * NUM_PAGES);
+	if (sharedMemoryBaseAddr == NULL) {
+		printf("Cannot allocate memory for liballoc: %s\n",strerror(errno));
+		return EXIT_FAILURE;
+	}
+	liballoc_init(sharedMemoryBaseAddr);
+	remainingPages--;
+
 	initDatamodel();
 	initResultset();
-	
+
 	INIT_EVT_STREAM(txStream,"net.device.onTx",0,GET_BASE(filter))
 	INIT_FILTER(filter,GET_BASE(selectTest),2)
 	ADD_PREDICATE(filter,0,filterTXPredicate)
@@ -57,6 +66,7 @@ int main() {
 		printf("Failed. Reason: %d\n",-ret);
 	}
 	query.root = GET_BASE(txStream);
+	printTupel(&model1,tupel);
 	executeQuery(&model1,&query,&tupel);
 
 	INIT_SRC_STREAM(txSrc,"process.process.utime",0,GET_BASE(joinProcess),100)
@@ -135,6 +145,7 @@ static void initResultset(void) {
 	allocItem(&model1,tupel,2,"net.device.rxBytes");
 	setItemString(&model1,tupel,"net.device.rxBytes",string);
 	
+	printTupel(&model1,tupel);
 	string = (char*)malloc(5);
 	strcpy(string,"eth0");
 	addItem(&tupel,3);

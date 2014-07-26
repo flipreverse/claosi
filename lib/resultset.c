@@ -98,9 +98,10 @@ void freeTupel(DataModelElement_t *rootDM, Tupel_t *tupel) {
 			continue;
 		}
 		if ((element = getDescription(rootDM,tupel->items[i]->name)) == NULL) {
-			if (tupel->items[i]->value != NULL) {
-				FREE(tupel->items[i]->value);
-			}
+			//if (tupel->items[i]->value != NULL) {
+				// No need to free itmes[i]->value. Interested why? Look at allocItem@resultset.h:361-366
+				FREE(tupel->items[i]);
+			//}
 			continue;
 		}
 		freeItem(rootDM,tupel->items[i]->value,element);

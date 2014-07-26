@@ -46,12 +46,12 @@ skb = (struct sk_buff*)regs->ARM_r0;
 
 	// Acquire the slcLock to avoid change in the datamodel while creating the tuple
 	ACQUIRE_READ_LOCK(slcLock);
-	allocItem(slcDataModel,tupel,0,"net.device.txBytes");
-	setItemInt(slcDataModel,tupel,"net.device.txBytes",4711);
-	allocItem(slcDataModel,tupel,1,"net.packetType");
-	setItemArray(slcDataModel,tupel,"net.packetType.macHdr",ETH_HLEN);
-	copyArrayByte(slcDataModel,tupel,"net.packetType.macHdr",0,skb->data,ETH_HLEN);
-	setItemByte(slcDataModel,tupel,"net.packetType.macProtocol",42);
+	allocItem(SLC_DATA_MODEL,tupel,0,"net.device.txBytes");
+	setItemInt(SLC_DATA_MODEL,tupel,"net.device.txBytes",4711);
+	allocItem(SLC_DATA_MODEL,tupel,1,"net.packetType");
+	setItemArray(SLC_DATA_MODEL,tupel,"net.packetType.macHdr",ETH_HLEN);
+	copyArrayByte(SLC_DATA_MODEL,tupel,"net.packetType.macHdr",0,skb->data,ETH_HLEN);
+	setItemByte(SLC_DATA_MODEL,tupel,"net.packetType.macProtocol",42);
 	RELEASE_READ_LOCK(slcLock);
 	PRINT_MSG("Received paket at %lu us\n",time.tv_sec * USEC_PER_MSEC + time.tv_usec);
 	eventOccured("net.device.onTx",tupel);
@@ -87,7 +87,7 @@ static void printResult(QueryID_t id, Tupel_t *tupel) {
 
 	do_gettimeofday(&time);
 	printk("Received tupel with %d items at memory address %p at %lu us\n",tupel->itemLen,tupel,time.tv_sec * USEC_PER_MSEC + time.tv_usec);
-	freeTupel(slcDataModel,tupel);
+	freeTupel(SLC_DATA_MODEL,tupel);
 }
 
 static void initQuery(void) {

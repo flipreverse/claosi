@@ -112,7 +112,7 @@ void printDatamodel(DataModelElement_t *root) {
 				numTabs++;
 		} else {
 			// Second, look for the current nodes sibling.
-			do {
+			 while(curNode != root) {
 				j = -1;
 				for (i = 0; i < curNode->parent->childrenLen; i++) {
 					if (curNode->parent->children[i] == curNode) {
@@ -137,7 +137,7 @@ void printDatamodel(DataModelElement_t *root) {
 					break;
 				}
 			// Stop, if the root node is reached.
-			} while(curNode != root);
+			};
 		}
 	} while(curNode != root);
 

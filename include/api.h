@@ -12,7 +12,7 @@
 #include <sys/queue.h>
 #endif
 
-extern DataModelElement_t *slcDataModel;
+extern DataModelElement_t **slcDataModel;
 DECLARE_LOCK_EXTERN(slcLock);
 
 /**

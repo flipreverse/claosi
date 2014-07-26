@@ -6,6 +6,7 @@
 #include <output.h>
 #include <api.h>
 #include <time.h>
+#include <errno.h>
 
 DECLARE_ELEMENTS(nsNet1, nsProcess, nsUI, model1)
 DECLARE_ELEMENTS(evtDisplay, typeEventType, srcForegroundApp, srcProcessess,objApp)
@@ -36,13 +37,22 @@ int main() {
 	clock_t startClock, endClock;
 
 	startClock = clock();
+
+	sharedMemoryBaseAddr = malloc(PAGE_SIZE * NUM_PAGES);
+	if (sharedMemoryBaseAddr == NULL) {
+		printf("Cannot allocate memory for liballoc: %s\n",strerror(errno));
+		return EXIT_FAILURE;
+	}
+	liballoc_init(sharedMemoryBaseAddr);
+	remainingPages--;
+
 	initDatamodel();
 	initQuery();
 
 	if (initSLC() == -1) {
 		return EXIT_FAILURE;
 	}
-	INIT_MODEL((*slcDataModel),0);
+	INIT_MODEL((*SLC_DATA_MODEL),0);
 	if ((ret = registerProvider(&model1, &query)) < 0 ) {
 		printf("Register failed: %d\n",-ret);
 		return EXIT_FAILURE;
@@ -93,16 +103,16 @@ static Tupel_t* generateStatusObject(void) {
 static void issueEvent(void) {
 	tupel = initTupel(20140530,2);
 
-	allocItem(slcDataModel,tupel,0,"net.device.txBytes");
-	setItemInt(slcDataModel,tupel,"net.device.txBytes",4711);
+	allocItem(SLC_DATA_MODEL,tupel,0,"net.device.txBytes");
+	setItemInt(SLC_DATA_MODEL,tupel,"net.device.txBytes",4711);
 
-	allocItem(slcDataModel,tupel,1,"net.packetType");
-	setItemArray(slcDataModel,tupel,"net.packetType.macHdr",4);
-	setArraySlotByte(slcDataModel,tupel,"net.packetType.macHdr",0,1);
-	setArraySlotByte(slcDataModel,tupel,"net.packetType.macHdr",1,2);
-	setArraySlotByte(slcDataModel,tupel,"net.packetType.macHdr",2,3);
-	setArraySlotByte(slcDataModel,tupel,"net.packetType.macHdr",3,4);
-	setItemByte(slcDataModel,tupel,"net.packetType.macProtocol",65);
+	allocItem(SLC_DATA_MODEL,tupel,1,"net.packetType");
+	setItemArray(SLC_DATA_MODEL,tupel,"net.packetType.macHdr",4);
+	setArraySlotByte(SLC_DATA_MODEL,tupel,"net.packetType.macHdr",0,1);
+	setArraySlotByte(SLC_DATA_MODEL,tupel,"net.packetType.macHdr",1,2);
+	setArraySlotByte(SLC_DATA_MODEL,tupel,"net.packetType.macHdr",2,3);
+	setArraySlotByte(SLC_DATA_MODEL,tupel,"net.packetType.macHdr",3,4);
+	setItemByte(SLC_DATA_MODEL,tupel,"net.packetType.macProtocol",65);
 	
 	eventOccured("net.device.onTx",tupel);
 }

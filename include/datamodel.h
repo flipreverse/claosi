@@ -3,16 +3,31 @@
 
 #include <output.h>
 #include <common.h>
+#include <liballoc.h>
 
 #define MAX_QUERIES_PER_DM	8
 
-#define ALLOC_CHILDREN_ARRAY(size)			(DataModelElement_t**)ALLOC(sizeof(DataModelElement_t**) * size)
-#define ALLOC_TYPEINFO(type)				(type*)ALLOC(sizeof(type))
-#define REALLOC_CHILDREN_ARRAY(ptr,size)	(DataModelElement_t**)REALLOC(ptr,sizeof(DataModelElement_t**) * size)
+#define USE_LIBALLOC
+//#undef USE_LIBALLOC
 
-#define DECLARE_ELEMENT(elem)	static DataModelElement_t elem;
-#define DECLARE_ELEMENTS(vars...)	static DataModelElement_t vars;
-#define ADD_CHILD(node,slot,child)	node.children[slot] = &child;
+#ifdef USE_LIBALLOC
+#define ALLOC_DM(size)						slcmalloc(size)
+#define FREE_DM(ptr)						slcfree(ptr)
+#define REALLOC_DM(ptr,size)				slcrealloc(ptr,size)
+#else
+#define ALLOC_DM(size)						ALLOC(size)
+#define FREE_DM(ptr)						FREE(ptr)
+#define REALLOC_DM(ptr,size)				REALLOC(ptr,size)
+#endif
+
+#define ALLOC_CHILDREN_ARRAY(size)			(DataModelElement_t**)ALLOC_DM(sizeof(DataModelElement_t**) * size)
+#define ALLOC_TYPEINFO(type)				(type*)ALLOC_DM(sizeof(type))
+#define REALLOC_CHILDREN_ARRAY(ptr,size)	(DataModelElement_t**)REALLOC_DM(ptr,sizeof(DataModelElement_t**) * size)
+#define ALLOC_STATIC_CHILDREN_ARRAY(size)	(DataModelElement_t**)ALLOC(sizeof(DataModelElement_t**) * size)
+
+#define DECLARE_ELEMENT(elem)				static DataModelElement_t elem;
+#define DECLARE_ELEMENTS(vars...)			static DataModelElement_t vars;
+#define ADD_CHILD(node,slot,child)			node.children[slot] = &child;
 
 enum DataModelType {
 	MODEL			=	0x0,
@@ -120,7 +135,7 @@ int getDataModelSize(DataModelElement_t *rootDM, DataModelElement_t *elem, int i
 #define getSize(rootDMVar, elemVar) getDataModelSize(rootDMVar,elemVar,1)
 
 #define SET_CHILDREN_ARRAY(varName,numChildren) if (numChildren > 0) { \
-		varName.children = ALLOC_CHILDREN_ARRAY(numChildren); \
+		varName.children = ALLOC_STATIC_CHILDREN_ARRAY(numChildren); \
 	} else { \
 		varName.children = NULL; \
 	}

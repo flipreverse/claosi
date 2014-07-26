@@ -5,11 +5,38 @@
 #include <linux/spinlock.h>
 #include <linux/wait.h>
 #include <linux/ktime.h>
+#include <linux/proc_fs.h>
+#include <linux/completion.h>
+#include <linux/delay.h>
+#include <linux/mm.h>
+#include <asm/uaccess.h>
 #include <datamodel.h>
 #include <resultset.h>
 #include <query.h>
 #include <api.h>
 
+#define PROCFS_READ_BUFFER_SIZE		10
+
+#ifndef VM_RESERVED
+# define VM_RESERVED				(VM_DONTEXPAND | VM_DONTDUMP)
+#endif
+
+typedef struct UserspacerLockerMeta {
+	struct completion lockCompleted;
+	struct completion unlockCompleted;
+	rwlock_t *lock;
+} UserspacerLockerMeta_t;
+
+typedef struct DataModelMmap_t {
+	unsigned long data;
+	int reference;
+} DataModelMmap_t;
+
+static struct proc_dir_entry *procfsSlcDir = NULL;
+static struct proc_dir_entry *procfsSlcLockFile = NULL;
+static struct proc_dir_entry *procfsSlcDMFile = NULL;
+static struct semaphore lockFileSem;
+static atomic_t datamodelFileRef;
 static struct task_struct *queryExecThread = NULL;
 static LIST_HEAD(queriesToExecList);
 // Synchronize access to queriesToExecList
@@ -52,6 +79,26 @@ void enqueueQuery(Query_t *query, Tupel_t *tuple) {
 	wake_up(&waitQueue);
 }
 EXPORT_SYMBOL(enqueueQuery);
+
+static int userspaceLockerWork(void *data) {
+	struct UserspacerLockerMeta *meta = (struct UserspacerLockerMeta*)data;
+
+	printk("userspaceLocker started...\n");
+	msleep(3000);
+	printk("Acquire lock\n");
+	write_lock(meta->lock);
+	printk("Lock acquired\n");
+	preempt_enable();
+	complete(&meta->lockCompleted);
+	printk("Waiting for unlock command...\n");
+	wait_for_completion(&meta->unlockCompleted);
+	preempt_disable();
+	printk("Unlocking\n");
+	write_unlock(meta->lock);
+
+	do_exit(0);
+	return 0;
+}
 
 static int generateObjectStatus(void *data) {
 	QueryStatusJob_t *statusJob = (QueryStatusJob_t*)data;
@@ -118,7 +165,7 @@ static enum hrtimer_restart hrtimerHandler(struct hrtimer *curTimer) {
 	tuple = src->callback();
 	RELEASE_WRITE_LOCK(src->lock);
 	if (tuple != NULL) {
-		ERR_MSG("Enqueue tuple\n");
+		DEBUG_MSG(2,"Enqueue tuple\n");
 		enqueueQuery(timerJob->query,tuple);
 	}
 	/*
@@ -189,7 +236,7 @@ static int queryExecutorWork(void *data) {
 			DEBUG_MSG(3,"%s: Executing query 0x%x with tuple %p\n",__FUNCTION__,cur->query->queryID,cur->tuple);
 			// A queries execution just reads from the datamodel. No write lock is needed.
 			ACQUIRE_READ_LOCK(slcLock);
-			executeQuery(slcDataModel,cur->query,&cur->tuple);
+			executeQuery(SLC_DATA_MODEL,cur->query,&cur->tuple);
 			RELEASE_READ_LOCK(slcLock);
 			FREE(cur);
 		}
@@ -202,7 +249,274 @@ static int queryExecutorWork(void *data) {
 	return 0;
 }
 
+static int lockFileRead(struct file *fil, char __user *buffer, size_t buffer_length, loff_t *pos) {
+	int ret = 0;
+
+	if (*pos > 0) {
+		return 0;
+	}
+	ret = snprintf(buffer,buffer_length, "%u\n",write_can_lock(&slcLock)) + 1;
+	*pos = ret;
+
+	return ret;
+}
+
+static int lockFileWrite(struct file *file, const char __user *buffer, size_t count, loff_t *ppos) {
+	UserspacerLockerMeta_t *meta = NULL;
+	struct task_struct *userspaceLockerThread = NULL;
+	unsigned long value = 0;
+	/*
+	* not a good design practice to place the buffer on the stack, but it's necessary 
+	* to avoid raceconditions during interleaved writes to a file for different devices
+	*/
+	char procfs_buffer[PROCFS_READ_BUFFER_SIZE];
+
+	/* get buffer size */
+	if (count > PROCFS_READ_BUFFER_SIZE - 1  ) {
+		count = PROCFS_READ_BUFFER_SIZE - 1;
+	}
+
+	/* write data to the buffer */
+	if (copy_from_user(procfs_buffer, buffer, count) ) {
+		ERR_MSG("ERROR in copyfromuser\n");
+		return -EFAULT;
+	}
+	procfs_buffer[count] = '\0';
+	/* parse input */
+	if (kstrtoul(procfs_buffer, 10, &value)) {
+		ERR_MSG("Could not parse input for /proc/%s/%s / overflow\n", PROCFS_DIR_NAME, PROCFS_LOCKFILE);
+		return -EINVAL;
+	}
+	if (value == 1) {
+		meta = (UserspacerLockerMeta_t*)file->private_data;
+		if (meta == NULL) {
+			// No lock instance for this file descriptor.
+			meta = (UserspacerLockerMeta_t*)kmalloc(sizeof(UserspacerLockerMeta_t),GFP_KERNEL);
+			if (meta == NULL) {
+				return -ENOMEM;
+			}
+			file->private_data = meta;
+		} else {
+			// The user already wrote a '1' to this file and acquired the lock, or - at least - blocked at down(&lockFileSem).
+			return -EINVAL;
+		}
+		init_completion(&meta->lockCompleted);
+		init_completion(&meta->unlockCompleted);
+		// Link the meta struct to the slc rwlock
+		meta->lock = &slcLock;
+		file->private_data = meta;
+		// Just one write is allowed to access the area below (and start the locker thread)
+		down(&lockFileSem);
+		DEBUG_MSG(1,"Down(exclusive)... Done.\n");
+		// Start the kernelthread which will acquire the rwlock for the userspace process.
+		userspaceLockerThread = kthread_create(userspaceLockerWork,meta,"userspaceLocker");
+		if (IS_ERR(userspaceLockerThread)) {
+			kfree(meta);
+			up(&lockFileSem);
+			return -EFAULT;
+		}
+		wake_up_process(userspaceLockerThread);
+		DEBUG_MSG(1,"UserspaceLockThread started. Waiting for lock...\n");
+		// Wait until the kernel thread signals it has successfully acquired the lock
+		wait_for_completion(&meta->lockCompleted);
+		DEBUG_MSG(1,"UserspaceLockerThread acquired spinlock. Returning from write\n");
+	} else if (value == 0) {
+		meta = (UserspacerLockerMeta_t*)file->private_data;
+		if (meta != NULL) {
+			file->private_data = NULL;
+			DEBUG_MSG(1,"Signaling unlock\n");
+			// Signal the kernel thread to resume and release the lock
+			complete(&meta->unlockCompleted);
+			// Another write instance is allowed to acquire the rwlock (slcLock)
+			up(&lockFileSem);
+			kfree(meta);
+		} else {
+			DEBUG_MSG(1,"User issued a release command, but the rwlock was not acquired!\n");
+		}
+	} else {
+		DEBUG_MSG(1,"unknown value\n");
+	}
+
+	return count;
+}
+
+static int lockFileRelease (struct inode *inode, struct file *file) {
+	UserspacerLockerMeta_t *meta = (UserspacerLockerMeta_t*)file->private_data;
+	if (meta != NULL) {
+		DEBUG_MSG(1,"User closed the lock file without releasing the spinlock. Doing this job for him...\n");
+		// The userspace locker thread will resume, release the slcLock and terminate.
+		complete(&meta->unlockCompleted);
+		up(&lockFileSem);
+		file->private_data = NULL;
+		kfree(meta);
+	}
+
+	return 0;
+}
+
+static const struct file_operations proc_lockfile_operations = {
+	.write			= lockFileWrite,
+	.read			= lockFileRead,
+	.release		= lockFileRelease,
+};
+
+void datamodelFileMmapOpen(struct vm_area_struct *vma) {
+	DataModelMmap_t *info = (DataModelMmap_t *)vma->vm_private_data;
+
+	info->reference++;
+	DEBUG_MSG(1,"reference (open) = %d\n",info->reference);
+}
+
+void datamodelFileMmapClose(struct vm_area_struct *vma) {
+	DataModelMmap_t *info = (DataModelMmap_t *)vma->vm_private_data;
+
+	info->reference--;
+	DEBUG_MSG(1,"reference (close) = %d\n",info->reference);
+}
+
+/* nopage is called the first time a memory area is accessed which is not in memory,
+ * it does the actual mapping between kernel and user space memory
+ */
+//struct page *mmap_nopage(struct vm_area_struct *vma, unsigned long address, int *type)	--changed
+static int datamodelFileMmapFault(struct vm_area_struct *vma, struct vm_fault *vmf) {
+	struct page *page;
+	DataModelMmap_t *info;
+	int offset = 0;
+	void *ptr = NULL;
+
+	/* the data is in vma->vm_private_data */
+	info = (DataModelMmap_t *)vma->vm_private_data;
+	if (!info->data) {
+		ERR_MSG("No VMA private data!\n");
+		return VM_FAULT_SIGBUS;
+	}
+
+	// Calculate the offset in bytes the user requests
+	offset = (unsigned long)vmf->virtual_address - vma->vm_start;
+	ptr = (void*)(info->data);
+	// Resolve the virtual page address to a struct page
+	page = virt_to_page(ptr);
+	DEBUG_MSG(1,"page fault at 0x%p, offset = 0x%x, mapping page at 0x%p(0x%p)\n",vmf->virtual_address,offset,page_address(page),ptr);
+	/* increment the reference count of this page */
+	get_page(page);
+	// Tell the memory management which page should be mapped at (vmf->virtual_address & PAGE_MASK)
+	vmf->page = page;
+
+	return 0;
+}
+
+struct vm_operations_struct datamodelfile_mmap_ops = {
+	.open		=	datamodelFileMmapOpen,
+	.close		=	datamodelFileMmapClose,
+	.fault		=	datamodelFileMmapFault,
+};
+
+static int datamodelFileRead(struct file *fil, char __user *buffer, size_t buffer_length, loff_t *pos) {
+	int ret = 0;
+
+	if (*pos > 0) {
+		return 0;
+	}
+	ret = snprintf(buffer,buffer_length, "0x%lx\n",(unsigned long)sharedMemoryBaseAddr);
+	if (ret >= buffer_length) {
+		// Not enough space to hold the whole string
+		ret = buffer_length;
+	} else {
+		// Account for the null byte
+		ret++;
+	}
+	*pos = ret;
+
+	return ret;
+}
+
+static int datamodelFileMmap(struct file *filp, struct vm_area_struct *vma) {
+	vma->vm_ops = &datamodelfile_mmap_ops;
+	vma->vm_flags |= VM_RESERVED;
+	/* assign the file private data to the vm private data */
+	vma->vm_private_data = filp->private_data;
+
+	DEBUG_MSG(1,"mapping datamodel space at 0x%p from 0x%lx to 0x%lx\n",filp->private_data,vma->vm_start,vma->vm_end);
+
+	datamodelFileMmapOpen(vma);
+	return 0;
+}
+
+static int datamodelFileClose(struct inode *inode, struct file *filp) {
+	DataModelMmap_t *info = (DataModelMmap_t*)filp->private_data;
+
+	kfree(info);
+	filp->private_data = NULL;
+	atomic_dec(&datamodelFileRef);
+
+	return 0;
+}
+
+static int datamodelFileOpen(struct inode *inode, struct file *filp) {
+	DataModelMmap_t *info = kmalloc(sizeof(DataModelMmap_t), GFP_KERNEL);
+
+	if (atomic_read(&datamodelFileRef) >= 1) {
+		return -EBUSY;
+	}
+	atomic_inc(&datamodelFileRef);
+	/* obtain new memory */
+	info->data = (unsigned long)sharedMemoryBaseAddr;
+	/* assign this info struct to the file */
+	filp->private_data = info;
+	info->reference = 0;
+
+	return 0;
+}
+
+static const struct file_operations proc_datamodel_operations = {
+	.open		=	datamodelFileOpen,
+	.read		=	datamodelFileRead,
+	.release	=	datamodelFileClose,
+	.mmap		=	datamodelFileMmap,
+};
+
 static int __init slc_init(void) {
+	kuid_t fileUID;
+	kgid_t fileGID;
+
+	fileUID.val = 0;
+	fileGID.val = 0;
+
+	sharedMemoryBaseAddr = (void*)__get_free_pages(GFP_KERNEL | __GFP_COMP | __GFP_ZERO | __GFP_DMA,PAGE_ORDER);
+	DEBUG_MSG(2,"Allocated %d pages of kernel memory for liballoc at 0x%p\n",NUM_PAGES,sharedMemoryBaseAddr);
+	if (sharedMemoryBaseAddr == NULL) {
+		return -ENOMEM;
+	}
+
+	procfsSlcDir = proc_mkdir(PROCFS_DIR_NAME, NULL);
+	if (procfsSlcDir == NULL) {
+		printk("Error: Could not initialize /proc/%s\n",PROCFS_DIR_NAME);
+		return -ENOMEM;
+	}
+	proc_set_user(procfsSlcDir,fileUID,fileGID);
+
+	procfsSlcDMFile = proc_create(PROCFS_DATAMODELFILE, 0777, procfsSlcDir,&proc_datamodel_operations);
+	if (procfsSlcDMFile == NULL) {
+		proc_remove(procfsSlcDir);
+		printk("Error: Could not initialize /proc/%s/%s\n",PROCFS_DIR_NAME,PROCFS_DATAMODELFILE);
+		return -ENOMEM;
+	}
+	proc_set_user(procfsSlcDMFile,fileUID,fileGID);
+	proc_set_size(procfsSlcDMFile,7);
+
+	procfsSlcLockFile = proc_create(PROCFS_LOCKFILE, 0777, procfsSlcDir,&proc_lockfile_operations);
+	if (procfsSlcLockFile == NULL) {
+		proc_remove(procfsSlcDMFile);
+		proc_remove(procfsSlcDir);
+		printk("Error: Could not initialize /proc/%s/%s\n",PROCFS_DIR_NAME,PROCFS_LOCKFILE);
+		return -ENOMEM;
+	}
+	proc_set_user(procfsSlcLockFile,fileUID,fileGID);
+	proc_set_size(procfsSlcLockFile,3);
+
+	sema_init(&lockFileSem,1);
+	atomic_set(&datamodelFileRef,0);
+
 	if (initSLC() == -1) {
 		return -1;
 	}
@@ -226,6 +540,13 @@ static void __exit slc_exit(void) {
 	// Signal the query execution thread to terminate and wait for it
 	kthread_stop(queryExecThread);
 	queryExecThread = NULL;
+	if (sharedMemoryBaseAddr != NULL) {
+		free_pages((unsigned long)sharedMemoryBaseAddr,PAGE_ORDER);
+	}
+
+	proc_remove(procfsSlcLockFile);
+	proc_remove(procfsSlcDMFile);
+	proc_remove(procfsSlcDir);
 
 	DEBUG_MSG(1,"Destroyed SLC\n");
 }

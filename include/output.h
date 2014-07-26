@@ -14,13 +14,13 @@
 #define TAG "[slc] "
 
 #ifdef OUTPUT
+	#ifdef __KERNEL__
+		#define PRINT_MSG(args...)					printk(KERN_INFO args);
+	#else
+		#define PRINT_MSG(args...)					printf(args);
+	#endif
 	#ifdef DEBUG
 		#if DEBUG > 0
-			#ifdef __KERNEL__
-				#define PRINT_MSG(args...)					printk(KERN_INFO args);
-			#else
-				#define PRINT_MSG(args...)					printf(args);
-			#endif
 			#define DEBUG_MSG(prio,args...) do {		\
 					if ((prio) <= DEBUG) {				\
 						PRINT_MSG(TAG args);			\

@@ -1,6 +1,6 @@
 #include <api.h>
 
-DataModelElement_t *slcDataModel = NULL;
+DataModelElement_t *SLC_DATA_MODEL = NULL;
 DECLARE_LOCK(slcLock);
 
 #ifdef __KERNEL__
@@ -11,10 +11,10 @@ EXPORT_SYMBOL(slcLock);
  * Initializes the global datamodel.
  */
 static int initDatamodel(void) {
-	if ((slcDataModel = ALLOC(sizeof(DataModelElement_t))) == NULL) {
+	if ((SLC_DATA_MODEL = ALLOC_DM(sizeof(DataModelElement_t))) == NULL) {
 		return -1;
 	}
-	INIT_MODEL((*slcDataModel),0);
+	INIT_MODEL((*SLC_DATA_MODEL),0);
 	return 0;
 }
 
@@ -38,30 +38,30 @@ int registerProvider(DataModelElement_t *dm, Query_t *queries) {
 		return -EPARAM;
 	}
 	if (dm != NULL) {
-		if ((ret = checkDataModelSyntax(slcDataModel,dm,NULL)) < 0) {
+		if ((ret = checkDataModelSyntax(SLC_DATA_MODEL,dm,NULL)) < 0) {
 			RELEASE_WRITE_LOCK(slcLock);
 			return ret;
 		}
 		// First, check if the datamodel is mergable
-		if ((ret = mergeDataModel(1,slcDataModel,dm)) < 0) {
+		if ((ret = mergeDataModel(1,SLC_DATA_MODEL,dm)) < 0) {
 			RELEASE_WRITE_LOCK(slcLock);
 			return ret;
 		}
 		// Now merge it.
-		if ((ret = mergeDataModel(0,slcDataModel,dm)) < 0) {
+		if ((ret = mergeDataModel(0,SLC_DATA_MODEL,dm)) < 0) {
 			RELEASE_WRITE_LOCK(slcLock);
 			return ret;
 		}
 	}
 	if (queries != NULL) {
-		if ((ret = checkQueries(slcDataModel,queries,NULL,0)) < 0) {
+		if ((ret = checkQueries(SLC_DATA_MODEL,queries,NULL,0)) < 0) {
 			RELEASE_WRITE_LOCK(slcLock);
 			return ret;
 		}
 		#ifdef __KERNEL__
-		if ((ret = addQueries(slcDataModel,queries,&flags)) < 0) {
+		if ((ret = addQueries(SLC_DATA_MODEL,queries,&flags)) < 0) {
 		#else
-		if ((ret = addQueries(slcDataModel,queries)) < 0) {
+		if ((ret = addQueries(SLC_DATA_MODEL,queries)) < 0) {
 		#endif
 			RELEASE_WRITE_LOCK(slcLock);
 			return ret;
@@ -94,30 +94,30 @@ int unregisterProvider(DataModelElement_t *dm, Query_t *queries) {
 		return -EPARAM;
 	}
 	if (queries != NULL) {
-		if ((ret = checkQueries(slcDataModel,queries,NULL,1)) < 0) {
+		if ((ret = checkQueries(SLC_DATA_MODEL,queries,NULL,1)) < 0) {
 			RELEASE_WRITE_LOCK(slcLock);
 			return ret;
 		}
 		#ifdef __KERNEL__
-		if ((ret = delQueries(slcDataModel,queries,&flags)) < 0) {
+		if ((ret = delQueries(SLC_DATA_MODEL,queries,&flags)) < 0) {
 		#else
-		if ((ret = delQueries(slcDataModel,queries)) < 0) {
+		if ((ret = delQueries(SLC_DATA_MODEL,queries)) < 0) {
 		#endif
 			RELEASE_WRITE_LOCK(slcLock);
 			return ret;
 		}
 	}
 	if (dm != NULL) {
-		if ((ret = checkDataModelSyntax(slcDataModel,dm,NULL)) < 0) {
+		if ((ret = checkDataModelSyntax(SLC_DATA_MODEL,dm,NULL)) < 0) {
 			RELEASE_WRITE_LOCK(slcLock);
 			return ret;
 		}
-		if ((ret = deleteSubtree(&slcDataModel,dm)) < 0) {
+		if ((ret = deleteSubtree(&SLC_DATA_MODEL,dm)) < 0) {
 			RELEASE_WRITE_LOCK(slcLock);
 			return ret;
 		}
 		// If deleteSubtree removes even the root node, it is necessary to reinitialize the global datamodel
-		if (slcDataModel == NULL) {
+		if (SLC_DATA_MODEL == NULL) {
 			initDatamodel();
 		}
 	}
@@ -140,14 +140,14 @@ int registerQuery(Query_t *queries) {
 	ACQUIRE_WRITE_LOCK(slcLock);
 
 	if (queries != NULL) {
-		if ((ret = checkQueries(slcDataModel,queries,NULL,1)) < 0) {
+		if ((ret = checkQueries(SLC_DATA_MODEL,queries,NULL,1)) < 0) {
 			RELEASE_WRITE_LOCK(slcLock);
 			return ret;
 		}
 		#ifdef __KERNEL__
-		if ((ret = addQueries(slcDataModel,queries,&flags)) < 0) {
+		if ((ret = addQueries(SLC_DATA_MODEL,queries,&flags)) < 0) {
 		#else
-		if ((ret = addQueries(slcDataModel,queries)) < 0) {
+		if ((ret = addQueries(SLC_DATA_MODEL,queries)) < 0) {
 		#endif
 			RELEASE_WRITE_LOCK(slcLock);
 			return ret;
@@ -175,14 +175,14 @@ int unregisterQuery(Query_t *queries) {
 	ACQUIRE_WRITE_LOCK(slcLock);
 
 	if (queries != NULL) {
-		if ((ret = checkQueries(slcDataModel,queries,NULL,1)) < 0) {
+		if ((ret = checkQueries(SLC_DATA_MODEL,queries,NULL,1)) < 0) {
 			RELEASE_WRITE_LOCK(slcLock);
 			return ret;
 		}
 		#ifdef __KERNEL__
-		if ((ret = delQueries(slcDataModel,queries,&flags)) < 0) {
+		if ((ret = delQueries(SLC_DATA_MODEL,queries,&flags)) < 0) {
 		#else
-		if ((ret = delQueries(slcDataModel,queries)) < 0) {
+		if ((ret = delQueries(SLC_DATA_MODEL,queries)) < 0) {
 		#endif
 			RELEASE_WRITE_LOCK(slcLock);
 			return ret;
@@ -217,7 +217,7 @@ void eventOccured(char *datamodelName, Tupel_t *tupel) {
 		RELEASE_WRITE_LOCK(slcLock);
 		return;
 	}
-	if ((dm = getDescription(slcDataModel,datamodelName)) == NULL) {
+	if ((dm = getDescription(SLC_DATA_MODEL,datamodelName)) == NULL) {
 		RELEASE_WRITE_LOCK(slcLock);
 		return;
 	}
@@ -261,7 +261,7 @@ void objectChanged(char *datamodelName, Tupel_t *tupel, int event) {
 		RELEASE_WRITE_LOCK(slcLock);
 		return;
 	}
-	if ((dm = getDescription(slcDataModel,datamodelName)) == NULL) {
+	if ((dm = getDescription(SLC_DATA_MODEL,datamodelName)) == NULL) {
 		RELEASE_WRITE_LOCK(slcLock);
 		return;
 	}
@@ -297,19 +297,31 @@ EXPORT_SYMBOL(objectChanged);
  * Does all common initialization stuff
  */
 int initSLC(void) {
-	int ret = 0;
+	int ret = 0, usedPages = 0;
+
+	// liballoc_init() returns the number of bytes used by liballoc to initialize its meta information within the shared memory
+	ret = liballoc_init(sharedMemoryBaseAddr);
+	usedPages = ret / PAGE_SIZE;
+	usedPages += (ret % PAGE_SIZE == 0 ? 0 : 1);
+	DEBUG_MSG(1,"Initialized liballoc. Used %d pages for its meta information.\n", usedPages);
+	remainingPages -= usedPages;
+
+	slcDataModel = sharedMemoryBaseAddr + ret;
+	DEBUG_MSG(1,"Placing slcDataModel at 0x%p\n",slcDataModel);
 
 	INIT_LOCK(slcLock);
+	#ifdef __KERNEL__
 	if ((ret = initDatamodel()) < 0) {
 		return ret;
 	}
+	#endif
 	return 0;
 }
 /**
  * Cleans all up
  */
 void destroySLC(void) {
-	if (slcDataModel != NULL) {
-		FREE(slcDataModel);
+	if (SLC_DATA_MODEL != NULL) {
+		FREE_DM(SLC_DATA_MODEL);
 	}
 }

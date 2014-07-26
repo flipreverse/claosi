@@ -5,7 +5,7 @@
 #include <stdio.h>
 #include <output.h>
 #include <time.h>
-
+#include <errno.h>
 
 DECLARE_ELEMENTS(nsNet1, nsProcess, nsUI, model1)
 DECLARE_ELEMENTS(evtDisplay, typeEventType, srcForegroundApp, srcProcessess,objApp)
@@ -19,6 +19,14 @@ int main() {
 	Tupel_t *tupel = NULL, *tupelCompact = NULL;
 	char *string = NULL, values[] = {5,4,3,2,1};
 	clock_t startClock, endClock;
+
+	sharedMemoryBaseAddr = malloc(PAGE_SIZE * NUM_PAGES);
+	if (sharedMemoryBaseAddr == NULL) {
+		printf("Cannot allocate memory for liballoc: %s\n",strerror(errno));
+		return EXIT_FAILURE;
+	}
+	liballoc_init(sharedMemoryBaseAddr);
+	remainingPages--;
 
 	startClock = clock();
 	initDatamodel();

@@ -8,15 +8,23 @@
 #include <linux/module.h>
 #include <linux/list.h>
 #include <linux/hrtimer.h>
+#include <asm/page.h>
 #else
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
 #include <pthread.h>
+#define PAGE_SIZE 4096
 #endif
 
+#define PAGE_ORDER							5
+#define NUM_PAGES							(1 << PAGE_ORDER)
 #define MAX_NAME_LEN						40
 #define DECLARE_BUFFER(name)				char name[MAX_NAME_LEN + 1];
+#define PROCFS_DIR_NAME						"slc"
+#define PROCFS_LOCKFILE						"lock"
+#define PROCFS_DATAMODELFILE				"datamodel"
+#define SLC_DATA_MODEL						(*slcDataModel)
 
 #ifdef __KERNEL__
 #define	ALLOC(size)							kmalloc(size,GFP_KERNEL & ~__GFP_WAIT)
@@ -33,21 +41,26 @@
 #define RELEASE_READ_LOCK(varName)			write_unlock_irqrestore(&varName,flags)
 #define ACQUIRE_WRITE_LOCK(varName)			write_lock_irqsave(&varName,flags)
 #define RELEASE_WRITE_LOCK(varName)			write_unlock_irqrestore(&varName,flags)
+#define LAYER_CODE							0x1
 #else
 #define	ALLOC(size)							malloc(size)
 #define	FREE(ptr)							free(ptr)
 #define REALLOC(ptr,size)					realloc(ptr,size)
 #define STRTOINT(strVar,intVar)				(intVar = atoi(strVar))
 #define STRTOCHAR(strVar,charVar)			(charVar = atoi(strVar))
-#define DECLARE_LOCK(varName)				pthread_mutex_t varName
-#define DECLARE_LOCK_EXTERN(varName)		extern pthread_mutex_t varName
-#define INIT_LOCK(varName)					pthread_mutex_init(&varName,NULL)
-#define ACQUIRE_READ_LOCK(varName)			pthread_mutex_lock(&varName)
-#define RELEASE_READ_LOCK(varName)			pthread_mutex_unlock(&varName)
-#define ACQUIRE_WRITE_LOCK(varName)			pthread_mutex_lock(&varName)
-#define RELEASE_WRITE_LOCK(varName)			pthread_mutex_unlock(&varName)
+#define DECLARE_LOCK(varName)				
+#define DECLARE_LOCK_EXTERN(varName)		
+#define INIT_LOCK(varName)					
+#define ACQUIRE_READ_LOCK(varName)			acquireSlcLock();
+#define RELEASE_READ_LOCK(varName)			releaseSlcLock();
+#define ACQUIRE_WRITE_LOCK(varName)			acquireSlcLock();
+#define RELEASE_WRITE_LOCK(varName)			releaseSlcLock();
 #define USEC_PER_MSEC						1000L
-#define TIMER_SIGNAL SIGRTMIN
+#define TIMER_SIGNAL						SIGRTMIN
+#define LAYER_CODE							0x2
+
+void acquireSlcLock(void);
+void releaseSlcLock(void);
 #endif
 
 enum {
@@ -80,5 +93,8 @@ enum {
 	EQUERYTYPE,						// 
 	EMAXQUERIES						// The maximum number of queries assigned to a node is reached
 };
+
+extern void *sharedMemoryBaseAddr;
+extern int remainingPages;
 
 #endif // __COMMON_H__

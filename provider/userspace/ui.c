@@ -45,9 +45,9 @@ static void* displayEvtWork(void *data) {
 
 		srand(time(0));
 		ACQUIRE_READ_LOCK(slcLock);
-		allocItem(slcDataModel,tuple,0,"ui.eventType");
-		setItemInt(slcDataModel,tuple,"ui.eventType.xPos",rand() % 1024);
-		setItemInt(slcDataModel,tuple,"ui.eventType.yPos",rand() % 1024);
+		allocItem(SLC_DATA_MODEL,tuple,0,"ui.eventType");
+		setItemInt(SLC_DATA_MODEL,tuple,"ui.eventType.xPos",rand() % 1024);
+		setItemInt(SLC_DATA_MODEL,tuple,"ui.eventType.yPos",rand() % 1024);
 		RELEASE_READ_LOCK(slcLock);
 		eventOccured("ui.display",tuple);
 	}
@@ -100,8 +100,8 @@ static Tupel_t* statusApp(void) {
 	}
 	strcpy(name,"lol.app");
 	ACQUIRE_READ_LOCK(slcLock);
-	allocItem(slcDataModel,tuple,0,"ui.app");
-	setItemString(slcDataModel,tuple,"ui.app",name);
+	allocItem(SLC_DATA_MODEL,tuple,0,"ui.app");
+	setItemString(SLC_DATA_MODEL,tuple,"ui.app",name);
 	RELEASE_READ_LOCK(slcLock);
 
 	return tuple;
@@ -126,8 +126,8 @@ static Tupel_t* sourceForegroundApp(void) {
 	}
 	strcpy(name,"pferd.app");
 	ACQUIRE_READ_LOCK(slcLock);
-	allocItem(slcDataModel,tuple,0,"ui.foregroundApp");
-	setItemString(slcDataModel,tuple,"ui.foregroundApp",name);
+	allocItem(SLC_DATA_MODEL,tuple,0,"ui.foregroundApp");
+	setItemString(SLC_DATA_MODEL,tuple,"ui.foregroundApp",name);
 	RELEASE_READ_LOCK(slcLock);
 
 	return tuple;
@@ -168,8 +168,8 @@ static void printResult(QueryID_t id, Tupel_t *tupel) {
 	gettimeofday(&time,NULL);
 	timeMS = (long long)time.tv_sec * (long long)USEC_PER_MSEC + (long long)time.tv_usec;
 	printf("processing duration: %llu ms,",timeMS - tupel->timestamp);
-	printTupel(slcDataModel,tupel);
-	freeTupel(slcDataModel,tupel);
+	printTupel(SLC_DATA_MODEL,tupel);
+	freeTupel(SLC_DATA_MODEL,tupel);
 }
 
 static void initQuery(void) {

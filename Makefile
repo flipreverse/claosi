@@ -33,7 +33,7 @@ endif
 # COMPILER AND LINKER FLAGS
 CROSS_COMPILE?=
 CC:=$(CROSS_COMPILE)gcc
-CFLAGS := -fPIC -Wall -Werror -c -g -I$(INCLUDE_PATH)
+CFLAGS := -fPIC -Wall -Werror -c -g -I$(INCLUDE_PATH) -Werror=format
 LDFLAGS :=
 LDLIBS := -ldl -lpthread -lrt
 
@@ -44,7 +44,7 @@ LDLIBS := -ldl -lpthread -lrt
 #<name>_OBJ=$(patsubst %.o,$(OBJ_PATH)/$(<name>_DIR)/%.o,$(<name>_SRC:%.cpp=%.o))
 
 LIB_COMMON_DIR=lib
-LIB_COMMON_SRC=datamodel.c query.c resultset.c api.c
+LIB_COMMON_SRC=datamodel.c query.c resultset.c api.c liballoc.c
 LIB_COMMON_OBJ=$(patsubst %.o,$(BUILD_USER)/$(LIB_COMMON_DIR)/%.o,$(LIB_COMMON_SRC:%.c=%.o))
 
 LIB_USERSPACE_DIR=$(LIB_COMMON_DIR)/userspace

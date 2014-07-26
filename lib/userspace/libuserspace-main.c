@@ -157,6 +157,10 @@ static void* fifoWork(void *data) {
 			}
 		} else if (strcmp(cmdBuffer,"exit") == 0) {
 			break;
+		} else if (strcmp(cmdBuffer,"lol") == 0) {
+			ACQUIRE_READ_LOCK(slcLock);
+			printDatamodel(SLC_DATA_MODEL);
+			RELEASE_READ_LOCK(slcLock);
 		} else {
 			ERR_MSG("Unknown command!\n");
 		}
@@ -169,12 +173,12 @@ static void* fifoWork(void *data) {
 int main(int argc, const char *argv[]) {
 	LIST_INIT(&providerList);
 
-	// First, initialize the common slc stuff
-	initSLC();
-	// Second, bring up the layer-specific stuff
+	// First, bring up the layer-specific stuff
 	if (initLayer() < 0) {
 		return EXIT_FAILURE;
 	}
+	// Second, initialize the common slc stuff
+	initSLC();
 
 	pthread_attr_init(&fifoWorkThreadAttr);
 	pthread_attr_setdetachstate(&fifoWorkThreadAttr, PTHREAD_CREATE_JOINABLE);
@@ -186,8 +190,8 @@ int main(int argc, const char *argv[]) {
 	pthread_join(fifoWorkThread,NULL);
 	pthread_attr_destroy(&fifoWorkThreadAttr);
 
-	exitLayer();
 	destroySLC();
+	exitLayer();
 
 	return EXIT_SUCCESS;
 }
