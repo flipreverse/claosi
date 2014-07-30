@@ -819,3 +819,143 @@ int checkDataModelSyntax(DataModelElement_t *rootCurrent,DataModelElement_t *roo
 	
 	return 0;
 }
+
+void copyAndCollectDatamodel(DataModelElement_t *node, void *freeMem) {
+	DataModelElement_t *curCopy = NULL, *curOrigin = node;
+	int i = 0, j = 0, childrenLen = 0, toCopy = 0;
+
+	memcpy(freeMem,curOrigin,sizeof(DataModelElement_t));
+	curCopy = (DataModelElement_t*)freeMem;
+	freeMem += sizeof(DataModelElement_t);
+	curCopy->parent = NULL;
+	curCopy->children = freeMem;
+	freeMem += sizeof(DataModelElement_t*) * curCopy->childrenLen;
+	for (i = 0; i < curCopy->childrenLen; i++) {
+		curCopy->children[i] = NULL;
+	}
+	if (curOrigin->typeInfo != NULL) {
+		switch (curOrigin->dataModelType) {
+			case SOURCE:
+				toCopy = sizeof(Source_t);
+				break;
+
+			case EVENT:
+				toCopy = sizeof(Event_t);
+				break;
+
+			case OBJECT:
+				toCopy = sizeof(Object_t);
+				break;
+
+			case REF:
+				toCopy = strlen(curOrigin->typeInfo) + 1;
+				break;
+			}
+		curCopy->typeInfo = freeMem;
+		memcpy(curCopy->typeInfo,curOrigin->typeInfo,toCopy);
+		freeMem += toCopy;
+	}
+
+	do {
+		childrenLen = curOrigin->childrenLen;
+		for (i = 0; i < childrenLen; i++) {
+			// Copy each child from the origin subtree, where its corresponding array element is still NULL
+			if (curCopy->children[i] == NULL) {
+				curCopy->children[i] = freeMem;
+				memcpy(curCopy->children[i],curOrigin->children[i],sizeof(DataModelElement_t));
+				freeMem += sizeof(DataModelElement_t);
+				curCopy->children[i]->children = freeMem;
+				freeMem += sizeof(DataModelElement_t*) * curCopy->children[i]->childrenLen;
+				for (j = 0; j < curCopy->children[i]->childrenLen; j++) {
+					curCopy->children[i]->children[j] = NULL;
+				}
+				if (curOrigin->children[i]->typeInfo != NULL) {
+					switch (curOrigin->children[i]->dataModelType) {
+						case SOURCE:
+							toCopy = sizeof(Source_t);
+							break;
+
+						case EVENT:
+							toCopy = sizeof(Event_t);
+							break;
+
+						case OBJECT:
+							toCopy = sizeof(Object_t);
+							break;
+
+						case REF:
+							toCopy = strlen(curOrigin->children[i]->typeInfo) + 1;
+							break;
+						}
+					curCopy->children[i]->typeInfo = freeMem;
+					memcpy(curCopy->children[i]->typeInfo,curOrigin->children[i]->typeInfo,toCopy);
+					freeMem += toCopy;
+				}
+				curCopy->children[i]->parent = curCopy;
+				// Step down and copy its children as well
+				curCopy = curCopy->children[i];
+				curOrigin = curOrigin->children[i];
+				break;
+			}
+		}
+		// All children processed. Step up.
+		if (i == childrenLen) {
+			curOrigin = curOrigin->parent;
+			curCopy = curCopy->parent;
+		}
+	} while(curOrigin != node->parent);
+}
+
+
+int calcDatamodelSize(DataModelElement_t *node) {
+	DataModelElement_t *curNode = node;
+	int i = 0, j = 0, size = 0;
+
+	do {
+		size += sizeof(DataModelElement_t) + sizeof(DataModelElement_t*) * curNode->childrenLen;
+		switch (curNode->dataModelType) {
+			case SOURCE:
+				size += sizeof(Source_t);
+				break;
+
+			case EVENT:
+				size += sizeof(Event_t);
+				break;
+
+			case OBJECT:
+				size += sizeof(Object_t);
+				break;
+
+			case REF:
+				size += strlen(curNode->typeInfo) + 1;
+				break;
+		}
+		if (curNode->childrenLen > 0) {
+			curNode = curNode->children[0];
+		} else {
+			// Stop, if the root node is reached.
+			while(curNode != node) {
+				j = -1;
+				// Look for the current nodes sibling.
+				for (i = 0; i < curNode->parent->childrenLen; i++) {
+					if (curNode->parent->children[i] == curNode) {
+						j = i;
+						break;
+					}
+				}
+				if (j == curNode->parent->childrenLen - 1) {
+					// If there is none, go one level up and look for this nodes sibling.
+					curNode = curNode->parent;
+				} else {
+					// At least one sibling left. Go for it.
+					j++;
+					curNode = curNode->parent->children[j];
+					break;
+				}
+			};
+		}
+	// Stop, if the root node is reached.
+	} while(curNode != node);
+	
+	return size;
+}

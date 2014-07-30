@@ -7,10 +7,10 @@
 
 #define MAX_QUERIES_PER_DM	8
 
-#define ALLOC_CHILDREN_ARRAY(size)			(DataModelElement_t**)ALLOC(sizeof(DataModelElement_t**) * size)
+#define ALLOC_CHILDREN_ARRAY(size)			(DataModelElement_t**)ALLOC(sizeof(DataModelElement_t*) * size)
 #define ALLOC_TYPEINFO(type)				(type*)ALLOC(sizeof(type))
-#define REALLOC_CHILDREN_ARRAY(ptr,size)	(DataModelElement_t**)REALLOC(ptr,sizeof(DataModelElement_t**) * size)
-#define ALLOC_STATIC_CHILDREN_ARRAY(size)	(DataModelElement_t**)ALLOC(sizeof(DataModelElement_t**) * size)
+#define REALLOC_CHILDREN_ARRAY(ptr,size)	(DataModelElement_t**)REALLOC(ptr,sizeof(DataModelElement_t*) * size)
+#define ALLOC_STATIC_CHILDREN_ARRAY(size)	(DataModelElement_t**)ALLOC(sizeof(DataModelElement_t*) * size)
 
 #define DECLARE_ELEMENT(elem)				static DataModelElement_t elem;
 #define DECLARE_ELEMENTS(vars...)			static DataModelElement_t vars;
@@ -119,6 +119,8 @@ int deleteSubtree(DataModelElement_t **root, DataModelElement_t *tree);
 int getOffset(DataModelElement_t *parent, char *child);
 void freeNode(DataModelElement_t *node, int freeNodes);
 int getDataModelSize(DataModelElement_t *rootDM, DataModelElement_t *elem, int ignoreArray);
+int calcDatamodelSize(DataModelElement_t *node);
+void copyAndCollectDatamodel(DataModelElement_t *node, void *freeMem);
 #define getSize(rootDMVar, elemVar) getDataModelSize(rootDMVar,elemVar,1)
 
 #define SET_CHILDREN_ARRAY(varName,numChildren) if (numChildren > 0) { \
