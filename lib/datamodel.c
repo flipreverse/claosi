@@ -235,7 +235,7 @@ DataModelElement_t* copyNode(DataModelElement_t *node) {
 	Source_t *src = NULL;
 	int len = 0, i = 0;
 			
-	ret = (DataModelElement_t*)ALLOC_DM(sizeof(DataModelElement_t));
+	ret = (DataModelElement_t*)ALLOC(sizeof(DataModelElement_t));
 	if (!ret) {
 		return NULL;
 	}
@@ -243,7 +243,7 @@ DataModelElement_t* copyNode(DataModelElement_t *node) {
 	if (node->childrenLen) {
 		ret->children = ALLOC_CHILDREN_ARRAY(ret->childrenLen);
 		if (!ret->children) {
-			FREE_DM(ret);
+			FREE(ret);
 			return NULL;
 		}
 	} else {
@@ -257,8 +257,8 @@ DataModelElement_t* copyNode(DataModelElement_t *node) {
 		case SOURCE:
 			src = ALLOC_TYPEINFO(Source_t);
 			if (!src) {
-				FREE_DM(ret->children);
-				FREE_DM(ret);
+				FREE(ret->children);
+				FREE(ret);
 				return NULL;
 			}
 			memcpy(src,node->typeInfo,sizeof(Source_t));
@@ -268,8 +268,8 @@ DataModelElement_t* copyNode(DataModelElement_t *node) {
 		case EVENT:
 			evt = ALLOC_TYPEINFO(Event_t);
 			if (!evt) {
-				FREE_DM(ret->children);
-				FREE_DM(ret);
+				FREE(ret->children);
+				FREE(ret);
 				return NULL;
 			}
 			memcpy(evt,node->typeInfo,sizeof(Event_t));
@@ -279,8 +279,8 @@ DataModelElement_t* copyNode(DataModelElement_t *node) {
 		case OBJECT:
 			obj = ALLOC_TYPEINFO(Object_t);
 			if (!obj) {
-				FREE_DM(ret->children);
-				FREE_DM(ret);
+				FREE(ret->children);
+				FREE(ret);
 				return NULL;
 			}
 			memcpy(obj,node->typeInfo,sizeof(Object_t));
@@ -289,10 +289,10 @@ DataModelElement_t* copyNode(DataModelElement_t *node) {
 			
 		case REF:
 			len = strlen((const char*)node->typeInfo) + 1;
-			ret->typeInfo = ALLOC_DM(sizeof(char) * len);
+			ret->typeInfo = ALLOC(sizeof(char) * len);
 			if (!ret->typeInfo) {
-				FREE_DM(ret->children);
-				FREE_DM(ret);
+				FREE(ret->children);
+				FREE(ret);
 				return NULL;
 			}
 			strcpy((char*)ret->typeInfo,(char*)node->typeInfo);
@@ -310,31 +310,16 @@ DataModelElement_t* copyNode(DataModelElement_t *node) {
  * @param node
  */
 void freeNode(DataModelElement_t *node, int freeNodeItself) {
-	/*
-	 * If a node was statically allocated and initialized using the macros defined in datamodel.h,
-	 * the children array and the typeinfo will be allocated by the layer-specific alloc-function.
-	 * Hence, a user will call freeDatamodel with freeNodeItself = 0. Free has tobe done using the
-	 * layer-specific free-function.
-	 */
+	if (node->children != NULL) {
+		FREE(node->children);
+		node->children = NULL;
+	}
+	if (node->typeInfo != NULL) {
+		FREE(node->typeInfo);
+		node->typeInfo = NULL;
+	}
 	if (freeNodeItself == 1) {
-		if (node->children != NULL) {
-			FREE_DM(node->children);
-			node->children = NULL;
-		}
-		if (node->typeInfo != NULL) {
-			FREE_DM(node->typeInfo);
-			node->typeInfo = NULL;
-		}
-		FREE_DM(node);
-	} else {
-		if (node->children != NULL) {
-			FREE(node->children);
-			node->children = NULL;
-		}
-		if (node->typeInfo != NULL) {
-			FREE(node->typeInfo);
-			node->typeInfo = NULL;
-		}
+		FREE(node);
 	}
 }
 /**
@@ -385,7 +370,7 @@ int deleteSubtree(DataModelElement_t **treePresent, DataModelElement_t *treeDele
 						}
 					}
 					// Free the old one.
-					FREE_DM(curPresent->children);
+					FREE(curPresent->children);
 					curPresent->children = temp;
 					curPresent->childrenLen = children;
 					curPresent = curPresent->parent;

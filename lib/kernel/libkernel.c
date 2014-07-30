@@ -21,21 +21,13 @@
 # define VM_RESERVED				(VM_DONTEXPAND | VM_DONTDUMP)
 #endif
 
-typedef struct UserspacerLockerMeta {
-	struct completion lockCompleted;
-	struct completion unlockCompleted;
-	rwlock_t *lock;
-} UserspacerLockerMeta_t;
-
 typedef struct DataModelMmap_t {
 	unsigned long data;
 	int reference;
 } DataModelMmap_t;
 
 static struct proc_dir_entry *procfsSlcDir = NULL;
-static struct proc_dir_entry *procfsSlcLockFile = NULL;
 static struct proc_dir_entry *procfsSlcDMFile = NULL;
-static struct semaphore lockFileSem;
 static atomic_t datamodelFileRef;
 static struct task_struct *queryExecThread = NULL;
 static LIST_HEAD(queriesToExecList);
@@ -79,26 +71,6 @@ void enqueueQuery(Query_t *query, Tupel_t *tuple) {
 	wake_up(&waitQueue);
 }
 EXPORT_SYMBOL(enqueueQuery);
-
-static int userspaceLockerWork(void *data) {
-	struct UserspacerLockerMeta *meta = (struct UserspacerLockerMeta*)data;
-
-	printk("userspaceLocker started...\n");
-	msleep(3000);
-	printk("Acquire lock\n");
-	write_lock(meta->lock);
-	printk("Lock acquired\n");
-	preempt_enable();
-	complete(&meta->lockCompleted);
-	printk("Waiting for unlock command...\n");
-	wait_for_completion(&meta->unlockCompleted);
-	preempt_disable();
-	printk("Unlocking\n");
-	write_unlock(meta->lock);
-
-	do_exit(0);
-	return 0;
-}
 
 static int generateObjectStatus(void *data) {
 	QueryStatusJob_t *statusJob = (QueryStatusJob_t*)data;
@@ -249,117 +221,6 @@ static int queryExecutorWork(void *data) {
 	return 0;
 }
 
-static int lockFileRead(struct file *fil, char __user *buffer, size_t buffer_length, loff_t *pos) {
-	int ret = 0;
-
-	if (*pos > 0) {
-		return 0;
-	}
-	ret = snprintf(buffer,buffer_length, "%u\n",write_can_lock(&slcLock)) + 1;
-	*pos = ret;
-
-	return ret;
-}
-
-static int lockFileWrite(struct file *file, const char __user *buffer, size_t count, loff_t *ppos) {
-	UserspacerLockerMeta_t *meta = NULL;
-	struct task_struct *userspaceLockerThread = NULL;
-	unsigned long value = 0;
-	/*
-	* not a good design practice to place the buffer on the stack, but it's necessary 
-	* to avoid raceconditions during interleaved writes to a file for different devices
-	*/
-	char procfs_buffer[PROCFS_READ_BUFFER_SIZE];
-
-	/* get buffer size */
-	if (count > PROCFS_READ_BUFFER_SIZE - 1  ) {
-		count = PROCFS_READ_BUFFER_SIZE - 1;
-	}
-
-	/* write data to the buffer */
-	if (copy_from_user(procfs_buffer, buffer, count) ) {
-		ERR_MSG("ERROR in copyfromuser\n");
-		return -EFAULT;
-	}
-	procfs_buffer[count] = '\0';
-	/* parse input */
-	if (kstrtoul(procfs_buffer, 10, &value)) {
-		ERR_MSG("Could not parse input for /proc/%s/%s / overflow\n", PROCFS_DIR_NAME, PROCFS_LOCKFILE);
-		return -EINVAL;
-	}
-	if (value == 1) {
-		meta = (UserspacerLockerMeta_t*)file->private_data;
-		if (meta == NULL) {
-			// No lock instance for this file descriptor.
-			meta = (UserspacerLockerMeta_t*)kmalloc(sizeof(UserspacerLockerMeta_t),GFP_KERNEL);
-			if (meta == NULL) {
-				return -ENOMEM;
-			}
-			file->private_data = meta;
-		} else {
-			// The user already wrote a '1' to this file and acquired the lock, or - at least - blocked at down(&lockFileSem).
-			return -EINVAL;
-		}
-		init_completion(&meta->lockCompleted);
-		init_completion(&meta->unlockCompleted);
-		// Link the meta struct to the slc rwlock
-		meta->lock = &slcLock;
-		file->private_data = meta;
-		// Just one write is allowed to access the area below (and start the locker thread)
-		down(&lockFileSem);
-		DEBUG_MSG(1,"Down(exclusive)... Done.\n");
-		// Start the kernelthread which will acquire the rwlock for the userspace process.
-		userspaceLockerThread = kthread_create(userspaceLockerWork,meta,"userspaceLocker");
-		if (IS_ERR(userspaceLockerThread)) {
-			kfree(meta);
-			up(&lockFileSem);
-			return -EFAULT;
-		}
-		wake_up_process(userspaceLockerThread);
-		DEBUG_MSG(1,"UserspaceLockThread started. Waiting for lock...\n");
-		// Wait until the kernel thread signals it has successfully acquired the lock
-		wait_for_completion(&meta->lockCompleted);
-		DEBUG_MSG(1,"UserspaceLockerThread acquired spinlock. Returning from write\n");
-	} else if (value == 0) {
-		meta = (UserspacerLockerMeta_t*)file->private_data;
-		if (meta != NULL) {
-			file->private_data = NULL;
-			DEBUG_MSG(1,"Signaling unlock\n");
-			// Signal the kernel thread to resume and release the lock
-			complete(&meta->unlockCompleted);
-			// Another write instance is allowed to acquire the rwlock (slcLock)
-			up(&lockFileSem);
-			kfree(meta);
-		} else {
-			DEBUG_MSG(1,"User issued a release command, but the rwlock was not acquired!\n");
-		}
-	} else {
-		DEBUG_MSG(1,"unknown value\n");
-	}
-
-	return count;
-}
-
-static int lockFileRelease (struct inode *inode, struct file *file) {
-	UserspacerLockerMeta_t *meta = (UserspacerLockerMeta_t*)file->private_data;
-	if (meta != NULL) {
-		DEBUG_MSG(1,"User closed the lock file without releasing the spinlock. Doing this job for him...\n");
-		// The userspace locker thread will resume, release the slcLock and terminate.
-		complete(&meta->unlockCompleted);
-		up(&lockFileSem);
-		file->private_data = NULL;
-		kfree(meta);
-	}
-
-	return 0;
-}
-
-static const struct file_operations proc_lockfile_operations = {
-	.write			= lockFileWrite,
-	.read			= lockFileRead,
-	.release		= lockFileRelease,
-};
-
 void datamodelFileMmapOpen(struct vm_area_struct *vma) {
 	DataModelMmap_t *info = (DataModelMmap_t *)vma->vm_private_data;
 
@@ -504,17 +365,6 @@ static int __init slc_init(void) {
 	proc_set_user(procfsSlcDMFile,fileUID,fileGID);
 	proc_set_size(procfsSlcDMFile,7);
 
-	procfsSlcLockFile = proc_create(PROCFS_LOCKFILE, 0777, procfsSlcDir,&proc_lockfile_operations);
-	if (procfsSlcLockFile == NULL) {
-		proc_remove(procfsSlcDMFile);
-		proc_remove(procfsSlcDir);
-		printk("Error: Could not initialize /proc/%s/%s\n",PROCFS_DIR_NAME,PROCFS_LOCKFILE);
-		return -ENOMEM;
-	}
-	proc_set_user(procfsSlcLockFile,fileUID,fileGID);
-	proc_set_size(procfsSlcLockFile,3);
-
-	sema_init(&lockFileSem,1);
 	atomic_set(&datamodelFileRef,0);
 
 	if (initSLC() == -1) {
@@ -544,7 +394,6 @@ static void __exit slc_exit(void) {
 		free_pages((unsigned long)sharedMemoryBaseAddr,PAGE_ORDER);
 	}
 
-	proc_remove(procfsSlcLockFile);
 	proc_remove(procfsSlcDMFile);
 	proc_remove(procfsSlcDir);
 

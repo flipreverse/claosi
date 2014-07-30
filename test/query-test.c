@@ -40,14 +40,6 @@ int main() {
 	query.queryID = 0;
 	query.onQueryCompleted = printResult;
 
-	sharedMemoryBaseAddr = malloc(PAGE_SIZE * NUM_PAGES);
-	if (sharedMemoryBaseAddr == NULL) {
-		printf("Cannot allocate memory for liballoc: %s\n",strerror(errno));
-		return EXIT_FAILURE;
-	}
-	liballoc_init(sharedMemoryBaseAddr);
-	remainingPages--;
-
 	initDatamodel();
 	initResultset();
 

@@ -14,7 +14,6 @@
 #define SEM_KEY 0xcaffee
 #define TIMER_SIGNAL SIGRTMIN
 
-static int fdLockFile = 0;
 static int fdDataModelFile  = 0;
 /**
  * A descriptor of the executor thread
@@ -249,73 +248,23 @@ void stopSourceTimer(Query_t *query) {
 	srcStream->timerInfo = NULL;
 }
 
-void acquireSlcLock(void) {
-	int ret = 0, bytes = 0;
-	char buff[10];
-	
-	bytes = sprintf(buff,"%d\n",1);
-	ret = write(fdLockFile,buff,bytes);
-	if (ret < 0) {
-		ERR_MSG("Cannot acquire slc lock: %s\n", strerror(errno));
-	}
-}
-
-void releaseSlcLock(void) {
-	int ret = 0, bytes = 0;
-	char buff[10];
-	
-	bytes = sprintf(buff,"%d\n",0);
-	ret = write(fdLockFile,buff,bytes);
-	if (ret < 0) {
-		ERR_MSG("Cannot release slc lock: %s\n", strerror(errno));
-	}
-}
-#include <sys/time.h>
-#include <sys/resource.h>
-#include <sys/syscall.h>
 int initLayer(void) {
 	union semun cmdval;
-	char buffer[15];
-	int readBytes = 0;
-	void *kernelSharedMemoryBase = NULL;
-struct rlimit lol;
-	fdLockFile = open("/proc/" PROCFS_DIR_NAME "/" PROCFS_LOCKFILE, O_RDWR);
-	if (fdLockFile < 0) {
-		ERR_MSG("Cannot open lock file: %s\n",strerror(errno));
-		return -1;
-	}
 
-	if (getrlimit(RLIMIT_AS,&lol) < 0)  {
-		perror("getrlimit");
-		return -1;
-	}
-	printf("rlim_cur=%ld, rlim_max=%ld, RLIM_INFINITY=%ld, tid=%ld\n",lol.rlim_cur,lol.rlim_max,RLIM_INFINITY,syscall(SYS_gettid));
 	fdDataModelFile = open("/proc/" PROCFS_DIR_NAME "/" PROCFS_DATAMODELFILE, O_RDWR);
 	if (fdDataModelFile < 0) {
 		ERR_MSG("Cannot open datamodel file: %s\n",strerror(errno));
 		return -1;
 	}
-	readBytes = read(fdDataModelFile,buffer,15);
-	if (readBytes < 0) {
-		ERR_MSG("Cannot read kernels shared memory base address: %s\n",strerror(errno));
-		close(fdDataModelFile);
-		close(fdLockFile);
-		return -1;
-	}
-	kernelSharedMemoryBase = (void*)strtoul(buffer,NULL,16);
-	DEBUG_MSG(1,"Trying to map the kernels shared memory at %p\n",kernelSharedMemoryBase);
-	sharedMemoryBaseAddr = mmap(kernelSharedMemoryBase, PAGE_SIZE * 4, PROT_READ|PROT_WRITE, MAP_PRIVATE | MAP_FIXED, fdDataModelFile, 0);
-	//sleep(60);
+
+	DEBUG_MSG(1,"Trying to map the kernels shared memory\n");
+	sharedMemoryBaseAddr = mmap(NULL, PAGE_SIZE * NUM_PAGES, PROT_READ|PROT_WRITE, MAP_PRIVATE, fdDataModelFile, 0);
 	if (sharedMemoryBaseAddr == MAP_FAILED) {
 		ERR_MSG("Cannot mmap datamodel file: %s\n",strerror(errno));
 		close(fdDataModelFile);
-		close(fdLockFile);
 		return -1;
 	}
-	printf("mapped at %p\n",sharedMemoryBaseAddr);
-	close(fdDataModelFile);
-	close(fdLockFile);
-	return -1;
+	DEBUG_MSG(1,"Mapped the kernels shared memory at %p\n",sharedMemoryBaseAddr);
 
 	// Create the semaphore for the query list and ...
 	waitingQueriesSemID = semget(SEM_KEY,1,IPC_CREAT|IPC_EXCL|0600);
@@ -348,7 +297,6 @@ void exitLayer(void) {
 	// Destroy the semaphore and wait for the execution thread to terminate
 	semctl(waitingQueriesSemID,0,IPC_RMID);
 	pthread_join(queryExecThread,NULL);
-	close(fdLockFile);
 	munmap(sharedMemoryBaseAddr, NUM_PAGES * PAGE_SIZE);
 	close(fdDataModelFile);
 }

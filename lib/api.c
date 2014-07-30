@@ -11,7 +11,8 @@ EXPORT_SYMBOL(slcLock);
  * Initializes the global datamodel.
  */
 static int initDatamodel(void) {
-	if ((SLC_DATA_MODEL = ALLOC_DM(sizeof(DataModelElement_t))) == NULL) {
+	SLC_DATA_MODEL = ALLOC(sizeof(DataModelElement_t));
+	if (SLC_DATA_MODEL == NULL) {
 		return -1;
 	}
 	INIT_MODEL((*SLC_DATA_MODEL),0);
@@ -297,24 +298,12 @@ EXPORT_SYMBOL(objectChanged);
  * Does all common initialization stuff
  */
 int initSLC(void) {
-	int ret = 0, usedPages = 0;
-
-	// liballoc_init() returns the number of bytes used by liballoc to initialize its meta information within the shared memory
-	ret = liballoc_init(sharedMemoryBaseAddr);
-	usedPages = ret / PAGE_SIZE;
-	usedPages += (ret % PAGE_SIZE == 0 ? 0 : 1);
-	DEBUG_MSG(1,"Initialized liballoc. Used %d pages for its meta information.\n", usedPages);
-	remainingPages -= usedPages;
-
-	slcDataModel = sharedMemoryBaseAddr + ret;
-	DEBUG_MSG(1,"Placing slcDataModel at 0x%p\n",slcDataModel);
+	int ret = 0;
 
 	INIT_LOCK(slcLock);
-	#ifdef __KERNEL__
 	if ((ret = initDatamodel()) < 0) {
 		return ret;
 	}
-	#endif
 	return 0;
 }
 /**
@@ -322,6 +311,6 @@ int initSLC(void) {
  */
 void destroySLC(void) {
 	if (SLC_DATA_MODEL != NULL) {
-		FREE_DM(SLC_DATA_MODEL);
+		FREE(SLC_DATA_MODEL);
 	}
 }

@@ -7,22 +7,9 @@
 
 #define MAX_QUERIES_PER_DM	8
 
-#define USE_LIBALLOC
-//#undef USE_LIBALLOC
-
-#ifdef USE_LIBALLOC
-#define ALLOC_DM(size)						slcmalloc(size)
-#define FREE_DM(ptr)						slcfree(ptr)
-#define REALLOC_DM(ptr,size)				slcrealloc(ptr,size)
-#else
-#define ALLOC_DM(size)						ALLOC(size)
-#define FREE_DM(ptr)						FREE(ptr)
-#define REALLOC_DM(ptr,size)				REALLOC(ptr,size)
-#endif
-
-#define ALLOC_CHILDREN_ARRAY(size)			(DataModelElement_t**)ALLOC_DM(sizeof(DataModelElement_t**) * size)
-#define ALLOC_TYPEINFO(type)				(type*)ALLOC_DM(sizeof(type))
-#define REALLOC_CHILDREN_ARRAY(ptr,size)	(DataModelElement_t**)REALLOC_DM(ptr,sizeof(DataModelElement_t**) * size)
+#define ALLOC_CHILDREN_ARRAY(size)			(DataModelElement_t**)ALLOC(sizeof(DataModelElement_t**) * size)
+#define ALLOC_TYPEINFO(type)				(type*)ALLOC(sizeof(type))
+#define REALLOC_CHILDREN_ARRAY(ptr,size)	(DataModelElement_t**)REALLOC(ptr,sizeof(DataModelElement_t**) * size)
 #define ALLOC_STATIC_CHILDREN_ARRAY(size)	(DataModelElement_t**)ALLOC(sizeof(DataModelElement_t**) * size)
 
 #define DECLARE_ELEMENT(elem)				static DataModelElement_t elem;

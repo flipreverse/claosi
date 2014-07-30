@@ -41,14 +41,6 @@ int main() {
 	int ret = 0, i = 0;
 	DataModelElement_t *errNode = NULL, *copy = NULL;
 
-	sharedMemoryBaseAddr = malloc(PAGE_SIZE * NUM_PAGES);
-	if (sharedMemoryBaseAddr == NULL) {
-		printf("Cannot allocate memory for liballoc: %s\n",strerror(errno));
-		return EXIT_FAILURE;
-	}
-	liballoc_init(sharedMemoryBaseAddr);
-	remainingPages--;
-
 	INIT_SOURCE_POD(srcSocketType,"type",objSocket,INT,getSrc)
 	INIT_SOURCE_POD(srcSocketFlags,"flags",objSocket,INT,getSrc)
 	INIT_OBJECT(objSocket,"socket",nsNet1,2,INT,regObjectCallback,unregObjectCallback,generateStatusObject)

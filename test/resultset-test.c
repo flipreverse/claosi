@@ -20,14 +20,6 @@ int main() {
 	char *string = NULL, values[] = {5,4,3,2,1};
 	clock_t startClock, endClock;
 
-	sharedMemoryBaseAddr = malloc(PAGE_SIZE * NUM_PAGES);
-	if (sharedMemoryBaseAddr == NULL) {
-		printf("Cannot allocate memory for liballoc: %s\n",strerror(errno));
-		return EXIT_FAILURE;
-	}
-	liballoc_init(sharedMemoryBaseAddr);
-	remainingPages--;
-
 	startClock = clock();
 	initDatamodel();
 	tupel = initTupel(20140530,3);

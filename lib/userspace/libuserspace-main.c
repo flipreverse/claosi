@@ -186,7 +186,7 @@ int main(int argc, const char *argv[]) {
 		ERR_MSG("Cannot create fifoWorkThread: %s\n",strerror(errno));
 		return EXIT_FAILURE;
 	}
-	// Wait for the fifo thread. It only terminates, if the user send us an exit command.
+	// Wait for the fifo thread. It only terminates, if the user sends us an exit command.
 	pthread_join(fifoWorkThread,NULL);
 	pthread_attr_destroy(&fifoWorkThreadAttr);
 
