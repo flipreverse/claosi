@@ -39,7 +39,7 @@ static Tupel_t* generateStatusObject(void) {
 
 int main() {
 	int ret = 0, i = 0;
-	DataModelElement_t *errNode = NULL, *copy = NULL;
+	DataModelElement_t *errNode = NULL, *copy = NULL, *compactDM = NULL;
 
 	INIT_SOURCE_POD(srcSocketType,"type",objSocket,INT,getSrc)
 	INIT_SOURCE_POD(srcSocketFlags,"flags",objSocket,INT,getSrc)
@@ -173,10 +173,20 @@ int main() {
 	printf(".... found at %p\n",getDescription(copy,""));
 	printf(".... found at %p\n",getDescription(copy,"net.device.rxBytes"));
 	printf("-------------------------\n");
+	ret = calcDatamodelSize(copy);
+	printf("Datamodel size = %d\n",ret);
+	compactDM = (DataModelElement_t*)malloc(ret);
+	if (compactDM == NULL) {
+		perror("alloc for compact dm\n");
+	}
+	copyAndCollectDatamodel(copy,compactDM);
+	freeDataModel(copy,1);
+	printDatamodel(compactDM);
+	free(compactDM);
+	printf("-------------------------\n");
 
 	freeDataModel(&model1,0);
 	freeDataModel(&model2,0);
-	freeDataModel(copy,1);
 
 	return EXIT_SUCCESS;
 }

@@ -121,8 +121,8 @@ void printDatamodel(DataModelElement_t *root) {
 					}
 				}
 				if (j == curNode->parent->childrenLen - 1) {
-					if (curNode->dataModelType == MODEL || curNode->dataModelType == NAMESPACE || curNode->dataModelType == OBJECT || curNode->dataModelType == TYPE) {
-						for (i = 0; i < numTabs; i++) {
+					if (curNode->parent->dataModelType == MODEL || curNode->parent->dataModelType == NAMESPACE || curNode->parent->dataModelType == OBJECT || curNode->parent->dataModelType == TYPE) {
+						for (i = 0; i < numTabs - 1; i++) {
 							printf("\t");
 						}
 						printf("}\n");
@@ -140,6 +140,4 @@ void printDatamodel(DataModelElement_t *root) {
 			};
 		}
 	} while(curNode != root);
-
-	printf("}\n");
 }
