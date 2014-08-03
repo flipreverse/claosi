@@ -89,6 +89,7 @@ static void* queryExecutorWork(void *data) {
 			}
 		}
 
+		ACQUIRE_READ_LOCK(slcLock);
 		pthread_mutex_lock(&listLock);
 		// Dequeue the head and execute the query
 		cur = STAILQ_FIRST(&queriesToExecList);
@@ -97,7 +98,6 @@ static void* queryExecutorWork(void *data) {
 
 		DEBUG_MSG(3,"%s: Executing query 0x%x with tuple %p\n",__FUNCTION__,cur->query->queryID,cur->tuple);
 		// A queries execution just reads from the datamodel. No write lock is needed.
-		ACQUIRE_READ_LOCK(slcLock);
 		executeQuery(SLC_DATA_MODEL,cur->query,&cur->tuple);
 		RELEASE_READ_LOCK(slcLock);
 		FREE(cur);

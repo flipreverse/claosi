@@ -198,6 +198,7 @@ static int queryExecutorWork(void *data) {
 		wait_event(waitQueue,kthread_should_stop() || atomic_read(&waitingQueries) > 0);
 
 		while (atomic_read(&waitingQueries) > 0) {
+			ACQUIRE_READ_LOCK(slcLock);
 			spin_lock(&listLock);
 			// Dequeue the head and execute the query
 			cur = list_first_entry(&queriesToExecList,QueryJob_t,list);
@@ -207,7 +208,6 @@ static int queryExecutorWork(void *data) {
 
 			DEBUG_MSG(3,"%s: Executing query 0x%x with tuple %p\n",__FUNCTION__,cur->query->queryID,cur->tuple);
 			// A queries execution just reads from the datamodel. No write lock is needed.
-			ACQUIRE_READ_LOCK(slcLock);
 			executeQuery(SLC_DATA_MODEL,cur->query,&cur->tuple);
 			RELEASE_READ_LOCK(slcLock);
 			FREE(cur);
