@@ -234,7 +234,7 @@ DataModelElement_t* copyNode(DataModelElement_t *node) {
 	Object_t *obj = NULL;
 	Source_t *src = NULL;
 	int len = 0, i = 0;
-			
+
 	ret = (DataModelElement_t*)ALLOC(sizeof(DataModelElement_t));
 	if (!ret) {
 		return NULL;
@@ -819,94 +819,10 @@ int checkDataModelSyntax(DataModelElement_t *rootCurrent,DataModelElement_t *roo
 	
 	return 0;
 }
-
-void copyAndCollectDatamodel(DataModelElement_t *node, void *freeMem) {
-	DataModelElement_t *curCopy = NULL, *curOrigin = node;
-	int i = 0, j = 0, childrenLen = 0, toCopy = 0;
-
-	memcpy(freeMem,curOrigin,sizeof(DataModelElement_t));
-	curCopy = (DataModelElement_t*)freeMem;
-	freeMem += sizeof(DataModelElement_t);
-	curCopy->parent = NULL;
-	curCopy->children = freeMem;
-	freeMem += sizeof(DataModelElement_t*) * curCopy->childrenLen;
-	for (i = 0; i < curCopy->childrenLen; i++) {
-		curCopy->children[i] = NULL;
-	}
-	if (curOrigin->typeInfo != NULL) {
-		switch (curOrigin->dataModelType) {
-			case SOURCE:
-				toCopy = sizeof(Source_t);
-				break;
-
-			case EVENT:
-				toCopy = sizeof(Event_t);
-				break;
-
-			case OBJECT:
-				toCopy = sizeof(Object_t);
-				break;
-
-			case REF:
-				toCopy = strlen(curOrigin->typeInfo) + 1;
-				break;
-			}
-		curCopy->typeInfo = freeMem;
-		memcpy(curCopy->typeInfo,curOrigin->typeInfo,toCopy);
-		freeMem += toCopy;
-	}
-
-	do {
-		childrenLen = curOrigin->childrenLen;
-		for (i = 0; i < childrenLen; i++) {
-			// Copy each child from the origin subtree, where its corresponding array element is still NULL
-			if (curCopy->children[i] == NULL) {
-				curCopy->children[i] = freeMem;
-				memcpy(curCopy->children[i],curOrigin->children[i],sizeof(DataModelElement_t));
-				freeMem += sizeof(DataModelElement_t);
-				curCopy->children[i]->children = freeMem;
-				freeMem += sizeof(DataModelElement_t*) * curCopy->children[i]->childrenLen;
-				for (j = 0; j < curCopy->children[i]->childrenLen; j++) {
-					curCopy->children[i]->children[j] = NULL;
-				}
-				if (curOrigin->children[i]->typeInfo != NULL) {
-					switch (curOrigin->children[i]->dataModelType) {
-						case SOURCE:
-							toCopy = sizeof(Source_t);
-							break;
-
-						case EVENT:
-							toCopy = sizeof(Event_t);
-							break;
-
-						case OBJECT:
-							toCopy = sizeof(Object_t);
-							break;
-
-						case REF:
-							toCopy = strlen(curOrigin->children[i]->typeInfo) + 1;
-							break;
-						}
-					curCopy->children[i]->typeInfo = freeMem;
-					memcpy(curCopy->children[i]->typeInfo,curOrigin->children[i]->typeInfo,toCopy);
-					freeMem += toCopy;
-				}
-				curCopy->children[i]->parent = curCopy;
-				// Step down and copy its children as well
-				curCopy = curCopy->children[i];
-				curOrigin = curOrigin->children[i];
-				break;
-			}
-		}
-		// All children processed. Step up.
-		if (i == childrenLen) {
-			curOrigin = curOrigin->parent;
-			curCopy = curCopy->parent;
-		}
-	} while(curOrigin != node->parent);
-}
-
-
+/**
+ * Calculates the amount of memory used by the subtree starting at {@link node}.
+ * @return the number of bytes to store the whole subtree in one huge chunk of memory including additional information like typeinfo
+ */
 int calcDatamodelSize(DataModelElement_t *node) {
 	DataModelElement_t *curNode = node;
 	int i = 0, j = 0, size = 0;
@@ -958,4 +874,139 @@ int calcDatamodelSize(DataModelElement_t *node) {
 	} while(curNode != node);
 	
 	return size;
+}
+/**
+ * It works in the same manner as {@link copyNode}. Besides it does *not* dynamically allocates the
+ * memory. It takes an additional parameter which is a pointer to a memory area. The function copies 
+ * all information of {@link origin} to {@link freeMem}
+ * @param freeMem a pointer 
+ * @param origin the node which should be copied
+ * @param copy a pointer to a pointer where the function stores the start address of the node
+ */
+static int copyNodeAdjacent(void *freeMem, DataModelElement_t *origin, DataModelElement_t **copy) {
+	int i = 0, toCopy = 0;
+
+	*copy = (DataModelElement_t*)freeMem;
+	memcpy(*copy,origin,sizeof(DataModelElement_t));
+	freeMem += sizeof(DataModelElement_t);
+
+	(*copy)->parent = NULL;
+	(*copy)->children = freeMem;
+	freeMem += sizeof(DataModelElement_t*) * (*copy)->childrenLen;
+
+	for (i = 0; i < (*copy)->childrenLen; i++) {
+		(*copy)->children[i] = NULL;
+	}
+	if (origin->typeInfo != NULL) {
+		switch (origin->dataModelType) {
+			case SOURCE:
+				toCopy = sizeof(Source_t);
+				break;
+
+			case EVENT:
+				toCopy = sizeof(Event_t);
+				break;
+
+			case OBJECT:
+				toCopy = sizeof(Object_t);
+				break;
+
+			case REF:
+				toCopy = strlen(origin->typeInfo) + 1;
+				break;
+			}
+		(*copy)->typeInfo = freeMem;
+		memcpy((*copy)->typeInfo,origin->typeInfo,toCopy);
+		freeMem += toCopy;
+	}
+	return freeMem - (void*)(*copy);
+}
+/**
+ * Copies the whole datamodel subtree starting with {@link node} to one huge memory area pointed to by
+ * {@freeMem}. The caller has to ensure that {@link freeMem} provides a sufficient amount of memory 
+ * to hold the subtree.
+ * @param node the root node of the subtree
+ * @param freeMem a pointer to the beginning of the free space
+ */
+void copyAndCollectDatamodel(DataModelElement_t *node, void *freeMem) {
+	DataModelElement_t *curCopy = NULL, *curOrigin = node;
+	int i = 0, childrenLen = 0;
+
+	/*
+	 * The following loop copies each node iterative starting with the children of node.
+	 * Hence, it's necessary to copy the root node first.
+	 */
+	freeMem += copyNodeAdjacent(freeMem,curOrigin,&curCopy);
+
+	do {
+		childrenLen = curOrigin->childrenLen;
+		for (i = 0; i < childrenLen; i++) {
+			// Copy each child from the origin subtree, where its corresponding array element is still NULL
+			if (curCopy->children[i] == NULL) {
+				freeMem += copyNodeAdjacent(freeMem,curOrigin->children[i],&curCopy->children[i]);
+				curCopy->children[i]->parent = curCopy;
+				// Step down and copy its children as well
+				curCopy = curCopy->children[i];
+				curOrigin = curOrigin->children[i];
+				break;
+			}
+		}
+		// All children processed. Step up.
+		if (i == childrenLen) {
+			curOrigin = curOrigin->parent;
+			curCopy = curCopy->parent;
+		}
+	} while(curOrigin != node->parent);
+}
+/**
+ * Traverses the subtree starting at {@link node} and rewrites each pointer in the subtree.
+ * It calculates the offset of each object according to {@link oldBaseAddr}, calculates the new absolute address according to {@link newBaseAddr}
+ * and writes it back.
+ * @param node The root node of this subtree
+ * @param oldBaseAddr The base address of the old memory area
+ * @param newBaseAddr The base address of the new memory area
+ */
+void rewriteDatamodelAddress(DataModelElement_t *node, void *oldBaseAddr, void *newBaseAddr) {
+	DataModelElement_t *curNode = NULL;
+	int i = 0, j = 0;
+
+	curNode = node;
+	do {
+		if (curNode->parent != NULL) {
+			curNode->parent = REWRITE_ADDR(curNode->parent,oldBaseAddr,newBaseAddr);
+		}
+		if (curNode->typeInfo != NULL) {
+			curNode->typeInfo = REWRITE_ADDR(curNode->typeInfo,oldBaseAddr,newBaseAddr);
+		}
+		if (curNode->childrenLen > 0) {
+			// Rewrite the address of the pointer array as well the address of each child
+			curNode->children = REWRITE_ADDR(curNode->children,oldBaseAddr,newBaseAddr);
+			for (i = 0; i < curNode->childrenLen; i++) {
+				curNode->children[i] = REWRITE_ADDR(curNode->children[i],oldBaseAddr,newBaseAddr);
+			}
+			curNode = curNode->children[0];
+		} else {
+			// Stop, if the root node is reached.
+			while(curNode != node) {
+				j = -1;
+				// Look for the current nodes sibling.
+				for (i = 0; i < curNode->parent->childrenLen; i++) {
+					if (curNode->parent->children[i] == curNode) {
+						j = i;
+						break;
+					}
+				}
+				if (j == curNode->parent->childrenLen - 1) {
+					// If there is none, go one level up and look for this nodes sibling.
+					curNode = curNode->parent;
+				} else {
+					// At least one sibling left. Go for it.
+					j++;
+					curNode = curNode->parent->children[j];
+					break;
+				}
+			};
+		}
+	// Stop, if the root node is reached.
+	} while(curNode != node);
 }

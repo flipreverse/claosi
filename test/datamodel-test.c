@@ -178,11 +178,23 @@ int main() {
 	compactDM = (DataModelElement_t*)malloc(ret);
 	if (compactDM == NULL) {
 		perror("alloc for compact dm\n");
+		return EXIT_FAILURE;
 	}
 	copyAndCollectDatamodel(copy,compactDM);
 	freeDataModel(copy,1);
 	printDatamodel(compactDM);
+	printf("-------------------------\n");
+	printf("Rewrite test\n");
+	copy = (DataModelElement_t*)malloc(ret);
+	if (copy == NULL) {
+		perror("alloc for compact copy dm\n");
+		return EXIT_FAILURE;
+	}
+	memcpy(copy,compactDM,ret);
+	rewriteDatamodelAddress(copy, compactDM, copy);
 	free(compactDM);
+	printDatamodel(copy);
+	free(copy);
 	printf("-------------------------\n");
 
 	freeDataModel(&model1,0);
