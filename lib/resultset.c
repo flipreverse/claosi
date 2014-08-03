@@ -365,28 +365,27 @@ static int copyAndCollectAdditionalMem(DataModelElement_t *rootDM, void *oldValu
 	return size;
 }
 /**
- * Calculates the size in bytes of {@link tupel} and all its indirect memory. Allocates one large chunk.
- * Finally, it copies the tupel, its items, their values and all indirect memory to the new area.
+ * Copies the tupel, its items, their values and all indirect memory to the new area.
  * @param rootDM a pointer to the slc datamodel
  * @param tupel a pointer to Tupel
+ * @param freeMem a pointer 
+ * @param tupleSize the size of the allocated memory chunk which corresponds to the size of the tuple
  * @return a pointer to the new tupel on success. NULL otherwise
  * @see copyAndCollectAdditionalMem()
  */
-Tupel_t* copyAndCollectTupel(DataModelElement_t *rootDM, Tupel_t *tupel) {
+void copyAndCollectTupel(DataModelElement_t *rootDM, Tupel_t *tupel, void *freeMem, int tupleSize) {
 	int size = 0, i = 0, j = 0, numItems = 0;
 	Tupel_t *ret = NULL;
 	DataModelElement_t *element = NULL;
 	void *newValue = NULL;
-	
-	if ((size = getTupelSize(rootDM,tupel)) == -1) {
-		return NULL;
+
+	if (freeMem == NULL) {
+		return;
 	}
-	if ((ret = ALLOC(size)) == NULL) {
-		return NULL;
-	}
+	ret = (Tupel_t*)freeMem;
 	memcpy(ret,tupel,sizeof(Tupel_t));
 	// Mark it as compact and store its size
-	ret->isCompact = (size << 8) | 0x1;
+	ret->isCompact = (tupleSize << 8) | 0x1;
 	ret->items = (Item_t**)(((void*)ret) + sizeof(Tupel_t));
 	// First, count the number of really present items. Due to delete operations one or more items might be deleted.
 	for (i = 0; i < tupel->itemLen; i++) {
@@ -423,6 +422,177 @@ Tupel_t* copyAndCollectTupel(DataModelElement_t *rootDM, Tupel_t *tupel) {
 		newValue += size;
 		j++;
 	}
-	
+}
+/**
+ * Copies all indirectly used memory for {@link element} and sets the length information and all pointers in {@link newValue} appropriatly.
+ * @param rootDM a pointer to the slc datamodel
+ * @param oldValue a pointer to the old instance of {@link element}
+ * @param newValue a pointer to the new instance of {@link element}
+ * @param element a pointer to the datamodel element, which describes the layout of the memory {@link oldValue} points to
+ * @return 0, if all memory was successfully copied. -1, otherwise.
+ */
+static int copyAdditionalMem(DataModelElement_t *rootDM, void *oldValue, void *newValue, DataModelElement_t *element) {
+	int i = 0, j = 0, k = 0, type = 0, len = 0, temp = 0, curOffset = 0, prevOffset = 0, steppedDown = 0;
+	DataModelElement_t *curNode = NULL, *parentNode = NULL;
+	void *curValueOld = NULL, *curValueNew = NULL, *ret = NULL;
+
+	curNode = element;
+	curValueOld = oldValue;
+	curValueNew = newValue;
+	do {
+		steppedDown = 0;
+		temp = 0;
+		GET_TYPE_FROM_DM(curNode,type);
+		//printf("curNode=%s@%d\n",curNode->name,curOffset);
+		if ((type & (STRING | ARRAY)) == (STRING | ARRAY)) {
+			len = temp = *(int*)(*((PTR_TYPE*)(curValueOld)));
+			temp *= SIZE_STRING;
+			temp += sizeof(int);
+			ret = ALLOC(temp);
+			if (ret == NULL) {
+				return -1;
+			}
+			*((PTR_TYPE*)curValueNew) = (PTR_TYPE)ret;
+			// First, copy the length information and all pointers.
+			memcpy(ret,(void*)*((PTR_TYPE*)(curValueOld)),temp);
+			DEBUG_MSG(2,"Copied string array (name=%s) with %d strings to %p\n",curNode->name,len, (void*)(*(PTR_TYPE*)curValueNew));
+			// Second, go across the string array and copy all strings to the new memory area and store a pointer to each string in the pointer array at curValueNew
+			for (k = 0; k < len; k++) {
+				temp = strlen(*(char**)((*(PTR_TYPE*)curValueOld) + sizeof(int) + k * SIZE_STRING)) + 1;
+				ret = ALLOC(temp);
+				if (ret == NULL) {
+					return -1;
+				}
+				*(char**)((*(PTR_TYPE*)curValueNew) + sizeof(int) + k * SIZE_STRING) = ret;
+				memcpy(*(char**)((*(PTR_TYPE*)curValueNew) + sizeof(int) + k * SIZE_STRING),*(char**)((*(PTR_TYPE*)curValueOld) + sizeof(int) + k * SIZE_STRING),temp);
+				DEBUG_MSG(2,"Copied %d string of array (%s) to %p\n",k,curNode->name,*(char**)((*(PTR_TYPE*)curValueNew) + sizeof(int) + k * SIZE_STRING));
+			}
+		} else if (type & ARRAY) {
+			len = *(int*)(*((PTR_TYPE*)curValueOld));
+			if ((temp = getDataModelSize(rootDM,curNode,1)) == -1) {
+				return -1;
+			}
+			temp = len * temp + sizeof(int);
+			ret = ALLOC(temp);
+			if (ret == NULL) {
+				return -1;
+			}
+			*((PTR_TYPE*)curValueNew) = (PTR_TYPE)ret;
+			// In contrast to a string array this one can be copied in one operation.
+			memcpy(ret,(void*)*((PTR_TYPE*)curValueOld),temp);
+			DEBUG_MSG(2,"Copied an array (%s) with %d elemetns to %p\n",curNode->name,len,(void*)*((PTR_TYPE*)curValueNew));
+		} else if (type & STRING) {
+			temp = strlen((char*)(*(PTR_TYPE*)curValueOld)) + 1;
+			ret = ALLOC(temp);
+			if (ret == NULL) {
+				return -1;
+			}
+			*((PTR_TYPE*)curValueNew) = (PTR_TYPE)ret;
+			memcpy(ret,(char*)(*(PTR_TYPE*)curValueOld),temp);
+			DEBUG_MSG(2,"Copied string (%s='%s'@%p) to %p with size %d\n",curNode->name,(char*)(*(PTR_TYPE*)curValueOld),(char*)(*(PTR_TYPE*)curValueOld),ret,temp);
+		} else if ((type & TYPE) || (type & COMPLEX)) {
+			curNode = curNode->children[0];
+			prevOffset = 0;
+			curOffset = 0;
+			steppedDown = 1;
+			//printf("down: offset=%d\n",curOffset);
+		}
+		if (steppedDown == 0) {
+			// look for the current nodes sibling.
+			while(curNode != element) {
+				j = -1;
+				parentNode = curNode->parent;
+				for (i = 0; i < parentNode->childrenLen; i++) {
+					if (parentNode->children[i] == curNode) {
+						j = i;
+						break;
+					}
+				}
+				if (j == parentNode->childrenLen - 1) {
+					// If there is none, go one level up and look for this nodes sibling.
+					curNode = parentNode;
+					// curValue 
+					curValueNew -= curOffset;
+					curValueOld -= curOffset;
+					if ((curOffset = getOffset(curNode->parent,curNode->name)) == -1) {
+						return -1;
+					}
+					prevOffset = curOffset;
+					//printf("up: offset=%d\n",curOffset);
+				} else {
+					// At least one sibling left. Go for it.
+					j++;
+					// Get the offset in bytes within the current struct
+					if ((curOffset = getOffset(parentNode,parentNode->children[j]->name)) == -1) {
+						return -1;
+					}
+					/*
+					 * curOffset represents the offset from beginnging of the struct.
+					 * Hence, we have to remember the previous offset to just add the margin.
+					 */
+					curNode = parentNode->children[j];
+					curValueNew = curValueNew + (curOffset - prevOffset);
+					curValueOld = curValueOld + (curOffset - prevOffset);
+					prevOffset = curOffset;
+					break;
+				}
+			// Stop, if the root node is reached.
+			};
+		}
+	} while(curNode != element);
+
+	return 0;
+}
+/**
+ * Copies a tuple, its items and all indirect used memory. The necessary memory will be allocated dynamically.
+ * @param rootDM a pointer to the slc datamodel
+ * @param tupel a pointer to Tupel
+ * @return a pointer to the new tupel on success. NULL otherwise
+ * @see copyAdditionalMem()
+ */
+Tupel_t* copyTupel(DataModelElement_t *rootDM, Tupel_t *tuple) {
+	int size = 0, i = 0, j = 0, numItems = 0;
+	Tupel_t *ret = NULL;
+	DataModelElement_t *element = NULL;
+
+	// Count the number of present items
+	for (i = 0; i < tuple->itemLen; i++) {
+		if (tuple->items[i] != NULL) {
+			numItems++;
+		}
+	}
+	// Allocate and init the copy tuple
+	ret = initTupel(tuple->timestamp,numItems);
+	if (ret == NULL) {
+		return NULL;
+	}
+
+	for (i = 0; i < tuple->itemLen; i++) {
+		if (tuple->items[i] == NULL) {
+			continue;
+		}
+		element = getDescription(rootDM,tuple->items[i]->name);
+		size = getDataModelSize(rootDM,element,0);
+		// Allocate memory for the item as well for the value
+		ret->items[j] = ALLOC(sizeof(Item_t) + size);
+		if (ret->items[j] == NULL) {
+			freeTupel(rootDM,ret);
+			return NULL;
+		}
+		memcpy(ret->items[j],tuple->items[i],sizeof(Item_t));
+		ret->items[j]->value = ret->items[j] + 1;
+		DEBUG_MSG(2,"Copied %d (->%d) item (%s) to %p\n",i,j,ret->items[j]->name,ret->items[j]);
+		// Copy the items value
+		memcpy(ret->items[j]->value,tuple->items[i]->value,size);
+		DEBUG_MSG(2,"Copied %d (->%d) items (%s) value bytes (%d) to %p\n",i,j,ret->items[j]->name,size,ret->items[j]->value);
+		// Finally, copy all indrectly used memory
+		if (copyAdditionalMem(rootDM,tuple->items[i]->value,ret->items[j]->value,element) == -1) {
+			freeTupel(rootDM,ret);
+			return NULL;
+		}
+		DEBUG_MSG(2,"Copied additional bytes for item %s\n",ret->items[j]->name);
+		j++;
+	}
+
 	return ret;
 }

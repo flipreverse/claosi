@@ -16,9 +16,10 @@ DECLARE_ELEMENTS(typeMacHdr, typeMacProt, typeNetHdr, typeNetProt, typeTranspHdr
 static void initDatamodel(void);
 
 int main() {
-	Tupel_t *tupel = NULL, *tupelCompact = NULL;
+	Tupel_t *tupel = NULL, *tupelCompact = NULL, *tupleCopy = NULL;
 	char *string = NULL, values[] = {5,4,3,2,1};
 	clock_t startClock, endClock;
+	int size = 0;
 
 	startClock = clock();
 	initDatamodel();
@@ -73,17 +74,30 @@ int main() {
 
 	printf("Size of tupel: %d\n",getTupelSize(&model1,tupel));
 
-	tupelCompact = copyAndCollectTupel(&model1,tupel);
-	freeTupel(&model1,tupel);
+	size = getTupelSize(&model1,tupel);
+	if (size != -1) {
+		tupelCompact = ALLOC(size);
+		if (tupelCompact != NULL) {
+			copyAndCollectTupel(&model1,tupel,tupelCompact,size);
+			freeTupel(&model1,tupel);
 
-	setItemString(&model1,tupelCompact,"net.device.rxBytes","LOOOOL");
-	printTupel(&model1,tupelCompact);
+			setItemString(&model1,tupelCompact,"net.device.rxBytes","LOOOOL");
+			printTupel(&model1,tupelCompact);
 
-	printf("Deleting an item...\n");
-	deleteItem(&model1,tupelCompact,0);
-	printTupel(&model1,tupelCompact);
+			printf("Deleting an item...\n");
+			deleteItem(&model1,tupelCompact,0);
+			printTupel(&model1,tupelCompact);
+			
+			tupleCopy = copyTupel(&model1,tupelCompact);
+			
+			freeTupel(&model1,tupelCompact);
+			printTupel(&model1,tupleCopy);
+			freeTupel(&model1,tupleCopy);
+		}
+	} else {
+		freeTupel(&model1,tupel);
+	}
 
-	freeTupel(&model1,tupelCompact);
 	freeDataModel(&model1,0);
 	endClock = clock();
 	printf("Start: %ld, end: %ld, diff: %ld/%e\n",startClock, endClock, (endClock - startClock),((double)endClock - (double)startClock) / (double)CLOCKS_PER_SEC);
