@@ -121,6 +121,7 @@ void freeNode(DataModelElement_t *node, int freeNodes);
 int getDataModelSize(DataModelElement_t *rootDM, DataModelElement_t *elem, int ignoreArray);
 int calcDatamodelSize(DataModelElement_t *node);
 void copyAndCollectDatamodel(DataModelElement_t *node, void *freeMem);
+void rewriteDatamodelAddress(DataModelElement_t *node, void *oldBaseAddr, void *newBaseAddr);
 #define getSize(rootDMVar, elemVar) getDataModelSize(rootDMVar,elemVar,1)
 
 #define SET_CHILDREN_ARRAY(varName,numChildren) if (numChildren > 0) { \

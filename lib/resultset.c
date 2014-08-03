@@ -596,3 +596,125 @@ Tupel_t* copyTupel(DataModelElement_t *rootDM, Tupel_t *tuple) {
 
 	return ret;
 }
+/**
+ * Depending on the memory layout which is derived from the {@link element} the function traverses all indirect allocated memory and rewrites all
+ * addresses.
+ * @param rootDM a pointer to the slc datamodel
+ * @param valuePtr a pointer to the memory location where an instance of {@link element} is stored
+ * @param oldBaseAddr a pointer to the old base address
+ * @param newBaseAddr a pointer to the new base address
+ * @param element a pointer to the datamodel element, which describes the layout of the memory {@link valuePtr} points to
+ */
+static int rewriteAdditionalMem(DataModelElement_t *rootDM, void *valuePtr, void *oldBaseAddr, void *newBaseAddr, DataModelElement_t *element) {
+	int i = 0, j = 0, k = 0, type = 0, len = 0, curOffset = 0, prevOffset = 0, steppedDown = 0;
+	DataModelElement_t *curNode = NULL, *parentNode = NULL;
+	void *curValue = NULL;
+	char **temp = NULL;
+	PTR_TYPE *ptr = NULL;
+
+	curNode = element;
+	curValue = valuePtr;
+
+	do {
+		steppedDown = 0;
+		temp = 0;
+		GET_TYPE_FROM_DM(curNode,type);
+		if ((type & (STRING | ARRAY)) == (STRING | ARRAY)) {
+			ptr = (PTR_TYPE*)(curValue);
+			*ptr = REWRITE_ADDR(*ptr,oldBaseAddr,newBaseAddr);
+			len = *(int*)(*((PTR_TYPE*)(curValue)));
+			DEBUG_MSG(2,"Rewriting addresses of a string array (name=%s) with %d strings to %p\n",curNode->name,len, (void*)(*(PTR_TYPE*)curValue));
+			// Second, go across the string array and copy all strings to the new memory area and store a pointer to each string in the pointer array at curValueNew
+			for (k = 0; k < len; k++) {
+				temp = (char**)((*(PTR_TYPE*)curValue) + sizeof(int) + k * SIZE_STRING);
+				*temp = REWRITE_ADDR(*temp,oldBaseAddr,newBaseAddr);
+				DEBUG_MSG(2,"Rewrote address of %d. string of array (%s) to %p\n",k,curNode->name,*(char**)((*(PTR_TYPE*)curValue) + sizeof(int) + k * SIZE_STRING));
+			}
+		} else if (type & ARRAY) {
+			ptr = (PTR_TYPE*)(curValue);
+			*ptr = REWRITE_ADDR(*ptr,oldBaseAddr,newBaseAddr);
+			DEBUG_MSG(2,"Rewrote array (%s) with %d elemetns at %p\n",curNode->name,len,(void*)*((PTR_TYPE*)curValue));
+		} else if (type & STRING) {
+			ptr = (PTR_TYPE*)(curValue);
+			*ptr = REWRITE_ADDR(*ptr,oldBaseAddr,newBaseAddr);
+			DEBUG_MSG(2,"Rewrote string (%s='%s'@%p)\n",curNode->name,(char*)(*(PTR_TYPE*)curValue),(char*)(*(PTR_TYPE*)curValue));
+		} else if ((type & TYPE) || (type & COMPLEX)) {
+			curNode = curNode->children[0];
+			prevOffset = 0;
+			curOffset = 0;
+			steppedDown = 1;
+		}
+		if (steppedDown == 0) {
+			// look for the current nodes sibling.
+			while(curNode != element) {
+				j = -1;
+				parentNode = curNode->parent;
+				for (i = 0; i < parentNode->childrenLen; i++) {
+					if (parentNode->children[i] == curNode) {
+						j = i;
+						break;
+					}
+				}
+				if (j == parentNode->childrenLen - 1) {
+					// If there is none, go one level up and look for this nodes sibling.
+					curNode = parentNode;
+					// curValue 
+					curValue -= curOffset;
+					if ((curOffset = getOffset(curNode->parent,curNode->name)) == -1) {
+						return -1;
+					}
+					prevOffset = curOffset;
+					//printf("up: offset=%d\n",curOffset);
+				} else {
+					// At least one sibling left. Go for it.
+					j++;
+					// Get the offset in bytes within the current struct
+					if ((curOffset = getOffset(parentNode,parentNode->children[j]->name)) == -1) {
+						return -1;
+					}
+					/*
+					 * curOffset represents the offset from beginnging of the struct.
+					 * Hence, we have to remember the previous offset to just add the margin.
+					 */
+					curNode = parentNode->children[j];
+					curValue = curValue + (curOffset - prevOffset);
+					prevOffset = curOffset;
+					break;
+				}
+			// Stop, if the root node is reached.
+			};
+		}
+	} while(curNode != element);
+
+	return 0;
+}
+/**
+ * Traverses the tuple starting at {@link tuple} and rewrites each pointer in the item array and each pointer to indirect allocated memory.
+ * It calculates the offset of each object according to {@link oldBaseAddr}, calculates the new absolute address according to {@link newBaseAddr}
+ * and writes it back.
+ * @param rootDM a pointer to the slc datamodel
+ * @param tupel a pointer to Tupel
+ * @param oldBaseAddr The base address of the old memory area
+ * @param newBaseAddr The base address of the new memory area
+ */
+void rewriteTupleAddress(DataModelElement_t *rootDM, Tupel_t *tuple, void *oldBaseAddr, void *newBaseAddr) {
+	int i = 0;
+	DataModelElement_t *element = NULL;
+
+	if (tuple->next != NULL) {
+		tuple->next = REWRITE_ADDR(tuple->next,oldBaseAddr,newBaseAddr);
+	}
+	if (tuple->itemLen > 0) {
+		tuple->items = REWRITE_ADDR(tuple->items,oldBaseAddr,newBaseAddr);
+		for (i = 0; i < tuple->itemLen; i++) {
+			// Skip empty items
+			if (tuple->items[i] == NULL) {
+				continue;
+			}
+			element = getDescription(rootDM,tuple->items[i]->name);
+			tuple->items[i] = REWRITE_ADDR(tuple->items[i],oldBaseAddr,newBaseAddr);
+			tuple->items[i]->value = REWRITE_ADDR(tuple->items[i]->value,oldBaseAddr,newBaseAddr);
+			rewriteAdditionalMem(rootDM,tuple->items[i]->value,oldBaseAddr,newBaseAddr,element);
+		}
+	}
+}

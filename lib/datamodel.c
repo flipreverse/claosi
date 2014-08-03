@@ -820,8 +820,8 @@ int checkDataModelSyntax(DataModelElement_t *rootCurrent,DataModelElement_t *roo
 	return 0;
 }
 /**
- * 
- * 
+ * Calculates the amount of memory used by the subtree starting at {@link node}.
+ * @return the number of bytes to store the whole subtree in one huge chunk of memory including additional information like typeinfo
  */
 int calcDatamodelSize(DataModelElement_t *node) {
 	DataModelElement_t *curNode = node;
@@ -957,4 +957,56 @@ void copyAndCollectDatamodel(DataModelElement_t *node, void *freeMem) {
 			curCopy = curCopy->parent;
 		}
 	} while(curOrigin != node->parent);
+}
+/**
+ * Traverses the subtree starting at {@link node} and rewrites each pointer in the subtree.
+ * It calculates the offset of each object according to {@link oldBaseAddr}, calculates the new absolute address according to {@link newBaseAddr}
+ * and writes it back.
+ * @param node The root node of this subtree
+ * @param oldBaseAddr The base address of the old memory area
+ * @param newBaseAddr The base address of the new memory area
+ */
+void rewriteDatamodelAddress(DataModelElement_t *node, void *oldBaseAddr, void *newBaseAddr) {
+	DataModelElement_t *curNode = NULL;
+	int i = 0, j = 0;
+
+	curNode = node;
+	do {
+		if (curNode->parent != NULL) {
+			curNode->parent = REWRITE_ADDR(curNode->parent,oldBaseAddr,newBaseAddr);
+		}
+		if (curNode->typeInfo != NULL) {
+			curNode->typeInfo = REWRITE_ADDR(curNode->typeInfo,oldBaseAddr,newBaseAddr);
+		}
+		if (curNode->childrenLen > 0) {
+			// Rewrite the address of the pointer array as well the address of each child
+			curNode->children = REWRITE_ADDR(curNode->children,oldBaseAddr,newBaseAddr);
+			for (i = 0; i < curNode->childrenLen; i++) {
+				curNode->children[i] = REWRITE_ADDR(curNode->children[i],oldBaseAddr,newBaseAddr);
+			}
+			curNode = curNode->children[0];
+		} else {
+			// Stop, if the root node is reached.
+			while(curNode != node) {
+				j = -1;
+				// Look for the current nodes sibling.
+				for (i = 0; i < curNode->parent->childrenLen; i++) {
+					if (curNode->parent->children[i] == curNode) {
+						j = i;
+						break;
+					}
+				}
+				if (j == curNode->parent->childrenLen - 1) {
+					// If there is none, go one level up and look for this nodes sibling.
+					curNode = curNode->parent;
+				} else {
+					// At least one sibling left. Go for it.
+					j++;
+					curNode = curNode->parent->children[j];
+					break;
+				}
+			};
+		}
+	// Stop, if the root node is reached.
+	} while(curNode != node);
 }

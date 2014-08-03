@@ -25,6 +25,7 @@
 #define PROCFS_LOCKFILE						"lock"
 #define PROCFS_DATAMODELFILE				"datamodel"
 #define SLC_DATA_MODEL						(slcDataModel)
+#define REWRITE_ADDR(var,oldBase,newBase)	(typeof(var))(((void*)(var) - oldBase) + newBase)
 
 #ifdef __KERNEL__
 #define	ALLOC(size)							kmalloc(size,GFP_KERNEL & ~__GFP_WAIT)

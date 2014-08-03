@@ -398,5 +398,6 @@ int getTupelSize(DataModelElement_t *rootDM, Tupel_t *tupel);
 void copyAndCollectTupel(DataModelElement_t *rootDM, Tupel_t *tupel, void *freeMem, int tupleSize);
 void deleteItem(DataModelElement_t *rootDM, Tupel_t *tupel, int slot);
 Tupel_t* copyTupel(DataModelElement_t *rootDM, Tupel_t *tuple);
+void rewriteTupleAddress(DataModelElement_t *rootDM, Tupel_t *tuple, void *oldBaseAddr, void *newBaseAddr);
 
 #endif // __RESULTSET_H__

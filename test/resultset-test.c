@@ -16,7 +16,7 @@ DECLARE_ELEMENTS(typeMacHdr, typeMacProt, typeNetHdr, typeNetProt, typeTranspHdr
 static void initDatamodel(void);
 
 int main() {
-	Tupel_t *tupel = NULL, *tupelCompact = NULL, *tupleCopy = NULL;
+	Tupel_t *tupel = NULL, *tupelCompact = NULL, *tupelCompact2 = NULL, *tupleCopy = NULL;
 	char *string = NULL, values[] = {5,4,3,2,1};
 	clock_t startClock, endClock;
 	int size = 0;
@@ -78,21 +78,33 @@ int main() {
 	if (size != -1) {
 		tupelCompact = ALLOC(size);
 		if (tupelCompact != NULL) {
+			printf("Copy and collecting tuple....");
 			copyAndCollectTupel(&model1,tupel,tupelCompact,size);
 			freeTupel(&model1,tupel);
-
+			printf("... done. Freed the origin tuple.\n");
+			printf("Trying to change rxBytes to LOOOOL\n");
 			setItemString(&model1,tupelCompact,"net.device.rxBytes","LOOOOL");
 			printTupel(&model1,tupelCompact);
-
 			printf("Deleting an item...\n");
 			deleteItem(&model1,tupelCompact,0);
 			printTupel(&model1,tupelCompact);
-			
+			printf("Copying tuple (a.k.a reverting compact)\n");
 			tupleCopy = copyTupel(&model1,tupelCompact);
-			
+			tupelCompact2 = malloc(size);
+			if (tupelCompact2 == NULL) {
+				perror("malloc for tupleCompact2");
+				return EXIT_FAILURE;
+			}
+			memcpy(tupelCompact2,tupelCompact,size);
+			rewriteTupleAddress(&model1,tupelCompact2,tupelCompact,tupelCompact2);
 			freeTupel(&model1,tupelCompact);
+			printf("Printing copied tuple:");
 			printTupel(&model1,tupleCopy);
+			printf("Printing copied and rewritten tuple:");
+			printTupel(&model1,tupelCompact2);
+			
 			freeTupel(&model1,tupleCopy);
+			free(tupelCompact2);
 		}
 	} else {
 		freeTupel(&model1,tupel);
