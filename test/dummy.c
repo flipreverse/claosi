@@ -22,3 +22,7 @@ void acquireSlcLock(void) {
 void releaseSlcLock(void) {
 	
 }
+
+void delPendingQuery(Query_t *query) {
+	
+}

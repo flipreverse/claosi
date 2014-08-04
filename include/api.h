@@ -133,5 +133,10 @@ void startSourceTimer(DataModelElement_t *dm, Query_t *query);
  * @param query a pointer to the query which should be executed query x ms
  */
 void stopSourceTimer(Query_t *query);
+/**
+ * Deletes {@link query} from all lists it was enqueued to.
+ * @param query a pointer to the query which should be deleted
+ */
+void delPendingQuery(Query_t *query);
 
 #endif // __API_H__

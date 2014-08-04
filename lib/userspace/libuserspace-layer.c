@@ -138,6 +138,20 @@ void enqueueQuery(Query_t *query, Tupel_t *tuple) {
 	}
 }
 
+void delPendingQuery(Query_t *query) {
+	QueryJob_t *cur = NULL, *curTmp = NULL;
+	
+	pthread_mutex_lock(&listLock);
+	for (cur = STAILQ_FIRST(&queriesToExecList); cur != NULL; cur = curTmp) {
+		curTmp = STAILQ_NEXT(cur,listEntry);
+		if (cur->query == query) {
+			DEBUG_MSG(1,"Found query 0x%lx. Removing it from list.\n",(unsigned long)cur->query);
+			STAILQ_REMOVE(&queriesToExecList,cur,QueryJob,listEntry);
+		}
+	}
+	pthread_mutex_unlock(&listLock);
+}
+
 static void* generateObjectStatus(void *data) {
 	QueryStatusJob_t *statusJob = (QueryStatusJob_t*)data;
 	Tupel_t *curTuple = NULL;

@@ -89,6 +89,21 @@ static int generateObjectStatus(void *data) {
 	return 0;
 }
 
+void delPendingQuery(Query_t *query) {
+	QueryJob_t *cur = NULL;
+	struct list_head *pos = NULL, *next = NULL;
+	
+	spin_lock(&listLock);
+	list_for_each_safe(pos, next, &queriesToExecList) {
+		cur = list_entry(pos, QueryJob_t, list);
+		if (cur->query == query) {
+			DEBUG_MSG(1,"Found query 0x%lx. Removing it from list.\n",(unsigned long)cur->query);
+			list_del(&cur->list);
+		}
+	}
+	spin_unlock(&listLock);
+}
+
 void startObjStatusThread(Query_t *query, generateStatus statusFn, unsigned long *__flags) {
 	struct task_struct *objStatusThread = NULL;
 	QueryStatusJob_t *statusJob = NULL;

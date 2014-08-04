@@ -738,8 +738,13 @@ int delQueries(DataModelElement_t *rootDM, Query_t *queries) {
 				regQueries = ((Source_t*)dm->typeInfo)->queries;
 				break;
 		}
-		id = GET_LOCAL_QUERY_ID(cur->queryID);
-		regQueries[id] = NULL;
+		// Only a query with a valid id can safely be removed
+		if (cur->queryID > 0) {
+			id = GET_LOCAL_QUERY_ID(cur->queryID);
+			DEBUG_MSG(1,"Removing all pending query: 0x%lx\n",(unsigned long)regQueries[id]);
+			delPendingQuery(regQueries[id]);
+			regQueries[id] = NULL;
+		}
 
 		cur = cur->next;
 	} while(cur != NULL);
