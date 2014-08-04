@@ -1,6 +1,7 @@
 #include <liballoc.h>
 #include <common.h>
 #include <output.h>
+#include <communication.h>
 
 /**  Durand's Amazing Super Duper Memory functions.  */
 
@@ -31,9 +32,6 @@
 
 //#define LIBALLOC_DEBUG
 typedef unsigned long uintptr_t;
-
-void *sharedMemoryBaseAddr = NULL;
-int remainingPages = NUM_PAGES;
 
 /** This macro will conveniently align our pointer upwards */
 #define ALIGN( ptr )													\
@@ -866,17 +864,6 @@ int liballoc_lock(void) {
 
 int liballoc_unlock(void) {
 	return 0;
-}
-
-void* liballoc_alloc(size_t pages) {
-	void *ret = NULL;
-
-	if (remainingPages - (int)pages >= 0) {
-		ret = sharedMemoryBaseAddr + PAGE_SIZE * (NUM_PAGES - remainingPages);
-		remainingPages -= pages;
-	}
-	
-	return ret;
 }
 
 int liballoc_free(void *ptr, size_t pages) {

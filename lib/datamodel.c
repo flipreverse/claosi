@@ -1,5 +1,7 @@
 #include <common.h>
 #include <datamodel.h>
+#include <communication.h>
+#include <liballoc.h>
 
 /**
  * Tries to resolve an element described by {@link name} to an instance of DataModelElement_t.
@@ -1009,4 +1011,35 @@ void rewriteDatamodelAddress(DataModelElement_t *node, void *oldBaseAddr, void *
 		}
 	// Stop, if the root node is reached.
 	} while(curNode != node);
+}
+/**
+ * Calculates the size of the subtree starting at {@link root}, allocates txMemory and copies the
+ * subtree to the memory location.
+ * Afterwards it tries to write the message to the ringbuffer. If it fails, it will sleep for one second and try again until it succeeds.
+ * Hopefully, the ringbuffer is large enough so this will be a rare corner case...
+ * @param root
+ * @param add
+ */
+void sendDatamodel(DataModelElement_t *root, int add) {
+	DataModelElement_t *copy = NULL;
+	int ret = 0;
+
+	if (txBuffer == NULL) {
+		ERR_MSG("txBuffer not initialized. Abort sending datamodel.\n");
+		return;
+	}
+	ret = calcDatamodelSize(root);
+	copy = (DataModelElement_t*)slcmalloc(ret);
+	if (copy == NULL) {
+		ERR_MSG("Cannot allocate memory to copy the datamodel\n");
+		return;
+	}
+	copyAndCollectDatamodel(root,copy);
+	do {
+		ret = ringBufferWrite(txBuffer,(add == 1 ? MSG_DM_ADD : MSG_DM_DEL),(char*)copy);
+		if (ret == -1) {
+			// Oh no. Start busy waiting...
+			SLEEP(1);
+		}
+	} while (ret == -1);
 }

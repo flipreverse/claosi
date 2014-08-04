@@ -14,6 +14,7 @@
 #include <resultset.h>
 #include <query.h>
 #include <api.h>
+#include <communication.h>
 
 #define PROCFS_READ_BUFFER_SIZE		10
 
@@ -28,8 +29,14 @@ typedef struct DataModelMmap_t {
 
 static struct proc_dir_entry *procfsSlcDir = NULL;
 static struct proc_dir_entry *procfsSlcDMFile = NULL;
-static atomic_t datamodelFileRef;
+static atomic_t communicationFileRef;
 static struct task_struct *queryExecThread = NULL;
+static struct task_struct *commThread = NULL;
+/*
+ * An array of pointers to the NUM_PAGES instances of struct page.
+ * Each represents on physical page.
+ */
+static struct page **sharedMemoryPages = NULL;
 static LIST_HEAD(queriesToExecList);
 // Synchronize access to queriesToExecList
 static DEFINE_SPINLOCK(listLock);
@@ -236,29 +243,80 @@ static int queryExecutorWork(void *data) {
 	return 0;
 }
 
-void datamodelFileMmapOpen(struct vm_area_struct *vma) {
+static int commThreadWork(void *data) {
+	LayerMessage_t *msg = NULL;
+	DataModelElement_t *dm = NULL;
+	int ret = 0;
+	unsigned long flags;
+
+	while (!kthread_should_stop()) {
+		msg = ringBufferReadBegin(rxBuffer);
+		if (msg == NULL) {
+			msleep(1000);
+		} else {
+			DEBUG_MSG(1,"Read msg with type 0x%x and addr 0x%p (rewritten addr = 0x%p)\n",msg->type,msg->addr,REWRITE_ADDR(msg->addr,sharedMemoryUserBase,sharedMemoryKernelBase));
+			switch (msg->type) {
+				case MSG_DM_ADD:
+					dm = (DataModelElement_t*)REWRITE_ADDR(msg->addr,sharedMemoryUserBase,sharedMemoryKernelBase);
+					rewriteDatamodelAddress(dm,sharedMemoryUserBase,sharedMemoryKernelBase);
+					ACQUIRE_WRITE_LOCK(slcLock);
+					ret = mergeDataModel(0,SLC_DATA_MODEL,dm);
+					if (ret < 0) {
+						ERR_MSG("Weird! Cannot merge datamodel received by kernel!\n");
+					}
+					RELEASE_WRITE_LOCK(slcLock);
+					break;
+
+				case MSG_DM_DEL:
+					dm = (DataModelElement_t*)REWRITE_ADDR(msg->addr,sharedMemoryUserBase,sharedMemoryKernelBase);
+					rewriteDatamodelAddress(dm,sharedMemoryUserBase,sharedMemoryKernelBase);
+					ACQUIRE_WRITE_LOCK(slcLock);
+					ret = deleteSubtree(&SLC_DATA_MODEL,dm);
+					if (ret < 0) {
+						ERR_MSG("Weird! Cannot delete datamodel received by kernel!\n");
+					}
+					if (SLC_DATA_MODEL == NULL) {
+						initSLCDatamodel();
+					}
+					RELEASE_WRITE_LOCK(slcLock);
+					break;
+
+				case MSG_EMPTY:
+					ERR_MSG("Read empty message!\n");
+					break;
+
+				default:
+					ERR_MSG("Unknown message type: 0x%x\n",msg->type);
+			}
+			ringBufferReadEnd(rxBuffer);
+		}
+	}
+
+	do_exit(0);
+	return 0;
+}
+
+static void communicationFileMmapOpen(struct vm_area_struct *vma) {
 	DataModelMmap_t *info = (DataModelMmap_t *)vma->vm_private_data;
 
 	info->reference++;
-	DEBUG_MSG(1,"reference (open) = %d\n",info->reference);
+	DEBUG_MSG(3,"reference (open) = %d\n",info->reference);
 }
 
-void datamodelFileMmapClose(struct vm_area_struct *vma) {
+static void communicationFileMmapClose(struct vm_area_struct *vma) {
 	DataModelMmap_t *info = (DataModelMmap_t *)vma->vm_private_data;
 
 	info->reference--;
-	DEBUG_MSG(1,"reference (close) = %d\n",info->reference);
+	DEBUG_MSG(3,"reference (close) = %d\n",info->reference);
 }
 
 /* nopage is called the first time a memory area is accessed which is not in memory,
  * it does the actual mapping between kernel and user space memory
  */
 //struct page *mmap_nopage(struct vm_area_struct *vma, unsigned long address, int *type)	--changed
-static int datamodelFileMmapFault(struct vm_area_struct *vma, struct vm_fault *vmf) {
+static int communicationFileMmapFault(struct vm_area_struct *vma, struct vm_fault *vmf) {
 	struct page *page;
 	DataModelMmap_t *info;
-	int offset = 0;
-	void *ptr = NULL;
 
 	/* the data is in vma->vm_private_data */
 	info = (DataModelMmap_t *)vma->vm_private_data;
@@ -267,12 +325,12 @@ static int datamodelFileMmapFault(struct vm_area_struct *vma, struct vm_fault *v
 		return VM_FAULT_SIGBUS;
 	}
 
-	// Calculate the offset in bytes the user requests
-	offset = (unsigned long)vmf->virtual_address - vma->vm_start;
-	ptr = (void*)(info->data);
-	// Resolve the virtual page address to a struct page
-	page = virt_to_page(ptr);
-	DEBUG_MSG(1,"page fault at 0x%p, offset = 0x%x, mapping page at 0x%p(0x%p)\n",vmf->virtual_address,offset,page_address(page),ptr);
+	if (vmf->pgoff > NUM_PAGES) {
+		ERR_MSG("Page offset is to large: %ld > %d\n",vmf->pgoff,NUM_PAGES);
+		return VM_FAULT_SIGBUS;
+	}
+	page = sharedMemoryPages[vmf->pgoff];
+	DEBUG_MSG(2,"page fault at 0x%p, mapping page 0x%p at offset %ld\n",vmf->virtual_address,page_address(page),vmf->pgoff);
 	/* increment the reference count of this page */
 	get_page(page);
 	// Tell the memory management which page should be mapped at (vmf->virtual_address & PAGE_MASK)
@@ -281,19 +339,19 @@ static int datamodelFileMmapFault(struct vm_area_struct *vma, struct vm_fault *v
 	return 0;
 }
 
-struct vm_operations_struct datamodelfile_mmap_ops = {
-	.open		=	datamodelFileMmapOpen,
-	.close		=	datamodelFileMmapClose,
-	.fault		=	datamodelFileMmapFault,
+struct vm_operations_struct communicationFile_mmap_ops = {
+	.open		=	communicationFileMmapOpen,
+	.close		=	communicationFileMmapClose,
+	.fault		=	communicationFileMmapFault,
 };
 
-static int datamodelFileRead(struct file *fil, char __user *buffer, size_t buffer_length, loff_t *pos) {
+static int communicationFileRead(struct file *fil, char __user *buffer, size_t buffer_length, loff_t *pos) {
 	int ret = 0;
 
 	if (*pos > 0) {
 		return 0;
 	}
-	ret = snprintf(buffer,buffer_length, "0x%lx\n",(unsigned long)sharedMemoryBaseAddr);
+	ret = snprintf(buffer,buffer_length, "0x%lx\n",(unsigned long)sharedMemoryKernelBase);
 	if (ret >= buffer_length) {
 		// Not enough space to hold the whole string
 		ret = buffer_length;
@@ -306,37 +364,40 @@ static int datamodelFileRead(struct file *fil, char __user *buffer, size_t buffe
 	return ret;
 }
 
-static int datamodelFileMmap(struct file *filp, struct vm_area_struct *vma) {
-	vma->vm_ops = &datamodelfile_mmap_ops;
+static int communicationFileMmap(struct file *filp, struct vm_area_struct *vma) {
+	DataModelMmap_t *info = NULL;
+	vma->vm_ops = &communicationFile_mmap_ops;
 	vma->vm_flags |= VM_RESERVED;
 	/* assign the file private data to the vm private data */
 	vma->vm_private_data = filp->private_data;
 
-	DEBUG_MSG(1,"mapping datamodel space at 0x%p from 0x%lx to 0x%lx\n",filp->private_data,vma->vm_start,vma->vm_end);
+	info = (DataModelMmap_t*)vma->vm_private_data;
+	DEBUG_MSG(1,"mapping datamodel space at 0x%lx from 0x%lx to 0x%lx\n",info->data,vma->vm_start,vma->vm_end);
+	sharedMemoryUserBase = (void*)vma->vm_start;
 
-	datamodelFileMmapOpen(vma);
+	communicationFileMmapOpen(vma);
 	return 0;
 }
 
-static int datamodelFileClose(struct inode *inode, struct file *filp) {
+static int communicationFileClose(struct inode *inode, struct file *filp) {
 	DataModelMmap_t *info = (DataModelMmap_t*)filp->private_data;
 
 	kfree(info);
 	filp->private_data = NULL;
-	atomic_dec(&datamodelFileRef);
+	atomic_dec(&communicationFileRef);
 
 	return 0;
 }
 
-static int datamodelFileOpen(struct inode *inode, struct file *filp) {
+static int communicationFileOpen(struct inode *inode, struct file *filp) {
 	DataModelMmap_t *info = kmalloc(sizeof(DataModelMmap_t), GFP_KERNEL);
 
-	if (atomic_read(&datamodelFileRef) >= 1) {
+	if (atomic_read(&communicationFileRef) >= 1) {
 		return -EBUSY;
 	}
-	atomic_inc(&datamodelFileRef);
+	atomic_inc(&communicationFileRef);
 	/* obtain new memory */
-	info->data = (unsigned long)sharedMemoryBaseAddr;
+	info->data = (unsigned long)sharedMemoryKernelBase;
 	/* assign this info struct to the file */
 	filp->private_data = info;
 	info->reference = 0;
@@ -345,24 +406,48 @@ static int datamodelFileOpen(struct inode *inode, struct file *filp) {
 }
 
 static const struct file_operations proc_datamodel_operations = {
-	.open		=	datamodelFileOpen,
-	.read		=	datamodelFileRead,
-	.release	=	datamodelFileClose,
-	.mmap		=	datamodelFileMmap,
+	.open		=	communicationFileOpen,
+	.read		=	communicationFileRead,
+	.release	=	communicationFileClose,
+	.mmap		=	communicationFileMmap,
 };
 
 static int __init slc_init(void) {
+	int i = 0, j = 0;
 	kuid_t fileUID;
 	kgid_t fileGID;
 
 	fileUID.val = 0;
 	fileGID.val = 0;
-
-	sharedMemoryBaseAddr = (void*)__get_free_pages(GFP_KERNEL | __GFP_COMP | __GFP_ZERO | __GFP_DMA,PAGE_ORDER);
-	DEBUG_MSG(2,"Allocated %d pages of kernel memory for liballoc at 0x%p\n",NUM_PAGES,sharedMemoryBaseAddr);
-	if (sharedMemoryBaseAddr == NULL) {
+	// Allocate the pointer array for our pages used by the shared memory
+	sharedMemoryPages = kmalloc(sizeof(struct page*) * NUM_PAGES,GFP_KERNEL);
+	if (sharedMemoryPages == NULL) {
+		ERR_MSG("Cannot allocate memory for sharedMemoryPages\n");
 		return -ENOMEM;
 	}
+	// Allocate NUM_PAGE physical, single pages. They are *not* consecutive.
+	for (i = 0; i < NUM_PAGES; i++) {
+		sharedMemoryPages[i] = alloc_page(GFP_KERNEL|__GFP_ZERO);
+		if (sharedMemoryPages[i] == NULL) {
+			ERR_MSG("Cannot allocate page\n");
+			for (j = 0; j < i; j++) {
+				__free_page(sharedMemoryPages[j]);
+			}
+			kfree(sharedMemoryPages);
+			return -ENOMEM;
+		}
+	}
+	// Map the NUM_PAGE pages to one virtual memory area.
+	sharedMemoryKernelBase = vmap(sharedMemoryPages,NUM_PAGES,VM_MAP,PAGE_KERNEL);
+	if (sharedMemoryKernelBase == NULL) {
+		ERR_MSG("Cannot vamp allocated pages\n");
+		for (j = 0; j < NUM_PAGES; j++) {
+			__free_page(sharedMemoryPages[j]);
+		}
+		kfree(sharedMemoryPages);
+	}
+	DEBUG_MSG(1,"Allocated %d pages and mapped them to address 0x%p\n",NUM_PAGES,sharedMemoryKernelBase);
+	ringBufferInit();
 
 	procfsSlcDir = proc_mkdir(PROCFS_DIR_NAME, NULL);
 	if (procfsSlcDir == NULL) {
@@ -371,16 +456,16 @@ static int __init slc_init(void) {
 	}
 	proc_set_user(procfsSlcDir,fileUID,fileGID);
 
-	procfsSlcDMFile = proc_create(PROCFS_DATAMODELFILE, 0777, procfsSlcDir,&proc_datamodel_operations);
+	procfsSlcDMFile = proc_create(PROCFS_COMMFILE, 0777, procfsSlcDir,&proc_datamodel_operations);
 	if (procfsSlcDMFile == NULL) {
 		proc_remove(procfsSlcDir);
-		printk("Error: Could not initialize /proc/%s/%s\n",PROCFS_DIR_NAME,PROCFS_DATAMODELFILE);
+		printk("Error: Could not initialize /proc/%s/%s\n",PROCFS_DIR_NAME,PROCFS_COMMFILE);
 		return -ENOMEM;
 	}
 	proc_set_user(procfsSlcDMFile,fileUID,fileGID);
 	proc_set_size(procfsSlcDMFile,7);
 
-	atomic_set(&datamodelFileRef,0);
+	atomic_set(&communicationFileRef,0);
 
 	if (initSLC() == -1) {
 		return -1;
@@ -394,23 +479,38 @@ static int __init slc_init(void) {
 	}
 	// ... and start the query execution thread
 	wake_up_process(queryExecThread);
+	// Init ...
+	commThread = (struct task_struct*)kthread_create(commThreadWork,NULL,"commThread");
+	if (IS_ERR(commThread)) {
+		kthread_stop(queryExecThread);
+		return PTR_ERR(commThread);
+	}
+	// ... and start the communication thread which read from the rxBuffer and processes the received messages.
+	wake_up_process(commThread);
 
 	DEBUG_MSG(1,"Initialized SLC\n");
 	return 0;
 }
 
 static void __exit slc_exit(void) {
+	int i = 0;
 	destroySLC();
 	
 	// Signal the query execution thread to terminate and wait for it
 	kthread_stop(queryExecThread);
 	queryExecThread = NULL;
-	if (sharedMemoryBaseAddr != NULL) {
-		free_pages((unsigned long)sharedMemoryBaseAddr,PAGE_ORDER);
-	}
+	// Signal the communication execution thread to terminate and wait for it
+	kthread_stop(commThread);
+	commThread = NULL;
 
 	proc_remove(procfsSlcDMFile);
 	proc_remove(procfsSlcDir);
+
+	vunmap(sharedMemoryKernelBase);
+	for (i = 0; i < NUM_PAGES; i++) {
+		__free_page(sharedMemoryPages[i]);
+	}
+	kfree(sharedMemoryPages);
 
 	DEBUG_MSG(1,"Destroyed SLC\n");
 }

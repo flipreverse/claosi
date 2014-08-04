@@ -6,7 +6,7 @@
 #include <api.h>
 
 #define REGISTER_QUERIES
-//#undef REGISTER_QUERIES
+#undef REGISTER_QUERIES
 
 DECLARE_ELEMENTS(nsProcess, model)
 DECLARE_ELEMENTS(objProcess, srcUTime, srcSTime)
