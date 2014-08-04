@@ -9,21 +9,21 @@
 #include <linux/list.h>
 #include <linux/hrtimer.h>
 #include <asm/page.h>
+#include <linux/delay.h>
 #else
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
 #include <pthread.h>
+#include <unistd.h>
 #define PAGE_SIZE 4096
 #endif
 
-#define PAGE_ORDER							5
-#define NUM_PAGES							(1 << PAGE_ORDER)
 #define MAX_NAME_LEN						40
 #define DECLARE_BUFFER(name)				char name[MAX_NAME_LEN + 1];
 #define PROCFS_DIR_NAME						"slc"
 #define PROCFS_LOCKFILE						"lock"
-#define PROCFS_DATAMODELFILE				"datamodel"
+#define PROCFS_COMMFILE						"comm"
 #define SLC_DATA_MODEL						(slcDataModel)
 #define REWRITE_ADDR(var,oldBase,newBase)	(typeof(var))(((void*)(var) - oldBase) + newBase)
 
@@ -42,6 +42,8 @@
 #define RELEASE_READ_LOCK(varName)			write_unlock_irqrestore(&varName,flags)
 #define ACQUIRE_WRITE_LOCK(varName)			write_lock_irqsave(&varName,flags)
 #define RELEASE_WRITE_LOCK(varName)			write_unlock_irqrestore(&varName,flags)
+#define SLEEP(x)							ssleep(1)
+#define LAYER_CODE							0x1
 #else
 #define	ALLOC(size)							malloc(size)
 #define	FREE(ptr)							free(ptr)
@@ -57,6 +59,8 @@
 #define RELEASE_WRITE_LOCK(varName)			pthread_mutex_unlock(&varName);
 #define USEC_PER_MSEC						1000L
 #define TIMER_SIGNAL						SIGRTMIN
+#define SLEEP(x)							sleep(1)
+#define LAYER_CODE							0x2
 
 #endif
 
@@ -90,8 +94,5 @@ enum {
 	EQUERYTYPE,						// 
 	EMAXQUERIES						// The maximum number of queries assigned to a node is reached
 };
-
-extern void *sharedMemoryBaseAddr;
-extern int remainingPages;
 
 #endif // __COMMON_H__

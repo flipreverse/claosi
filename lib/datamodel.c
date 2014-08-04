@@ -1,5 +1,7 @@
 #include <common.h>
 #include <datamodel.h>
+#include <communication.h>
+#include <liballoc.h>
 
 /**
  * Tries to resolve an element described by {@link name} to an instance of DataModelElement_t.
@@ -1009,4 +1011,27 @@ void rewriteDatamodelAddress(DataModelElement_t *node, void *oldBaseAddr, void *
 		}
 	// Stop, if the root node is reached.
 	} while(curNode != node);
+}
+/**
+ * 
+ * @param root
+ * @param add
+ */
+void sendDatamodel(DataModelElement_t *root, int add) {
+	DataModelElement_t *copy = NULL;
+	int ret = 0;
+
+	ret = calcDatamodelSize(root);
+	copy = (DataModelElement_t*)slcmalloc(ret);
+	if (copy == NULL) {
+		ERR_MSG("Cannot allocate memory to copy the datamodel\n");
+		return;
+	}
+	copyAndCollectDatamodel(root,copy);
+	do {
+		ret = ringBufferWrite(txBuffer,(add == 1 ? MSG_DM_ADD : MSG_DM_DEL),(char*)copy);
+		if (ret == -1) {
+			SLEEP(1);
+		}
+	} while (ret == -1);
 }

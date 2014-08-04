@@ -10,11 +10,22 @@
 #include <unistd.h>
 #include <errno.h>
 #include <signal.h>
+#include <communication.h>
+#include <api.h>
 
 #define SEM_KEY 0xcaffee
 #define TIMER_SIGNAL SIGRTMIN
 
-static int fdDataModelFile  = 0;
+static int fdCommunicationFile  = 0;
+/**
+ * A descriptor of the communication thread
+ */
+static pthread_t commThread;
+/**
+ * pthread attributes: needed to mark a thread as joinable
+ */
+static pthread_attr_t commThreadAttr;
+static int commThreadRunning = 0;
 /**
  * A descriptor of the executor thread
  */
@@ -101,6 +112,58 @@ static void* queryExecutorWork(void *data) {
 		executeQuery(SLC_DATA_MODEL,cur->query,&cur->tuple);
 		RELEASE_READ_LOCK(slcLock);
 		FREE(cur);
+	}
+
+	pthread_exit(0);
+	return NULL;
+}
+
+static void* commThreadWork(void *data) {
+	LayerMessage_t *msg = NULL;
+	DataModelElement_t *dm = NULL;
+	int ret = 0;
+
+	while (commThreadRunning == 1) {
+		msg = ringBufferReadBegin(rxBuffer);
+		if (msg == NULL) {
+			sleep(1);
+		} else {
+			DEBUG_MSG(1,"Read msg with type 0x%x and addr %p (rewritten addr = %p)\n",msg->type,msg->addr,REWRITE_ADDR(msg->addr,sharedMemoryUserBase,sharedMemoryKernelBase));
+			switch (msg->type) {
+				case MSG_DM_ADD:
+					dm = (DataModelElement_t*)REWRITE_ADDR(msg->addr,sharedMemoryKernelBase,sharedMemoryUserBase);
+					rewriteDatamodelAddress(dm,sharedMemoryKernelBase,sharedMemoryUserBase);
+					ACQUIRE_WRITE_LOCK(slcLock);
+					ret = mergeDataModel(0,SLC_DATA_MODEL,dm);
+					if (ret < 0) {
+						ERR_MSG("Weird! Cannot merge datamodel received by kernel!\n");
+					}
+					RELEASE_WRITE_LOCK(slcLock);
+					break;
+
+				case MSG_DM_DEL:
+					dm = (DataModelElement_t*)REWRITE_ADDR(msg->addr,sharedMemoryKernelBase,sharedMemoryUserBase);
+					rewriteDatamodelAddress(dm,sharedMemoryKernelBase,sharedMemoryUserBase);
+					ACQUIRE_WRITE_LOCK(slcLock);
+					ret = deleteSubtree(&SLC_DATA_MODEL,dm);
+					if (ret < 0) {
+						ERR_MSG("Weird! Cannot delete datamodel received by kernel!\n");
+					}
+					if (SLC_DATA_MODEL == NULL) {
+						initSLCDatamodel();
+					}
+					RELEASE_WRITE_LOCK(slcLock);
+					break;
+
+				case MSG_TUPLE:
+					break;
+
+				case MSG_EMPTY:
+					ERR_MSG("Read empty message!\n");
+					break;
+			}
+			ringBufferReadEnd(rxBuffer);
+		}
 	}
 
 	pthread_exit(0);
@@ -264,21 +327,32 @@ void stopSourceTimer(Query_t *query) {
 
 int initLayer(void) {
 	union semun cmdval;
+	char buffer[20];
+	unsigned long addr = 0;
 
-	fdDataModelFile = open("/proc/" PROCFS_DIR_NAME "/" PROCFS_DATAMODELFILE, O_RDWR);
-	if (fdDataModelFile < 0) {
+	fdCommunicationFile = open("/proc/" PROCFS_DIR_NAME "/" PROCFS_COMMFILE, O_RDWR);
+	if (fdCommunicationFile < 0) {
 		ERR_MSG("Cannot open datamodel file: %s\n",strerror(errno));
 		return -1;
 	}
 
 	DEBUG_MSG(1,"Trying to map the kernels shared memory\n");
-	sharedMemoryBaseAddr = mmap(NULL, PAGE_SIZE * NUM_PAGES, PROT_READ|PROT_WRITE, MAP_PRIVATE, fdDataModelFile, 0);
-	if (sharedMemoryBaseAddr == MAP_FAILED) {
+	sharedMemoryUserBase = mmap(NULL, PAGE_SIZE * NUM_PAGES, PROT_READ|PROT_WRITE, MAP_SHARED, fdCommunicationFile, 0);
+	if (sharedMemoryUserBase == MAP_FAILED) {
 		ERR_MSG("Cannot mmap datamodel file: %s\n",strerror(errno));
-		close(fdDataModelFile);
+		close(fdCommunicationFile);
 		return -1;
 	}
-	DEBUG_MSG(1,"Mapped the kernels shared memory at %p\n",sharedMemoryBaseAddr);
+	DEBUG_MSG(1,"Mapped the kernels shared memory at %p\n",sharedMemoryUserBase);
+	if (read(fdCommunicationFile,buffer,20) < 0) {
+		ERR_MSG("Cannot read sharedMemoryKernelBase: %s\n",strerror(errno));
+		close(fdCommunicationFile);
+		return -1;
+	}
+	addr = strtoul(buffer,NULL,16);
+	DEBUG_MSG(1,"Kernel mapped shared memory at 0x%lx\n",addr);
+	sharedMemoryKernelBase = (void*)addr;
+	ringBufferInit();
 
 	// Create the semaphore for the query list and ...
 	waitingQueriesSemID = semget(SEM_KEY,1,IPC_CREAT|IPC_EXCL|0600);
@@ -303,6 +377,18 @@ int initLayer(void) {
 		ERR_MSG("Cannot create queryExecThread: %s\n",strerror(errno));
 		return -1;
 	}
+
+	commThreadRunning = 1;
+	pthread_attr_init(&commThreadAttr);
+	pthread_attr_setdetachstate(&commThreadAttr, PTHREAD_CREATE_JOINABLE);
+	if (pthread_create(&commThread,&commThreadAttr,commThreadWork,NULL) < 0) {
+		ERR_MSG("Cannot create commThread: %s\n",strerror(errno));
+		queryExecThreadRunning = 0;
+		semctl(waitingQueriesSemID,0,IPC_RMID);
+		pthread_join(queryExecThread,NULL);
+		return -1;
+	}
+
 	return 0;
 }
 
@@ -311,6 +397,6 @@ void exitLayer(void) {
 	// Destroy the semaphore and wait for the execution thread to terminate
 	semctl(waitingQueriesSemID,0,IPC_RMID);
 	pthread_join(queryExecThread,NULL);
-	munmap(sharedMemoryBaseAddr, NUM_PAGES * PAGE_SIZE);
-	close(fdDataModelFile);
+	munmap(sharedMemoryUserBase, NUM_PAGES * PAGE_SIZE);
+	close(fdCommunicationFile);
 }

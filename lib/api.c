@@ -10,7 +10,7 @@ EXPORT_SYMBOL(slcLock);
 /**
  * Initializes the global datamodel.
  */
-static int initDatamodel(void) {
+int initSLCDatamodel(void) {
 	SLC_DATA_MODEL = ALLOC(sizeof(DataModelElement_t));
 	if (SLC_DATA_MODEL == NULL) {
 		return -1;
@@ -48,6 +48,7 @@ int registerProvider(DataModelElement_t *dm, Query_t *queries) {
 			RELEASE_WRITE_LOCK(slcLock);
 			return ret;
 		}
+		sendDatamodel(dm,1);
 		// Now merge it.
 		if ((ret = mergeDataModel(0,SLC_DATA_MODEL,dm)) < 0) {
 			RELEASE_WRITE_LOCK(slcLock);
@@ -117,9 +118,10 @@ int unregisterProvider(DataModelElement_t *dm, Query_t *queries) {
 			RELEASE_WRITE_LOCK(slcLock);
 			return ret;
 		}
+		sendDatamodel(dm,0);
 		// If deleteSubtree removes even the root node, it is necessary to reinitialize the global datamodel
 		if (SLC_DATA_MODEL == NULL) {
-			initDatamodel();
+			initSLCDatamodel();
 		}
 	}
 	RELEASE_WRITE_LOCK(slcLock);
@@ -301,7 +303,7 @@ int initSLC(void) {
 	int ret = 0;
 
 	INIT_LOCK(slcLock);
-	if ((ret = initDatamodel()) < 0) {
+	if ((ret = initSLCDatamodel()) < 0) {
 		return ret;
 	}
 	return 0;

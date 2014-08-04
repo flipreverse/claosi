@@ -57,6 +57,7 @@ enum {
 typedef struct DataModelElement{
 	DECLARE_BUFFER(name);
 	struct DataModelElement *parent;
+	int layerCode;
 	int	childrenLen;
 	struct DataModelElement **children;
 	unsigned int dataModelType;
@@ -122,6 +123,7 @@ int getDataModelSize(DataModelElement_t *rootDM, DataModelElement_t *elem, int i
 int calcDatamodelSize(DataModelElement_t *node);
 void copyAndCollectDatamodel(DataModelElement_t *node, void *freeMem);
 void rewriteDatamodelAddress(DataModelElement_t *node, void *oldBaseAddr, void *newBaseAddr);
+void sendDatamodel(DataModelElement_t *root, int add);
 #define getSize(rootDMVar, elemVar) getDataModelSize(rootDMVar,elemVar,1)
 
 #define SET_CHILDREN_ARRAY(varName,numChildren) if (numChildren > 0) { \
@@ -139,19 +141,22 @@ void rewriteDatamodelAddress(DataModelElement_t *node, void *oldBaseAddr, void *
 	SET_CHILDREN_ARRAY(varName,numChildren) \
 	varName.dataModelType = MODEL; \
 	varName.typeInfo = NULL; \
-	varName.parent = NULL;
+	varName.parent = NULL; \
+	varName.layerCode = LAYER_CODE;
 
 #define INIT_NS(varName,nodeName,parentNode,numChildren)	strncpy((char*)&varName.name,nodeName,MAX_NAME_LEN); \
 	varName.childrenLen = numChildren; \
 	SET_CHILDREN_ARRAY(varName,numChildren) \
 	varName.dataModelType = NAMESPACE; \
 	varName.typeInfo = NULL; \
-	varName.parent = &parentNode;
+	varName.parent = &parentNode; \
+	varName.layerCode = LAYER_CODE;
 
 #define INIT_SOURCE_BASIC(varName,nodeName,parentNode,cbFunc)	strncpy((char*)&varName.name,nodeName,MAX_NAME_LEN); \
 	varName.childrenLen = 0; \
 	varName.children = NULL; \
 	varName.parent = &parentNode; \
+	varName.layerCode = LAYER_CODE; \
 	varName.dataModelType = SOURCE; \
 	varName.typeInfo = ALLOC(sizeof(Source_t)); \
 	((Source_t*)varName.typeInfo)->callback = cbFunc; \
@@ -171,6 +176,7 @@ void rewriteDatamodelAddress(DataModelElement_t *node, void *oldBaseAddr, void *
 	SET_CHILDREN_ARRAY(varName,numChildren) \
 	varName.parent = &parentNode; \
 	varName.dataModelType = OBJECT; \
+	varName.layerCode = LAYER_CODE; \
 	varName.typeInfo = ALLOC(sizeof(Object_t)); \
 	((Object_t*)varName.typeInfo)->identifierType = idType; \
 	((Object_t*)varName.typeInfo)->activate = activateFunc; \
@@ -184,6 +190,7 @@ void rewriteDatamodelAddress(DataModelElement_t *node, void *oldBaseAddr, void *
 	varName.children = NULL; \
 	varName.parent = &parentNode; \
 	varName.dataModelType = EVENT; \
+	varName.layerCode = LAYER_CODE; \
 	varName.typeInfo = ALLOC(sizeof(Event_t)); \
 	((Event_t*)varName.typeInfo)->returnType = evtType; \
 	memset(&((Event_t*)varName.typeInfo)->returnName,0,MAX_NAME_LEN); \
@@ -197,6 +204,7 @@ void rewriteDatamodelAddress(DataModelElement_t *node, void *oldBaseAddr, void *
 	varName.children = NULL; \
 	varName.parent = &parentNode; \
 	varName.dataModelType = EVENT; \
+	varName.layerCode = LAYER_CODE; \
 	varName.typeInfo = ALLOC(sizeof(Event_t)); \
 	((Event_t*)varName.typeInfo)->returnType = COMPLEX; \
 	strncpy((char*)&((Event_t*)varName.typeInfo)->returnName,returnTypeName,MAX_NAME_LEN); \
@@ -210,6 +218,7 @@ void rewriteDatamodelAddress(DataModelElement_t *node, void *oldBaseAddr, void *
 	SET_CHILDREN_ARRAY(varName,numChildren) \
 	varName.parent = &parentNode; \
 	varName.dataModelType = TYPE; \
+	varName.layerCode = LAYER_CODE; \
 	varName.typeInfo = NULL;
 
 #define INIT_PLAINTYPE(varName,nodeName,parentNode,type)	strncpy((char*)&varName.name,nodeName,MAX_NAME_LEN);\
@@ -217,6 +226,7 @@ void rewriteDatamodelAddress(DataModelElement_t *node, void *oldBaseAddr, void *
 	varName.children = NULL; \
 	varName.parent = &parentNode; \
 	varName.dataModelType = type; \
+	varName.layerCode = LAYER_CODE; \
 	varName.typeInfo = NULL;
 	
 #define INIT_REF(varName,nodeName,parentNode,refName)	strncpy((char*)&varName.name,nodeName,MAX_NAME_LEN); \
@@ -224,6 +234,7 @@ void rewriteDatamodelAddress(DataModelElement_t *node, void *oldBaseAddr, void *
 	varName.children = NULL; \
 	varName.parent = &parentNode; \
 	varName.dataModelType = REF; \
+	varName.layerCode = LAYER_CODE; \
 	varName.typeInfo = ALLOC(sizeof(char) * (strlen(refName) + 1)); \
 	strcpy((char*)varName.typeInfo,refName);
 

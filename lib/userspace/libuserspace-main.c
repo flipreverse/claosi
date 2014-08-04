@@ -12,7 +12,7 @@
 #define FIFO_PATH "./slc-userspace-input"
 #define BUFFER_SIZE 	128
 static char pathBuffer[BUFFER_SIZE];
-static char cmdBuffer[4];
+static char cmdBuffer[10];
 static pthread_t fifoWorkThread;
 static pthread_attr_t fifoWorkThreadAttr;
 
@@ -41,6 +41,29 @@ typedef struct LoadedProvider {
  */
 LIST_HEAD(ProviderListHead,LoadedProvider) providerList;
 
+static void unloadProvider(void *curDL, LoadedProvider_t *curProv, int remove) {
+	int (*onUnloadFn)(void);
+	int ret = 0;
+
+	onUnloadFn = dlsym(curDL,"onUnload");
+	// No unloadFn symbol! Refuse to unload the library.
+	if (onUnloadFn == NULL) {
+		ERR_MSG("Cannot find symbol 'onUnload'. Refusing to unload provider %s.\n",curProv->libPath);
+		return;
+	}
+	ret = onUnloadFn();
+	if (ret < 0) {
+		ERR_MSG("Provider %s destruction failed: %d\n",curProv->libPath,-ret);
+		return;
+	}
+	if (remove == 1) {
+		LIST_REMOVE(curProv,listEntry);
+	}
+	dlclose(curProv->dlHandle);
+	FREE(curProv->libPath);
+	FREE(curProv);
+}
+
 static void* fifoWork(void *data) {
 	FILE *cmdFifo;
 	struct stat fifo_stat;
@@ -48,7 +71,6 @@ static void* fifoWork(void *data) {
 	int read = 0, ret = 0;
 	LoadedProvider_t *curProv = NULL;
 	int (*onLoadFn)(void);
-	int (*onUnloadFn)(void);
 
 	// Does the fifo exist?
 	if (stat(FIFO_PATH,&fifo_stat) < 0) {
@@ -81,7 +103,7 @@ static void* fifoWork(void *data) {
 			pthread_exit(0);
 		}
 		// A command from the fifo: <command> [argument]
-		read = fscanf(cmdFifo,"%4s %127s\n",cmdBuffer,pathBuffer);
+		read = fscanf(cmdFifo,"%10s %127s\n",cmdBuffer,pathBuffer);
 		// At least one token is necessary
 		if (read == 0 || read == EOF) {
 			ERR_MSG("Cannot read from FIFO (%s): %s\n",FIFO_PATH,strerror(errno));
@@ -137,27 +159,16 @@ static void* fifoWork(void *data) {
 				}
 			}
 			if (ret) {
-				onUnloadFn = dlsym(curDL,"onUnload");
-				// No unloadFn symbol! Refuse to unload the library.
-				if (onUnloadFn == NULL) {
-					ERR_MSG("Cannot find symbol 'onUnload'. Refusing to unload provider %s.\n",curProv->libPath);
-					continue;
-				}
-				ret = onUnloadFn();
-				if (ret < 0) {
-					ERR_MSG("Provider %s destruction failed: %d\n",curProv->libPath,-ret);
-					continue;
-				}
-				LIST_REMOVE(curProv,listEntry);
-				dlclose(curProv->dlHandle);
-				FREE(curProv->libPath);
-				FREE(curProv);
+				unloadProvider(curDL,curProv,1);
 			} else {
 				ERR_MSG("No provider loaded with library path %s\n",pathBuffer);
 			}
 		} else if (strcmp(cmdBuffer,"exit") == 0) {
+			for (curProv = providerList.lh_first; curProv != NULL; curProv = curProv->listEntry.le_next) {
+				unloadProvider(curDL,curProv,0);
+			}
 			break;
-		} else if (strcmp(cmdBuffer,"lol") == 0) {
+		} else if (strcmp(cmdBuffer,"printdm") == 0) {
 			ACQUIRE_READ_LOCK(slcLock);
 			printDatamodel(SLC_DATA_MODEL);
 			RELEASE_READ_LOCK(slcLock);
