@@ -41,11 +41,11 @@ typedef struct LoadedProvider {
  */
 LIST_HEAD(ProviderListHead,LoadedProvider) providerList;
 
-static void unloadProvider(void *curDL, LoadedProvider_t *curProv, int remove) {
+static void unloadProvider(LoadedProvider_t *curProv) {
 	int (*onUnloadFn)(void);
 	int ret = 0;
 
-	onUnloadFn = dlsym(curDL,"onUnload");
+	onUnloadFn = dlsym(curProv->dlHandle,"onUnload");
 	// No unloadFn symbol! Refuse to unload the library.
 	if (onUnloadFn == NULL) {
 		ERR_MSG("Cannot find symbol 'onUnload'. Refusing to unload provider %s.\n",curProv->libPath);
@@ -56,12 +56,7 @@ static void unloadProvider(void *curDL, LoadedProvider_t *curProv, int remove) {
 		ERR_MSG("Provider %s destruction failed: %d\n",curProv->libPath,-ret);
 		return;
 	}
-	if (remove == 1) {
-		LIST_REMOVE(curProv,listEntry);
-	}
 	dlclose(curProv->dlHandle);
-	FREE(curProv->libPath);
-	FREE(curProv);
 }
 
 static void* fifoWork(void *data) {
@@ -69,7 +64,7 @@ static void* fifoWork(void *data) {
 	struct stat fifo_stat;
 	void *curDL = NULL;
 	int read = 0, ret = 0;
-	LoadedProvider_t *curProv = NULL;
+	LoadedProvider_t *curProv = NULL, *tmpProv = NULL;
 	int (*onLoadFn)(void);
 
 	// Does the fifo exist?
@@ -151,7 +146,7 @@ static void* fifoWork(void *data) {
 			LIST_INSERT_HEAD(&providerList, curProv, listEntry);
 		} else if (strcmp(cmdBuffer,"del") == 0) {
 			ret = 0;
-			for (curProv = providerList.lh_first; curProv != NULL; curProv = curProv->listEntry.le_next) {
+			LIST_FOREACH(curProv, &providerList, listEntry) {
 				// The user has to provide the identical path to the shared library as for the add command
 				if (strcmp(curProv->libPath,pathBuffer) == 0) {
 					ret = 1;
@@ -159,13 +154,24 @@ static void* fifoWork(void *data) {
 				}
 			}
 			if (ret) {
-				unloadProvider(curDL,curProv,1);
+				unloadProvider(curProv);
+				LIST_REMOVE(curProv,listEntry);
+				FREE(curProv->libPath);
+				FREE(curProv);
 			} else {
 				ERR_MSG("No provider loaded with library path %s\n",pathBuffer);
 			}
 		} else if (strcmp(cmdBuffer,"exit") == 0) {
-			for (curProv = providerList.lh_first; curProv != NULL; curProv = curProv->listEntry.le_next) {
-				unloadProvider(curDL,curProv,0);
+			/*
+			 * Gracefully shutdown the userspace layer
+			 * 
+			 */
+			for (curProv = LIST_FIRST(&providerList); curProv != NULL; curProv = tmpProv) {
+				tmpProv = LIST_NEXT(curProv,listEntry);
+				unloadProvider(curProv);
+				LIST_REMOVE(curProv,listEntry);
+				FREE(curProv->libPath);
+				FREE(curProv);
 			}
 			break;
 		} else if (strcmp(cmdBuffer,"printdm") == 0) {
