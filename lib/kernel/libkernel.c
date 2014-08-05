@@ -488,6 +488,14 @@ static int __init slc_init(void) {
 	// ... and start the communication thread which read from the rxBuffer and processes the received messages.
 	wake_up_process(commThread);
 
+	commThread = (struct task_struct*)kthread_create(commThreadWork,NULL,"commThread");
+	if (IS_ERR(commThread)) {
+		kthread_stop(queryExecThread);
+		return PTR_ERR(commThread);
+	}
+	// ... and start the communication thread
+	wake_up_process(commThread);
+
 	DEBUG_MSG(1,"Initialized SLC\n");
 	return 0;
 }
