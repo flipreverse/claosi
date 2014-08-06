@@ -28,6 +28,7 @@ static int handler_pre(struct kprobe *p, struct pt_regs *regs) {
 	Tupel_t *tupel = NULL;
 	struct timeval time;
 	unsigned long flags;
+	unsigned long long timeUS = 0;
 
 #if defined(__i386__)
 skb = (struct sk_buff*)regs->ax;
@@ -40,7 +41,8 @@ skb = (struct sk_buff*)regs->ARM_r0;
 #endif
 
 	do_gettimeofday(&time);
-	if ((tupel = initTupel(time.tv_sec + time.tv_usec / USEC_PER_MSEC,2)) == NULL) {
+	timeUS = (unsigned long long)time.tv_sec * (unsigned long long)USEC_PER_SEC + (unsigned long long)time.tv_usec;
+	if ((tupel = initTupel(timeUS,2)) == NULL) {
 		return 0;
 	}
 
@@ -53,7 +55,6 @@ skb = (struct sk_buff*)regs->ARM_r0;
 	copyArrayByte(SLC_DATA_MODEL,tupel,"net.packetType.macHdr",0,skb->data,ETH_HLEN);
 	setItemByte(SLC_DATA_MODEL,tupel,"net.packetType.macProtocol",42);
 	RELEASE_READ_LOCK(slcLock);
-	PRINT_MSG("Received paket at %lu us\n",time.tv_sec * USEC_PER_MSEC + time.tv_usec);
 	eventOccured("net.device.onTx",tupel);
 
 	return 0;
@@ -84,9 +85,11 @@ static Tupel_t* getSrc(void) {
 
 static void printResult(QueryID_t id, Tupel_t *tupel) {
 	struct timeval time;
+	unsigned long long timeMS = 0;
 
 	do_gettimeofday(&time);
-	printk("Received tupel with %d items at memory address %p at %lu us\n",tupel->itemLen,tupel,time.tv_sec * USEC_PER_MSEC + time.tv_usec);
+	timeMS = (unsigned long long)time.tv_sec * (unsigned long long)USEC_PER_SEC + (unsigned long long)time.tv_usec;
+	printk("Received tupel with %d items at memory address %p at %llu us\n",tupel->itemLen,tupel,timeMS - tupel->timestamp);
 	freeTupel(SLC_DATA_MODEL,tupel);
 }
 
