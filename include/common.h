@@ -36,10 +36,9 @@
 #define DECLARE_LOCK(varName)				rwlock_t varName
 #define DECLARE_LOCK_EXTERN(varName)		extern rwlock_t varName
 #define INIT_LOCK(varName)					rwlock_init(&varName)
-//#define ACQUIRE_READ_LOCK(varName)			read_lock_irqsave(&varName,flags)
-//#define RELEASE_READ_LOCK(varName)			read_unlock_irqrestore(&varName,flags)
-#define ACQUIRE_READ_LOCK(varName)			write_lock_irqsave(&varName,flags)
-#define RELEASE_READ_LOCK(varName)			write_unlock_irqrestore(&varName,flags)
+#define ACQUIRE_READ_LOCK(varName)			read_lock_irqsave(&varName,flags)
+#define TRY_READ_LOCK(varName)				read_trylock(&varName)
+#define RELEASE_READ_LOCK(varName)			read_unlock_irqrestore(&varName,flags)
 #define ACQUIRE_WRITE_LOCK(varName)			write_lock_irqsave(&varName,flags)
 #define RELEASE_WRITE_LOCK(varName)			write_unlock_irqrestore(&varName,flags)
 #define SLEEP(x)							ssleep(1)
@@ -50,13 +49,14 @@
 #define REALLOC(ptr,size)					realloc(ptr,size)
 #define STRTOINT(strVar,intVar)				(intVar = atoi(strVar))
 #define STRTOCHAR(strVar,charVar)			(charVar = atoi(strVar))
-#define DECLARE_LOCK(varName)				pthread_mutex_t varName;
-#define DECLARE_LOCK_EXTERN(varName)		extern pthread_mutex_t varName;
-#define INIT_LOCK(varName)					pthread_mutex_init(&varName,NULL);
-#define ACQUIRE_READ_LOCK(varName)			pthread_mutex_lock(&varName);
-#define RELEASE_READ_LOCK(varName)			pthread_mutex_unlock(&varName);
-#define ACQUIRE_WRITE_LOCK(varName)			pthread_mutex_lock(&varName);
-#define RELEASE_WRITE_LOCK(varName)			pthread_mutex_unlock(&varName);
+#define DECLARE_LOCK(varName)				pthread_rwlock_t varName
+#define DECLARE_LOCK_EXTERN(varName)		extern pthread_rwlock_t varName
+#define INIT_LOCK(varName)					pthread_rwlock_init(&varName,NULL)
+#define ACQUIRE_READ_LOCK(varName)			pthread_rwlock_wrlock(&varName)
+#define TRY_READ_LOCK(varName)				pthread_rwlock_tryrdlock(&varName)
+#define RELEASE_READ_LOCK(varName)			pthread_rwlock_unlock(&varName)
+#define ACQUIRE_WRITE_LOCK(varName)			pthread_rwlock_rdlock(&varName)
+#define RELEASE_WRITE_LOCK(varName)			pthread_rwlock_unlock(&varName)
 #define USEC_PER_MSEC						1000L
 #define TIMER_SIGNAL						SIGRTMIN
 #define SLEEP(x)							sleep(1)

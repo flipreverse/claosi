@@ -1,0 +1,61 @@
+- registerProvider/registerQuery/unregisterProvider
+	writeLock_irqsave(slcLock)
+	...
+	writeUnlock_irqrestore(slcLock)
+
+- unregisterQuery
+	writeLock_irqsave(slcLock)
+	...
+		delPendingQuery()
+			lock(listLock)
+			...
+			unlock(listLock)
+	writeUnlock_irqrestore(slcLock)
+
+- {hrtimer,timer}Handler
+	readLock(slcLock)
+	....
+	enqueueQuery()
+		lock(listLock)
+		...
+		unlock(listLock)
+	readUnlock(slcLocK)
+
+- queryExecutorWork
+	readLock_irqsave(slcLock)
+	lock(listLock)
+	...
+	unlock(listLock)
+	executeQuery()
+	readUnlock_irqrestore(slcLock)
+
+- commThreadWork
+	readMessage()
+	writeLock_irqsave(slcLock)
+	...
+	writeUnlock_irqrestore(slcLock)
+
+- <object>/<event>-Handler
+	readLock_irqsave(slcLock)
+	...
+	objectChanged/eventOccured()
+		...
+		enqueueQuery()
+			lock(listLock)
+			...
+			unlock(listLock)
+	readUnlock_irqrestore(slcLock)
+
+- <object>/<event>-Handler [alt]
+	readLock_irqsave(slcLock)
+	...
+	readUnlock_irqrestore(slcLock)
+	objectChanged/eventOccured()
+		readLock_irqsave(slcLock)
+		...
+		enqueueQuery()
+			lock(listLock)
+			...
+			unlock(listLock)
+		readUnlock_irqrestore(slcLock)
+

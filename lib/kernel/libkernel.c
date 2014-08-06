@@ -40,6 +40,8 @@ static struct page **sharedMemoryPages = NULL;
 static LIST_HEAD(queriesToExecList);
 // Synchronize access to queriesToExecList
 static DEFINE_SPINLOCK(listLock);
+
+static atomic_t missedTimer;
 static DECLARE_WAIT_QUEUE_HEAD(waitQueue);
 /*
  * Using list_empty() as a condition for wait_event() may lead to a race condition, especially on a smp system.
@@ -152,7 +154,21 @@ static enum hrtimer_restart hrtimerHandler(struct hrtimer *curTimer) {
 	Source_t *src = (Source_t*)timerJob->dm->typeInfo;
 	Tupel_t *tuple= NULL;
 	unsigned long flags;
-
+	
+	/*
+	 * It is possible that the component deletes queries thus stopping a timer while a timer expires.
+	 * Hence, the hrtimerHandler while stall at src->callback(), because the source wants to acquire the slcLock in order to create a tuple.
+	 * After deleting the queries the lock will be release and the handler will acquire it.
+	 * It is likeley that this timer was canceled. Therefore, the instance of TimerJob_t was freed. Further access to the recently freed memory location
+	 * will lead to unpredictable behavior.
+	 * To avoid this, each call to hrtimerHandler() will try to acquire the read lock. If it fails, the handler will abort.
+	 * The delQuery() function will acquire a write lock.
+	 */
+	if (TRY_READ_LOCK(slcLock) == 0) {
+		ERR_MSG("Cannot acquire read slc lock\n");
+		atomic_inc(&missedTimer);
+		return HRTIMER_RESTART;
+	}
 	DEBUG_MSG(2,"%s: Creating tuple\n",__FUNCTION__);
 	// Only one timer at a time is allowed to access this source
 	ACQUIRE_WRITE_LOCK(src->lock);
@@ -167,6 +183,7 @@ static enum hrtimer_restart hrtimerHandler(struct hrtimer *curTimer) {
 	 * will block at least one core. It will slow down the whole system.
 	 */
 	hrtimer_start(&timerJob->timer,ns_to_ktime(timerJob->period * NSEC_PER_MSEC),HRTIMER_MODE_REL);
+	RELEASE_READ_LOCK(slcLock);
 
 	return HRTIMER_NORESTART;
 }
@@ -200,6 +217,10 @@ void stopSourceTimer(Query_t *query) {
 	SourceStream_t *srcStream = (SourceStream_t*)query->root;
 	QueryTimerJob_t *timerJob = (QueryTimerJob_t*)srcStream->timerInfo;
 
+	if (timerJob == NULL) {
+		ERR_MSG("No timer registered for query 0x%p\n",query);
+		return;
+	}
 	DEBUG_MSG(2,"%s: Canceling hrtimer for node %s...\n",__FUNCTION__,srcStream->st_name);
 	// Cancel the timer. Blocks until the timer handler terminates.
 	ret = hrtimer_cancel(&timerJob->timer);
@@ -292,7 +313,6 @@ static int commThreadWork(void *data) {
 		}
 	}
 
-	do_exit(0);
 	return 0;
 }
 
@@ -472,6 +492,7 @@ static int __init slc_init(void) {
 	}
 
 	atomic_set(&waitingQueries,0);
+	atomic_set(&missedTimer,0);
 	// Init ...
 	queryExecThread = (struct task_struct*)kthread_create(queryExecutorWork,NULL,"queryExecThread");
 	if (IS_ERR(queryExecThread)) {
@@ -494,7 +515,6 @@ static int __init slc_init(void) {
 
 static void __exit slc_exit(void) {
 	int i = 0;
-	destroySLC();
 	
 	// Signal the query execution thread to terminate and wait for it
 	kthread_stop(queryExecThread);
@@ -506,12 +526,15 @@ static void __exit slc_exit(void) {
 	proc_remove(procfsSlcDMFile);
 	proc_remove(procfsSlcDir);
 
+	destroySLC();
+
 	vunmap(sharedMemoryKernelBase);
 	for (i = 0; i < NUM_PAGES; i++) {
 		__free_page(sharedMemoryPages[i]);
 	}
 	kfree(sharedMemoryPages);
 
+	DEBUG_MSG(1,"Missed %d timer\n", atomic_read(&missedTimer));
 	DEBUG_MSG(1,"Destroyed SLC\n");
 }
 

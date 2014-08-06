@@ -211,23 +211,25 @@ void eventOccured(char *datamodelName, Tupel_t *tupel) {
 	DataModelElement_t *dm = NULL;
 	Query_t **query = NULL;
 	int i = 0;
-	#ifdef __KERNEL__
+/*	#ifdef __KERNEL__
 	unsigned long flags;
 	#endif
-	ACQUIRE_WRITE_LOCK(slcLock);
+	ACQUIRE_READ_LOCK(slcLock);*/
 
 	if (tupel == NULL) {
-		RELEASE_WRITE_LOCK(slcLock);
+//		RELEASE_READ_LOCK(slcLock);
 		return;
 	}
 	if ((dm = getDescription(SLC_DATA_MODEL,datamodelName)) == NULL) {
-		RELEASE_WRITE_LOCK(slcLock);
+		freeTupel(SLC_DATA_MODEL,tupel);
+//		RELEASE_READ_LOCK(slcLock);
 		return;
 	}
 	if (dm->dataModelType == EVENT) {
 		query = ((Event_t*)dm->typeInfo)->queries;
 	} else {
-		RELEASE_WRITE_LOCK(slcLock);
+		freeTupel(SLC_DATA_MODEL,tupel);
+//		RELEASE_READ_LOCK(slcLock);
 		return;
 	}
 
@@ -237,7 +239,7 @@ void eventOccured(char *datamodelName, Tupel_t *tupel) {
 			enqueueQuery(query[i],tupel);
 		}
 	}
-	RELEASE_WRITE_LOCK(slcLock);
+//	RELEASE_READ_LOCK(slcLock);
 }
 #ifdef __KERNEL__
 EXPORT_SYMBOL(eventOccured);
@@ -252,26 +254,29 @@ EXPORT_SYMBOL(eventOccured);
  */
 void objectChanged(char *datamodelName, Tupel_t *tupel, int event) {
 	int i = 0;
-	#ifdef __KERNEL__
+/*	#ifdef __KERNEL__
 	unsigned long flags;
-	#endif
+	#endif*/
 	DataModelElement_t *dm = NULL;
 	Query_t **query = NULL;
 	ObjectStream_t *objStream = NULL;
-	ACQUIRE_WRITE_LOCK(slcLock);
+
+//	ACQUIRE_READ_LOCK(slcLock);
 
 	if (tupel == NULL) {
-		RELEASE_WRITE_LOCK(slcLock);
+//		RELEASE_READ_LOCK(slcLock);
 		return;
 	}
 	if ((dm = getDescription(SLC_DATA_MODEL,datamodelName)) == NULL) {
-		RELEASE_WRITE_LOCK(slcLock);
+		freeTupel(SLC_DATA_MODEL,tupel);
+//		RELEASE_READ_LOCK(slcLock);
 		return;
 	}
 	if (dm->dataModelType == OBJECT) {
 		query = ((Object_t*)dm->typeInfo)->queries;
 	} else {
-		RELEASE_WRITE_LOCK(slcLock);
+		freeTupel(SLC_DATA_MODEL,tupel);
+//		RELEASE_READ_LOCK(slcLock);
 		return;
 	}
 
@@ -291,7 +296,7 @@ void objectChanged(char *datamodelName, Tupel_t *tupel, int event) {
 			}
 		}
 	}
-	RELEASE_WRITE_LOCK(slcLock);
+//	RELEASE_READ_LOCK(slcLock);
 }
 #ifdef __KERNEL__
 EXPORT_SYMBOL(objectChanged);

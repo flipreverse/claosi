@@ -48,6 +48,7 @@ static pthread_mutex_t listLock;
  * A list head for the list of remaining queries
  */
 STAILQ_HEAD(QueryExecListHead,QueryJob) queriesToExecList;
+static int missedTimer;
 
  union semun {
 	int val;					/* Value for SETVAL */
@@ -62,16 +63,32 @@ static void timerHandler(union sigval data) {
 	Source_t *src = (Source_t*)timerJob->dm->typeInfo;
 	Tupel_t *tuple= NULL;
 
+	/**
+	 * It is possible that the component deletes queries thus stopping a timer while a timer expires.
+	 * Hence, the hrtimerHandler while stall at src->callback(), because the source wants to acquire the slcLock in order to create a tuple.
+	 * After deleting the queries the lock will be release and the handler will acquire it.
+	 * It is likeley that this timer was canceled. Therefore, the instance of TimerJob_t was freed. Further access to the recently freed memory location
+	 * will lead to unpredictable behavior.
+	 * To avoid this, each call to hrtimerHandler() will try to acquire the read lock. If it fails, the handler will abort.
+	 * The delQuery() function will acquire a write lock.
+	 */
+	if (TRY_READ_LOCK(slcLock) != 0) {
+		ERR_MSG("Cannot acquire read timer lock\n");
+		__sync_fetch_and_add(&missedTimer,1);
+		return;
+	}
 	DEBUG_MSG(3,"Context of timerHandler, tid=%ld\n",syscall(SYS_gettid));
 	DEBUG_MSG(3,"%s: Creating tuple\n",__FUNCTION__);
 	// Only one timer at a time is allowed to access this source
 	ACQUIRE_WRITE_LOCK(src->lock);
 	tuple = src->callback();
 	RELEASE_WRITE_LOCK(src->lock);
+	
 	if (tuple != NULL) {
 		DEBUG_MSG(3,"%s: Enqueue tuple\n",__FUNCTION__);
 		enqueueQuery(timerJob->query,tuple);
 	}
+	RELEASE_READ_LOCK(slcLock);
 }
 
 static void* queryExecutorWork(void *data) {
@@ -401,4 +418,7 @@ void exitLayer(void) {
 	pthread_join(commThread,NULL);
 	munmap(sharedMemoryUserBase, NUM_PAGES * PAGE_SIZE);
 	close(fdCommunicationFile);
+	
+	pthread_mutex_destroy(&listLock);
+	DEBUG_MSG(1,"Missed %d timer\n", missedTimer);
 }

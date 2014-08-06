@@ -99,10 +99,8 @@ static Tupel_t* statusApp(void) {
 		return NULL;
 	}
 	strcpy(name,"lol.app");
-	ACQUIRE_READ_LOCK(slcLock);
 	allocItem(SLC_DATA_MODEL,tuple,0,"ui.app");
 	setItemString(SLC_DATA_MODEL,tuple,"ui.app",name);
-	RELEASE_READ_LOCK(slcLock);
 
 	return tuple;
 }
@@ -125,10 +123,8 @@ static Tupel_t* sourceForegroundApp(void) {
 		return NULL;
 	}
 	strcpy(name,"pferd.app");
-	ACQUIRE_READ_LOCK(slcLock);
 	allocItem(SLC_DATA_MODEL,tuple,0,"ui.foregroundApp");
 	setItemString(SLC_DATA_MODEL,tuple,"ui.foregroundApp",name);
-	RELEASE_READ_LOCK(slcLock);
 
 	return tuple;
 }

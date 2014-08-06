@@ -54,8 +54,8 @@ skb = (struct sk_buff*)regs->ARM_r0;
 	setItemArray(SLC_DATA_MODEL,tupel,"net.packetType.macHdr",ETH_HLEN);
 	copyArrayByte(SLC_DATA_MODEL,tupel,"net.packetType.macHdr",0,skb->data,ETH_HLEN);
 	setItemByte(SLC_DATA_MODEL,tupel,"net.packetType.macProtocol",42);
-	RELEASE_READ_LOCK(slcLock);
 	eventOccured("net.device.onTx",tupel);
+	RELEASE_READ_LOCK(slcLock);
 
 	return 0;
 }

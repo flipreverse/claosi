@@ -34,8 +34,8 @@ static int fork_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
 	ACQUIRE_READ_LOCK(slcLock);
 	allocItem(SLC_DATA_MODEL,tupel,0,"process.process");
 	setItemInt(SLC_DATA_MODEL,tupel,"process.process",retval);
-	RELEASE_READ_LOCK(slcLock);
 	objectChanged("process.process",tupel,OBJECT_CREATE);
+	RELEASE_READ_LOCK(slcLock);
 
 	return 0;
 }
@@ -56,8 +56,8 @@ static int exit_handler(struct kprobe *p, struct pt_regs *regs) {
 	ACQUIRE_READ_LOCK(slcLock);
 	allocItem(SLC_DATA_MODEL,tupel,0,"process.process");
 	setItemInt(SLC_DATA_MODEL,tupel,"process.process",curTask->pid);
-	RELEASE_READ_LOCK(slcLock);
 	objectChanged("process.process",tupel,OBJECT_DELETE);
+	RELEASE_READ_LOCK(slcLock);
 
 	return 0;
 }
@@ -113,10 +113,8 @@ static Tupel_t* generateStatusObject(void) {
 			head = curTuple;
 		}
 		// Acquire the slcLock to avoid change in the datamodel while creating the tuple
-		ACQUIRE_READ_LOCK(slcLock);
 		allocItem(SLC_DATA_MODEL,curTuple,0,"process.process");
 		setItemInt(SLC_DATA_MODEL,curTuple,"process.process",curTask->pid);
-		RELEASE_READ_LOCK(slcLock);
 		if (prevTuple != NULL) {
 			prevTuple->next = curTuple;
 		}
@@ -138,10 +136,8 @@ static Tupel_t* getSrc(void) {
 		return NULL;
 	}
 
-	ACQUIRE_READ_LOCK(slcLock);
 	allocItem(SLC_DATA_MODEL,tuple,0,"process.process.utime");
 	setItemInt(SLC_DATA_MODEL,tuple,"process.process.utime",4711);
-	RELEASE_READ_LOCK(slcLock);
 
 	return tuple;
 };
@@ -214,7 +210,7 @@ static void initQuery(void) {
 	querySrc.queryID = 0;
 	querySrc.onQueryCompleted = printResultSource;
 	querySrc.root = GET_BASE(processUTimeStr);
-	INIT_SRC_STREAM(processUTimeStr,"process.process.utime",0,NULL,1000);
+	INIT_SRC_STREAM(processUTimeStr,"process.process.utime",0,NULL,700);
 }
 #endif
 
