@@ -26,7 +26,7 @@ Tupel_t *tupel = NULL;
 Query_t query;
 Element_t elemPacket, elemUTime;
 
-void printResult(QueryID_t id, Tupel_t *tupel) {
+void printResult(unsigned int id, Tupel_t *tupel) {
 	printf("Received tupel:\t");
 	printTupel(&model1,tupel);
 }
@@ -37,7 +37,6 @@ int main() {
 	Query_t *copyCollect = NULL, *copyRewrite = NULL;
 
 	query.next = NULL;
-	query.queryType = SYNC;
 	query.queryID = 0;
 	query.onQueryCompleted = printResult;
 
@@ -87,7 +86,7 @@ int main() {
 	printf("-------------------------\n");
 	printf("Executing txStream query: \n");
 	printTupel(&model1,tupel);
-	executeQuery(&model1,&query,&tupel);
+	executeQuery(&model1,&query,tupel,0);
 	printf("-------------------------\n");
 
 	printf("Checking txSrc query: \n");

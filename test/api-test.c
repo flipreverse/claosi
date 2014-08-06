@@ -7,6 +7,7 @@
 #include <api.h>
 #include <time.h>
 #include <errno.h>
+#include <communication.h>
 
 DECLARE_ELEMENTS(nsNet1, nsProcess, nsUI, model1)
 DECLARE_ELEMENTS(evtDisplay, typeEventType, srcForegroundApp, srcProcessess,objApp)
@@ -15,7 +16,7 @@ DECLARE_ELEMENTS(objProcess, srcUTime, srcSTime, srcProcessSockets)
 DECLARE_ELEMENTS(objSocket, objDevice, srcSocketType, srcSocketFlags, typePacketType, srcTXBytes, srcRXBytes, evtOnRX, evtOnTX)
 DECLARE_ELEMENTS(typeMacHdr, typeMacProt, typeNetHdr, typeNetProt, typeTranspHdr, typeTransProt, typeDataLen)
 static void initDatamodel(void);
-static void initQuery(void);
+static void setupQueries(void);
 static void issueEvent(void);
 
 static EventStream_t txStream;
@@ -25,8 +26,9 @@ static Select_t selectTest;
 static Query_t query;
 static Element_t elemPacket;
 static Tupel_t *tupel = NULL;
+static unsigned int foo = 1;
 
-void printResult(QueryID_t id, Tupel_t *tupel) {
+void printResult(unsigned int id, Tupel_t *tupel) {
 	printf("Received tupel:\t");
 	printTupel(&model1,tupel);
 	freeTupel(&model1,tupel);
@@ -39,7 +41,8 @@ int main() {
 	startClock = clock();
 
 	initDatamodel();
-	initQuery();
+	setupQueries();
+	globalQueryID = &foo;
 
 	if (initSLC() == -1) {
 		return EXIT_FAILURE;
@@ -58,7 +61,7 @@ int main() {
 		return EXIT_FAILURE;
 	}
 
-	freeQuery(GET_BASE(txStream),0);
+	freeOperator(GET_BASE(txStream),0);
 	freeDataModel(&model1,0);
 	destroySLC();
 	endClock = clock();
@@ -109,9 +112,8 @@ static void issueEvent(void) {
 	eventOccured("net.device.onTx",tupel);
 }
 
-static void initQuery(void) {
+static void setupQueries(void) {
 	query.next = NULL;
-	query.queryType = ASYNC;
 	query.queryID = 0;
 	query.onQueryCompleted = printResult;
 	query.root = GET_BASE(txStream);

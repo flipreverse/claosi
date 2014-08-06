@@ -86,7 +86,7 @@ static void timerHandler(union sigval data) {
 	
 	if (tuple != NULL) {
 		DEBUG_MSG(3,"%s: Enqueue tuple\n",__FUNCTION__);
-		enqueueQuery(timerJob->query,tuple);
+		enqueueQuery(timerJob->query,tuple,0);
 	}
 	RELEASE_READ_LOCK(slcLock);
 }
@@ -126,7 +126,7 @@ static void* queryExecutorWork(void *data) {
 
 		DEBUG_MSG(3,"%s: Executing query 0x%x with tuple %p\n",__FUNCTION__,cur->query->queryID,cur->tuple);
 		// A queries execution just reads from the datamodel. No write lock is needed.
-		executeQuery(SLC_DATA_MODEL,cur->query,&cur->tuple);
+		executeQuery(SLC_DATA_MODEL,cur->query,cur->tuple,cur->step);
 		RELEASE_READ_LOCK(slcLock);
 		FREE(cur);
 	}
@@ -138,6 +138,8 @@ static void* queryExecutorWork(void *data) {
 static void* commThreadWork(void *data) {
 	LayerMessage_t *msg = NULL;
 	DataModelElement_t *dm = NULL;
+	Query_t *query = NULL, *queryCopy = NULL;
+	QueryID_t *queryID = NULL;
 	int ret = 0;
 
 	while (commThreadRunning == 1) {
@@ -172,6 +174,45 @@ static void* commThreadWork(void *data) {
 					RELEASE_WRITE_LOCK(slcLock);
 					break;
 
+				case MSG_QUERY_ADD:
+					DEBUG_MSG(1,"Received query\n");
+					query = (Query_t*)REWRITE_ADDR(msg->addr,sharedMemoryKernelBase,sharedMemoryUserBase);
+					rewriteQueryAddress(query,sharedMemoryKernelBase,sharedMemoryUserBase);
+					DEBUG_MSG(1,"Rewrote query\n");
+					queryCopy = ALLOC(query->size);
+					if (queryCopy == NULL) {
+						break;
+					}
+					memcpy(queryCopy,query,query->size);
+					rewriteQueryAddress(queryCopy,query,queryCopy);
+					DEBUG_MSG(1,"Rewrote copied query, compact? %d\n",queryCopy->flags & COMPACT);
+					ACQUIRE_WRITE_LOCK(slcLock);
+					if (addQueries(SLC_DATA_MODEL,queryCopy) != 0) {
+						freeQuery(queryCopy);
+					}
+					DEBUG_MSG(1,"Registered remote query with id %d\n",queryCopy->queryID);
+					RELEASE_WRITE_LOCK(slcLock);
+					break;
+
+				case MSG_QUERY_DEL:
+					DEBUG_MSG(1,"Received del query\n");
+					queryID = (QueryID_t*)REWRITE_ADDR(msg->addr,sharedMemoryKernelBase,sharedMemoryUserBase);
+					ACQUIRE_READ_LOCK(slcLock);
+					query = resolveQuery(queryID);
+					if (query == NULL) {
+						ERR_MSG("No such query: name=%s, id=%d\n",queryID->name, queryID->id);
+						RELEASE_READ_LOCK(slcLock);
+						break;
+					}
+					delQueries(SLC_DATA_MODEL,query);
+					freeQuery(query);
+					RELEASE_READ_LOCK(slcLock);
+					break;
+
+				case MSG_QUERY_CONTINUE:
+					break;
+
+
 				case MSG_EMPTY:
 					ERR_MSG("Read empty message!\n");
 					break;
@@ -187,7 +228,7 @@ static void* commThreadWork(void *data) {
 	return NULL;
 }
 
-void enqueueQuery(Query_t *query, Tupel_t *tuple) {
+void enqueueQuery(Query_t *query, Tupel_t *tuple, int step) {
 	QueryJob_t *job = NULL;
 	struct sembuf operation;
 	operation.sem_num = 0;
@@ -207,6 +248,7 @@ void enqueueQuery(Query_t *query, Tupel_t *tuple) {
 	}
 	job->query = query;
 	job->tuple = tuple;
+	job->step = step;
 	// Enqueue it
 	DEBUG_MSG(3,"Enqueued query 0x%x with tuple %p for execution\n",job->query->queryID,job->tuple);
 	pthread_mutex_lock(&listLock);
@@ -240,7 +282,7 @@ static void* generateObjectStatus(void *data) {
 	curTuple = statusJob->statusFn();
 	while (curTuple != NULL) {
 		// Forward any query to the execution thread
-		enqueueQuery(statusJob->query,curTuple);
+		enqueueQuery(statusJob->query,curTuple,0);
 		curTuple = curTuple->next;
 	}
 	

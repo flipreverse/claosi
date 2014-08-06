@@ -54,6 +54,7 @@ typedef struct QueryJob {
 	 * A pointer to the tuple
 	 */
 	Tupel_t *tuple;
+	int step;
 } QueryJob_t;
 /**
  * An instance of QueryTimerJob_t holds any information needed by the 
@@ -106,8 +107,9 @@ void objectChanged(char *datamodelName, Tupel_t *tupel, int event);
  * But it has to ensure that it operates asynchronously!
  * @param query the query to be executed
  * @param tuple the tuple
+ * @param step indicates the stage of {@link query} the execution should start with
  */
-void enqueueQuery(Query_t *query, Tupel_t *tuple);
+void enqueueQuery(Query_t *query, Tupel_t *tuple, int step);
 /**
  * Creates and starts a thread, which calls a objects status function {@link status} and
  * and enqueues each returned tuple for execution.

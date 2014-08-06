@@ -8,7 +8,10 @@
 enum LayerMessageType {
 	MSG_EMPTY				=	0x1,
 	MSG_DM_ADD,
-	MSG_DM_DEL
+	MSG_DM_DEL,
+	MSG_QUERY_ADD,
+	MSG_QUERY_DEL,
+	MSG_QUERY_CONTINUE
 };
 /**
  * Used to send messages between layers.
@@ -50,6 +53,7 @@ extern void *sharedMemoryKernelBase;
 extern void *sharedMemoryUserBase;
 extern Ringbuffer_t *txBuffer;
 extern Ringbuffer_t *rxBuffer;
+extern unsigned int *globalQueryID;
 
 void ringBufferInit(void);
 LayerMessage_t* ringBufferReadBegin(Ringbuffer_t *ringBuffer);

@@ -6,13 +6,6 @@
 #include <datamodel.h>
 #include <resultset.h>
 
-/**
- * Generates an unique query which will be assigned to Query_t.queryID
- */
-#define MAKE_QUERY_ID(globalID,localID)	((globalID << 8) | (localID & 0xf))
-#define GET_LOCAL_QUERY_ID(queryID)		(queryID & 0xf)
-#define GET_GLOBAL_QUERY_ID(queryID)	(queryID >> 8)
-
 #define GET_BASE(varName)	(Operator_t*)&varName
 #define ADD_PREDICATE(varOperator,slot,predicateVar)	varOperator.predicates[slot] = &predicateVar;
 #define ADD_ELEMENT(varOperator,slot,elementVar,elementName)	varOperator.elements[slot] = &elementVar; \
@@ -59,15 +52,9 @@
 	strncpy((char*)&varName.right.value,predRightName,MAX_NAME_LEN);
 
 enum QueryFlags {
-	COMPACT		=	0x1
+	COMPACT		=	0x1,
+	TRANSFERED	=	0x2
 };
-
-enum QueryType {
-	SYNC		=	0,
-	ASYNC		=	1
-};
-
-typedef unsigned short	QueryID_t;
 
 enum OperatorType {
 	GEN_EVENT		=	0x0,
@@ -113,19 +100,30 @@ enum SizeUnit {
 	SIZEUNIT_END
 };
 
-typedef void (*queryCompletedFunction)(QueryID_t,Tupel_t*);
+typedef void (*queryCompletedFunction)(unsigned int,Tupel_t*);
+
+
+typedef struct __attribute__((packed)) QueryID {
+	DECLARE_BUFFER(name);
+	unsigned short id;
+} QueryID_t;
+
+typedef struct __attribute__((packed)) QueryContinue {
+	QueryID_t qID;
+	unsigned short idx;
+} QueryContinue_t;
 
 /**
  * Baseclass for a query. Each element of a query uses this struct.
  */
-typedef struct Operator {
+typedef struct __attribute__((packed)) Operator {
 	unsigned short type;
 	struct Operator *child;	
 } Operator_t;
 /**
  * Used to describe the left-hand and right-hand side of a predicate
  */
-typedef struct Operand {
+typedef struct __attribute__((packed)) Operand {
 	unsigned short type;
 	DECLARE_BUFFER(value)
 } Operand_t;
@@ -133,11 +131,11 @@ typedef struct Operand {
  * Describes a single element of the datamodel.
  * For now, it just contains a string holding the complete path to the desired element.
  */
-typedef struct Element {
+typedef struct __attribute__((packed)) Element {
 	DECLARE_BUFFER(name)
 } Element_t;
 
-typedef struct GenStream {
+typedef struct __attribute__((packed)) GenStream {
 	Operator_t base;
 	#define op_type	base.type
 	#define op_child	base.child
@@ -145,7 +143,7 @@ typedef struct GenStream {
 	DECLARE_BUFFER(name)
 } GenStream_t;
 
-typedef struct EventStream {
+typedef struct __attribute__((packed)) EventStream {
 	GenStream_t streamBase;
 	#define st_urgent streamBase.urgent
 	#define st_name streamBase.name
@@ -153,7 +151,7 @@ typedef struct EventStream {
 	#define st_child streamBase.op_child
 } EventStream_t;
 
-typedef struct SourceStream {
+typedef struct __attribute__((packed)) SourceStream {
 	GenStream_t streamBase;
 	#define st_urgent streamBase.urgent
 	#define st_name streamBase.name
@@ -161,20 +159,20 @@ typedef struct SourceStream {
 	void *timerInfo;
 } SourceStream_t;
 
-typedef struct ObjectStream {
+typedef struct __attribute__((packed)) ObjectStream {
 	GenStream_t streamBase;
 	#define st_urgent streamBase.urgent
 	#define st_name streamBase.name
 	int objectEvents;
 } ObjectStream_t;
 
-typedef struct Predicate {
+typedef struct __attribute__((packed)) Predicate {
 		unsigned short type;
 		Operand_t left;
 		Operand_t right;
 } Predicate_t;
 
-typedef struct Filter {
+typedef struct __attribute__((packed)) Filter {
 	Operator_t base;
 	#define op_type	base.type
 	#define op_child	base.child
@@ -190,7 +188,7 @@ typedef struct Select {
 	Element_t **elements;
 } Select_t;
 
-typedef struct Sort {
+typedef struct __attribute__((packed)) Sort {
 	Operator_t base;
 	#define op_type	base.type
 	#define op_child	base.child
@@ -208,7 +206,7 @@ typedef Sort_t Group_t;
  * NOT IMPLEMENTED
  */
 
-typedef struct Join {
+typedef struct __attribute__((packed)) Join {
 	Operator_t base;
 	#define op_type	base.type
 	#define op_child	base.child
@@ -221,7 +219,7 @@ typedef struct Join {
  * NOT IMPLEMENTED
  */
 
-typedef struct Aggregate {
+typedef struct __attribute__((packed)) Aggregate {
 	Operator_t base;
 	#define op_type	base.type
 	#define op_child	base.child
@@ -239,14 +237,27 @@ typedef struct Aggregate {
 typedef struct __attribute__((packed)) Query {
 	struct Query *next;								// Since a provider can issue more than one query at a time the next pointer holds the address of the next query. The user has to set it to NULL, if the current instance is the last one.
 	Operator_t *root;								// Points to the first element of the actual query, which in fact is of type GEN_{OBJECT,SOURCE,EVENT}.
-	unsigned short queryType;						// Indicates an synchronous or synchronoues query. The letter one will be executed immediately. Therefore it can only be a source or object-status query. TODO: This member may be obsolete.
 	unsigned short flags;
-	QueryID_t queryID;								// An unique identifier for this query. The first byte is used to address the queries array of a node in the datamodel. The upper bytes contain a global id, which is incremented each time a new query is registered.
+	unsigned short idx;
+	unsigned int size;
+	unsigned int layerCode;
+	unsigned int queryID;								// An unique identifier for this query. The first byte is used to address the queries array of a node in the datamodel. The upper bytes contain a global id, which is incremented each time a new query is registered.
 	queryCompletedFunction onQueryCompleted;		// A function being called, if a query completes *and* the tupel is not rejected. The called code has to free the tupel!
 } Query_t;
 
+static inline void initQuery(Query_t *query) {
+	query->next = NULL;
+	query->root = NULL;
+	query->flags = 0;
+	query->idx = 0;
+	query->layerCode = LAYER_CODE;
+	query->queryID = 0;
+	query->onQueryCompleted = NULL;
+	query->size = 0;
+}
+
 int checkQuerySyntax(DataModelElement_t *rootDM, Operator_t *rootQuery, Operator_t **errOperator);
-int checkQueries(DataModelElement_t *rootDM, Query_t *queries, Operator_t **errOperator, int syncAllowed);
+int checkQueries(DataModelElement_t *rootDM, Query_t *queries, Operator_t **errOperator);
 #ifdef __KERNEL__
 int addQueries(DataModelElement_t *rootDM, Query_t *queries, unsigned long *flags);
 #else
@@ -260,10 +271,11 @@ int delQueries(DataModelElement_t *rootDM, Query_t *queries);
 int checkAndSanitizeElementPath(char *elemPath, char **elemPathSani, char **objId);
 void printQuery(Operator_t *root);
 void freeQuery(Query_t* query);
-void executeQuery(DataModelElement_t *rootDM, Query_t *query, Tupel_t **tupel);
+void executeQuery(DataModelElement_t *rootDM, Query_t *query, Tupel_t *tupel, int step);
 int calcQuerySize(Query_t *query);
 void copyAndCollectQuery(Query_t *origin, void *freeMem);
 void rewriteQueryAddress(Query_t *query, void *oldBaseAddr, void *newBaseAddr);
 void freeOperator(Operator_t *op, int freeOperator);
+Query_t* resolveQuery(QueryID_t *id);
 
 #endif // __QUERY_H__

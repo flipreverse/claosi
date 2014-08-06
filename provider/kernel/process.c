@@ -12,7 +12,7 @@ DECLARE_ELEMENTS(nsProcess, model)
 DECLARE_ELEMENTS(objProcess, srcUTime, srcSTime)
 static void initDatamodel(void);
 #ifdef REGISTER_QUERIES
-static void initQuery(void);
+static void setupQueries(void);
 static ObjectStream_t processObjCreate, processObjExit, processObjStatus;
 static SourceStream_t processUTimeStr;
 static Query_t queryFork, queryExit, queryStatus, querySrc;
@@ -143,7 +143,7 @@ static Tupel_t* getSrc(void) {
 };
 
 #ifdef REGISTER_QUERIES
-static void printResultFork(QueryID_t id, Tupel_t *tupel) {
+static void printResultFork(unsigned int id, Tupel_t *tupel) {
 	struct timeval time;
 	unsigned long long timeUS;
 
@@ -153,7 +153,7 @@ static void printResultFork(QueryID_t id, Tupel_t *tupel) {
 	freeTupel(SLC_DATA_MODEL,tupel);
 }
 
-static void printResultExit(QueryID_t id, Tupel_t *tupel) {
+static void printResultExit(unsigned int id, Tupel_t *tupel) {
 	struct timeval time;
 	unsigned long long timeUS;
 
@@ -163,7 +163,7 @@ static void printResultExit(QueryID_t id, Tupel_t *tupel) {
 	freeTupel(SLC_DATA_MODEL,tupel);
 }
 
-static void printResultStatus(QueryID_t id, Tupel_t *tupel) {
+static void printResultStatus(unsigned int id, Tupel_t *tupel) {
 	struct timeval time;
 	unsigned long long timeUS;
 
@@ -173,7 +173,7 @@ static void printResultStatus(QueryID_t id, Tupel_t *tupel) {
 	freeTupel(SLC_DATA_MODEL,tupel);
 }
 
-static void printResultSource(QueryID_t id, Tupel_t *tupel) {
+static void printResultSource(unsigned int id, Tupel_t *tupel) {
 	struct timeval time;
 	unsigned long long timeUS;
 
@@ -183,31 +183,27 @@ static void printResultSource(QueryID_t id, Tupel_t *tupel) {
 	freeTupel(SLC_DATA_MODEL,tupel);
 }
 
-static void initQuery(void) {
+static void setupQueries(void) {
+	initQuery(&queryFork);
 	queryFork.next = &queryExit;
-	queryFork.queryType = ASYNC;
-	queryFork.queryID = 0;
 	queryFork.onQueryCompleted = printResultFork;
 	queryFork.root = GET_BASE(processObjCreate);
 	INIT_OBJ_STREAM(processObjCreate,"process.process",0,NULL,OBJECT_CREATE);
 
+	initQuery(&queryExit);
 	queryExit.next = &queryStatus;
-	queryExit.queryType = ASYNC;
-	queryExit.queryID = 0;
 	queryExit.onQueryCompleted = printResultExit;
 	queryExit.root = GET_BASE(processObjExit);
 	INIT_OBJ_STREAM(processObjExit,"process.process",0,NULL,OBJECT_DELETE);
 
+	initQuery(&queryStatus);
 	queryStatus.next = &querySrc;
-	queryStatus.queryType = ASYNC;
-	queryStatus.queryID = 0;
 	queryStatus.onQueryCompleted = printResultStatus;
 	queryStatus.root = GET_BASE(processObjStatus);
 	INIT_OBJ_STREAM(processObjStatus,"process.process",0,NULL,OBJECT_STATUS);
 
+	initQuery(&querySrc);
 	querySrc.next = NULL;
-	querySrc.queryType = ASYNC;
-	querySrc.queryID = 0;
 	querySrc.onQueryCompleted = printResultSource;
 	querySrc.root = GET_BASE(processUTimeStr);
 	INIT_SRC_STREAM(processUTimeStr,"process.process.utime",0,NULL,700);
@@ -236,7 +232,7 @@ int __init process_init(void)
 	int ret = 0;
 	initDatamodel();
 #ifdef REGISTER_QUERIES
-	initQuery();
+	setupQueries();
 #endif
 
 	if ((ret = registerProvider(&model, NULL)) < 0 ) {
@@ -269,9 +265,9 @@ void __exit process_exit(void) {
 	}
 
 #ifdef REGISTER_QUERIES
-	freeQuery(GET_BASE(processObjCreate),0);
-	freeQuery(GET_BASE(processObjExit),0);
-	freeQuery(GET_BASE(processObjStatus),0);
+	freeOperator(GET_BASE(processObjCreate),0);
+	freeOperator(GET_BASE(processObjExit),0);
+	freeOperator(GET_BASE(processObjStatus),0);
 #endif
 	freeDataModel(&model,0);
 	DEBUG_MSG(1,"Unregistered process provider\n");

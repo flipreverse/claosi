@@ -157,7 +157,7 @@ static void initDatamodel(void) {
 }
 
 #ifdef REGISTER_QUERIES
-static void printResult(QueryID_t id, Tupel_t *tupel) {
+static void printResult(unsigned int id, Tupel_t *tupel) {
 	struct timeval time;
 	unsigned long long timeMS;
 
@@ -168,9 +168,8 @@ static void printResult(QueryID_t id, Tupel_t *tupel) {
 	freeTupel(SLC_DATA_MODEL,tupel);
 }
 
-static void initQuery(void) {
+static void setupQueries(void) {
 	queryDisplay.next = &queryApp;
-	queryDisplay.queryType = ASYNC;
 	queryDisplay.queryID = 0;
 	queryDisplay.onQueryCompleted = printResult;
 	queryDisplay.root = GET_BASE(displayStream);
@@ -182,14 +181,12 @@ static void initQuery(void) {
 	SET_PREDICATE(yPosPred,LEQ, STREAM, "ui.eventType.yPos", POD, "300")
 
 	queryApp.next = &queryForeground;
-	queryApp.queryType = ASYNC;
 	queryApp.queryID = 0;
 	queryApp.onQueryCompleted = printResult;
 	queryApp.root = GET_BASE(appStream);
 	INIT_OBJ_STREAM(appStream,"ui.app",0,NULL,OBJECT_STATUS)
 
 	queryForeground.next = NULL;
-	queryForeground.queryType = ASYNC;
 	queryForeground.queryID = 0;
 	queryForeground.onQueryCompleted = printResult;
 	queryForeground.root = GET_BASE(fappStream);
@@ -202,7 +199,7 @@ int onLoad(void) {
 
 	initDatamodel();
 #ifdef REGISTER_QUERIES
-	initQuery();
+	setupQueries();
 #endif
 
 	if ((ret = registerProvider(&model, NULL)) < 0 ) {
@@ -236,8 +233,8 @@ int onUnload(void) {
 	}
 
 #ifdef REGISTER_QUERIES
-	freeQuery(GET_BASE(displayStream),0);
-	freeQuery(GET_BASE(appStream),0);
+	freeOperator(GET_BASE(displayStream),0);
+	freeOperator(GET_BASE(appStream),0);
 #endif
 	freeDataModel(&model,0);
 

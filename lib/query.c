@@ -2,8 +2,9 @@
 #include <resultset.h>
 #include <query.h>
 #include <api.h>
+#include <communication.h>
 
-static QueryID_t globalQueryID = 1;
+extern unsigned int *globalQueryID;
 
 /**
  * Applies a certain {@link predicate} to a {@link tupel}.
@@ -161,6 +162,55 @@ static int applySelect(DataModelElement_t *rootDM, Select_t *selectOperator, Tup
 	
 	return 1;
 }
+
+static void sendQueryContinue(Query_t *query, Tupel_t *tuple, int steps) {
+	QueryContinue_t *queryCont = NULL;
+	Tupel_t *nextTuple= NULL, *nextTuple_ = NULL;
+	void *freeMem = NULL;
+	int temp = 0, size = sizeof(QueryContinue_t);
+
+	nextTuple = tuple;
+	do {
+		temp = getTupelSize(SLC_DATA_MODEL,tuple);
+		if (temp == -1) {
+			ERR_MSG("Cannot determine size of tuple. Freeing all tuple and abort.\n");
+			nextTuple = tuple;
+			while (nextTuple != NULL) {
+				nextTuple_ = nextTuple->next;
+				freeTupel(SLC_DATA_MODEL,nextTuple);
+				nextTuple = nextTuple_;
+			}
+			return;
+		}
+		size += temp;
+		nextTuple = nextTuple->next;
+	} while (nextTuple != NULL);
+
+	freeMem = slcmalloc(size);
+	if (quefreeMemryCont == NULL) {
+		ERR_MSG("Cannot allocate txMemory for QueryContinue_t\n");
+		return;
+	}
+	DEBUG_MSG(1,"Allocated %d bytes for query continue\n",size);
+
+	queryCont = (QueryContinue_t*)freeMem;
+	strncpy(queryCont->qID.name,(char*)&((GenStream_t*)query->root)->name,MAX_NAME_LEN);
+	queryCont->qID.id = query->queryID;
+	queryCont->idx = steps;
+	freeMem += sizeof(QueryContinue_t*);
+
+	nextTuple = tuple;
+	do {
+		
+		
+	} while(nextTuple != NULL);
+	do {
+		temp = ringBufferWrite(txBuffer,MSG_QUERY_CONTINUE,(char*)queryCont);
+		if (temp == -1) {
+			SLEEP(1);
+		}
+	} while (temp == -1);
+}
 /**
  * Executes {@link query}. If one of the operators do not aplly to the {@link tupel}, the {@link tuple} will be freed.
  * Therefore the caller has to provide a pointer to the pointer of tupel. In the letter case the pointer will be set to NULL.
@@ -169,53 +219,65 @@ static int applySelect(DataModelElement_t *rootDM, Select_t *selectOperator, Tup
  * @param query the query to be executed
  * @param tupel 
  */
-void executeQuery(DataModelElement_t *rootDM, Query_t *query, Tupel_t **tupel) {
+void executeQuery(DataModelElement_t *rootDM, Query_t *query, Tupel_t *tupel, int steps) {
 	Operator_t *cur = NULL;
+	int counter = 0, i = 0;
 
 	if (query == NULL) {
 		DEBUG_MSG(1,"%s: Query is NULL",__func__);
 		return;
 	}
-	cur = query->root;
-	while (cur != NULL) {
-		switch (cur->type) {
-			case GEN_SOURCE:
-			case GEN_OBJECT:
-			case GEN_EVENT:
-				break;
-
-			case FILTER:
-				if (applyFilter(rootDM,(Filter_t*)cur,*tupel) == 0) {
-					freeTupel(rootDM,*tupel);
-					*tupel = NULL;
-					return;
-				}
-				break;
-
-			case SELECT:
-				if (applySelect(rootDM,(Select_t*)cur,*tupel) == 0) {
-					freeTupel(rootDM,*tupel);
-					*tupel = NULL;
-					return;
-				}
-				break;
-
-			case SORT:
-			case GROUP:
-				break;
-
-			case JOIN:
-				break;
-
-			case MAX:
-			case MIN:
-			case AVG:
-				break;
+	if (steps != -1) {
+		cur = query->root;
+		for (i = 0; i < steps && cur != NULL; i++) {
+			cur = cur->child;
 		}
-		cur = cur->child;
+		counter = steps;
+		while (cur != NULL) {
+			switch (cur->type) {
+				case GEN_SOURCE:
+				case GEN_OBJECT:
+				case GEN_EVENT:
+					break;
+
+				case FILTER:
+					if (applyFilter(rootDM,(Filter_t*)cur,tupel) == 0) {
+						freeTupel(rootDM,tupel);
+						return;
+					}
+					break;
+
+				case SELECT:
+					if (applySelect(rootDM,(Select_t*)cur,tupel) == 0) {
+						freeTupel(rootDM,tupel);
+						return;
+					}
+					break;
+
+				case SORT:
+				case GROUP:
+					break;
+
+				case JOIN:
+					break;
+
+				case MAX:
+				case MIN:
+				case AVG:
+					break;
+			}
+			cur = cur->child;
+			counter++;
+		}
+	} else {
+		DEBUG_MSG(1,"No further steps to process.\n");
 	}
-	if (query->onQueryCompleted != NULL && *tupel != NULL) {
-		query->onQueryCompleted(query->queryID,*tupel);
+	if (query->layerCode == LAYER_CODE) {
+		if (query->onQueryCompleted != NULL) {
+			query->onQueryCompleted(query->queryID,tupel);
+		}
+	} else {
+		sendQueryContinue(query,tupel,-1);
 	}
 }
 /**
@@ -532,7 +594,7 @@ int checkQuerySyntax(DataModelElement_t *rootDM, Operator_t *rootQuery, Operator
  * @param errOperator will point to the faulty operator, if not NULL
  * @return 0 on success and a value below zero, if an error was discovered.
  */
-int checkQueries(DataModelElement_t *rootDM, Query_t *queries, Operator_t **errOperator, int syncAllowed) {
+int checkQueries(DataModelElement_t *rootDM, Query_t *queries, Operator_t **errOperator) {
 	int ret = 0;
 	Query_t *cur = queries;
 
@@ -543,9 +605,6 @@ int checkQueries(DataModelElement_t *rootDM, Query_t *queries, Operator_t **errO
 		if (cur->onQueryCompleted == NULL) {
 			return -ERESULTFUNCPTR;
 		}
-		if (syncAllowed == 0 && cur->queryType == SYNC) {
-			return -EQUERYTYPE;
-		}
 		if ((ret = checkQuerySyntax(rootDM,cur->root,errOperator)) < 0) {
 			return ret;
 		}
@@ -553,6 +612,64 @@ int checkQueries(DataModelElement_t *rootDM, Query_t *queries, Operator_t **errO
 	} while(cur != NULL);
 	
 	return 0;
+}
+/**
+ * Determines if a query should be transfered to the other layer.
+ * @param rootDM a pointer to the root of the datamodel
+ * @param dm a pointer to the datamodel element which corresponds to the orign of the stream ({@link query}->root).
+ * @param query a pointer to the query which should be investigated
+ * @return 1, if the query should be transfered. 0 otherwise.
+ */
+static int shouldTransferQuery(DataModelElement_t * rootDM, DataModelElement_t *dm, Query_t *query) {
+	// Query was registered at the remote layer and send to this layer. Do nothing!
+	if (query->layerCode != LAYER_CODE) {
+		return 0;
+	}
+	// Stream origin is at the remote side. Should transfer...
+	if (dm->layerCode != LAYER_CODE) {
+		return 1;
+	}
+	return 1;
+}
+
+static void sendAddQuery(Query_t *query) {
+	Query_t *copy = NULL;
+	int temp = 0;
+
+	temp = calcQuerySize(query);
+	copy = slcmalloc(temp);
+	if (copy == NULL) {
+		ERR_MSG("Cannot allocate txMemory for query: 0x%lx\n",(unsigned long)query);
+		return;
+	}
+	copyAndCollectQuery(query,copy);
+	copy->size = temp;
+	do {
+		temp = ringBufferWrite(txBuffer,MSG_QUERY_ADD,(char*)copy);
+		if (temp == -1) {
+			SLEEP(1);
+		}
+	} while (temp == -1);
+	query->flags |= TRANSFERED;
+}
+
+static void sendDelQuery(Query_t *query) {
+	QueryID_t *queryID = NULL;
+	int temp = 0;
+
+	queryID = slcmalloc(sizeof(QueryID_t));
+	if (queryID == NULL) {
+		ERR_MSG("Cannot allocate txMemory for QueryID_t\n");
+		return;
+	}
+	strncpy(queryID->name,(char*)&((GenStream_t*)query->root)->name,MAX_NAME_LEN);
+	queryID->id = query->queryID;
+	do {
+		temp = ringBufferWrite(txBuffer,MSG_QUERY_DEL,(char*)queryID);
+		if (temp == -1) {
+			SLEEP(1);
+		}
+	} while (temp == -1);
 }
 /**
  * Adds all queries in that list to the corresponding nodes in the global datamodel.
@@ -569,24 +686,18 @@ int addQueries(DataModelElement_t *rootDM, Query_t *queries) {
 	DataModelElement_t *dm = NULL;
 	Query_t *cur = queries, **regQueries = NULL;
 	char *name = NULL;
-	int i = 0, addQuery = 1, events = 0, statusQuery = 0;
+	int i = 0, events = 0, statusQuery = 0, temp = 0;
 	#ifdef __KERNEL__
 	unsigned long flags = *__flags;
 	#endif
 
 	do {
-		addQuery = 1;
 		statusQuery = 0;
 		switch (cur->root->type) {
 			case GEN_OBJECT:
 				events = ((ObjectStream_t*)cur->root)->objectEvents;
 				// Need to start the generate status thread?
 				statusQuery = events & OBJECT_STATUS;
-				// Status only query?
-				if ((events & (OBJECT_CREATE | OBJECT_DELETE)) == 0 && events & OBJECT_STATUS) {
-					// Oh yes. No need to remember this query.
-					addQuery = 0;
-				}
 			case GEN_EVENT:
 			case GEN_SOURCE:
 				name = ((GenStream_t*)cur->root)->name;
@@ -594,34 +705,45 @@ int addQueries(DataModelElement_t *rootDM, Query_t *queries) {
 		}
 
 		dm = getDescription(rootDM,name);
-		if (addQuery) {
-			// This function just gets called from an api method. Hence, the lock is already acquired.
-			// We can safely operate on the numQueries var.
-			switch (dm->dataModelType) {
-				case EVENT:
-					regQueries = ((Event_t*)dm->typeInfo)->queries;
-					break;
+		// This function just gets called from an api method. Hence, the lock is already acquired.
+		// We can safely operate on the numQueries var.
+		switch (dm->dataModelType) {
+			case EVENT:
+				regQueries = ((Event_t*)dm->typeInfo)->queries;
+				break;
 
-				case OBJECT:
-					regQueries = ((Object_t*)dm->typeInfo)->queries;
-					break;
+			case OBJECT:
+				regQueries = ((Object_t*)dm->typeInfo)->queries;
+				break;
 
-				case SOURCE:
-					regQueries = ((Source_t*)dm->typeInfo)->queries;
-					break;
+			case SOURCE:
+				regQueries = ((Source_t*)dm->typeInfo)->queries;
+				break;
+		}
+		for (i = 0; i < MAX_QUERIES_PER_DM; i++) {
+			if (regQueries[i] == NULL) {
+				break;
 			}
-			for (i = 0; i < MAX_QUERIES_PER_DM; i++) {
-				if (regQueries[i] == NULL) {
-					break;
-				}
-			}
-			if (i >= MAX_QUERIES_PER_DM) {
-				return -EMAXQUERIES;
-			}
-			regQueries[i] = cur;
-			cur->queryID = MAKE_QUERY_ID(globalQueryID,i);
-			globalQueryID++;
-			
+		}
+		if (i >= MAX_QUERIES_PER_DM) {
+			return -EMAXQUERIES;
+		}
+		regQueries[i] = cur;
+		// Only assign a new global id, if the query on its origin layer
+		if (cur->layerCode == LAYER_CODE) {
+			temp = __sync_fetch_and_add(globalQueryID,1);
+			cur->queryID = temp;
+		}
+		cur->idx = i;
+
+		if (shouldTransferQuery(rootDM,dm,cur) == 1) {
+			DEBUG_MSG(1,"Transfering query to other layer: 0x%lx\n",(unsigned long)cur);
+			sendAddQuery(cur);
+		}
+
+		if (dm->layerCode == LAYER_CODE) {
+			DEBUG_MSG(1,"Stream origin (%s) is at our layer. Start it...\n",dm->name);
+
 			switch (dm->dataModelType) {
 				case EVENT:
 					if (((Event_t*)dm->typeInfo)->numQueries == 0) {
@@ -666,13 +788,16 @@ int addQueries(DataModelElement_t *rootDM, Query_t *queries) {
 					startSourceTimer(dm,cur);
 					break;
 			}
-		}
-		if (statusQuery) {
-			#ifdef __KERNEL__
-			startObjStatusThread(cur,((Object_t*)dm->typeInfo)->status,__flags);
-			#else
-			startObjStatusThread(cur,((Object_t*)dm->typeInfo)->status);
-			#endif
+
+			if (statusQuery) {
+				#ifdef __KERNEL__
+				startObjStatusThread(cur,((Object_t*)dm->typeInfo)->status,__flags);
+				#else
+				startObjStatusThread(cur,((Object_t*)dm->typeInfo)->status);
+				#endif
+			}
+		} else {
+			DEBUG_MSG(1,"Stream origin (%s) is at the remote layer. Doing nothing.\n",dm->name);
 		}
 
 		cur = cur->next;
@@ -695,7 +820,6 @@ int delQueries(DataModelElement_t *rootDM, Query_t *queries) {
 	DataModelElement_t *dm = NULL;
 	Query_t *cur = queries, **regQueries = NULL;
 	char *name = NULL;
-	int id = 0;
 	#ifdef __KERNEL__
 	unsigned long flags = *__flags;
 	#endif
@@ -710,57 +834,66 @@ int delQueries(DataModelElement_t *rootDM, Query_t *queries) {
 		}
 
 		dm = getDescription(rootDM,name);
-		switch (dm->dataModelType) {
-			case EVENT:
-				regQueries = ((Event_t*)dm->typeInfo)->queries;
-				((Event_t*)dm->typeInfo)->numQueries--;
-				if (((Event_t*)dm->typeInfo)->numQueries == 0) {
-					/*
-					 * The slc-core component does *not* know, which steps are necessary to 'deactivate'
-					 * an event. Therefore, the write lock will be released to avoid any kind of race conditions.
-					 * For example, if the kernel has to unregister a kprobe it may sleep or call schedule, which
-					 * is *not* allowed in an atomic context.
-					 * Moreover it is safe to release the lock, because there are no onging modifications. One may argue that
-					 * during this short period of time without a lock held someone else deletes this particular node (dm)
-					 * from the datamodel and the following code will explode.
-					 * Well.... for now, we don't care. :-D This would be a rare corner case. :-)
-					 */
-					RELEASE_WRITE_LOCK(slcLock);
-					((Event_t*)dm->typeInfo)->deactivate();
-					ACQUIRE_WRITE_LOCK(slcLock);
-					#ifdef __KERNEL__
-					*__flags = flags;
-					#endif
+		if (dm->layerCode == LAYER_CODE) {
+			DEBUG_MSG(1,"Stream origin (%s) is at our layer. Stopping it...\n",dm->name);
+			switch (dm->dataModelType) {
+				case EVENT:
+					regQueries = ((Event_t*)dm->typeInfo)->queries;
+					((Event_t*)dm->typeInfo)->numQueries--;
+					if (((Event_t*)dm->typeInfo)->numQueries == 0) {
+						/*
+						 * The slc-core component does *not* know, which steps are necessary to 'deactivate'
+						 * an event. Therefore, the write lock will be released to avoid any kind of race conditions.
+						 * For example, if the kernel has to unregister a kprobe it may sleep or call schedule, which
+						 * is *not* allowed in an atomic context.
+						 * Moreover it is safe to release the lock, because there are no onging modifications. One may argue that
+						 * during this short period of time without a lock held someone else deletes this particular node (dm)
+						 * from the datamodel and the following code will explode.
+						 * Well.... for now, we don't care. :-D This would be a rare corner case. :-)
+						 */
+						RELEASE_WRITE_LOCK(slcLock);
+						((Event_t*)dm->typeInfo)->deactivate();
+						ACQUIRE_WRITE_LOCK(slcLock);
+						#ifdef __KERNEL__
+						*__flags = flags;
+						#endif
 
-				}
-				break;
+					}
+					break;
 
-			case OBJECT:
-				regQueries = ((Object_t*)dm->typeInfo)->queries;
-				((Object_t*)dm->typeInfo)->numQueries--;
-				if (((Object_t*)dm->typeInfo)->numQueries == 0) {
-					// Same applies here for an object.
-					RELEASE_WRITE_LOCK(slcLock);
-					((Object_t*)dm->typeInfo)->deactivate();
-					ACQUIRE_WRITE_LOCK(slcLock);
-					#ifdef __KERNEL__
-					*__flags = flags;
-					#endif
-				}
-				break;
+				case OBJECT:
+					regQueries = ((Object_t*)dm->typeInfo)->queries;
+					((Object_t*)dm->typeInfo)->numQueries--;
+					if (((Object_t*)dm->typeInfo)->numQueries == 0) {
+						// Same applies here for an object.
+						RELEASE_WRITE_LOCK(slcLock);
+						((Object_t*)dm->typeInfo)->deactivate();
+						ACQUIRE_WRITE_LOCK(slcLock);
+						#ifdef __KERNEL__
+						*__flags = flags;
+						#endif
+					}
+					break;
 
-			case SOURCE:
-				stopSourceTimer(cur);
-				((Source_t*)dm->typeInfo)->numQueries--;
-				regQueries = ((Source_t*)dm->typeInfo)->queries;
-				break;
+				case SOURCE:
+					stopSourceTimer(cur);
+					((Source_t*)dm->typeInfo)->numQueries--;
+					regQueries = ((Source_t*)dm->typeInfo)->queries;
+					break;
+			}
+		} else {
+			DEBUG_MSG(1,"Stream origin (%s) is at the remote layer. Doing nothing.\n",dm->name);
 		}
 		// Only a query with a valid id can safely be removed
 		if (cur->queryID > 0) {
-			id = GET_LOCAL_QUERY_ID(cur->queryID);
-			DEBUG_MSG(2,"Removing all pending query: 0x%lx\n",(unsigned long)regQueries[id]);
-			delPendingQuery(regQueries[id]);
-			regQueries[id] = NULL;
+			DEBUG_MSG(2,"Removing all pending query: 0x%lx\n",(unsigned long)regQueries[cur->idx]);
+			delPendingQuery(regQueries[cur->idx]);
+			regQueries[cur->idx] = NULL;
+		}
+		// Query was registered on this layer and transfered to the remote layer
+		if (cur->layerCode == LAYER_CODE && (cur->flags & TRANSFERED) == TRANSFERED) {
+			DEBUG_MSG(1,"Query was transfered to the remote layer. Sending a DEL_QUERY: 0x%lx\n",(unsigned long)cur);
+			sendDelQuery(cur);
 		}
 
 		cur = cur->next;
@@ -1118,4 +1251,8 @@ void rewriteQueryAddress(Query_t *query, void *oldBaseAddr, void *newBaseAddr) {
 		}
 		curOp = curOp->child;
 	} while(curOp != NULL);
+}
+
+Query_t* resolveQuery(QueryID_t *id) {
+	return NULL;
 }
