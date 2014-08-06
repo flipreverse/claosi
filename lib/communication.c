@@ -27,6 +27,7 @@ static char *txMemory = NULL;
  * Each layer has just on txBuffer. Therefore, only one static writeOps is needed.
  */
 static int writeOps;
+unsigned int *globalQueryID;
 
 /**
  * Initialize the ring buffer according to the current layer.
@@ -58,6 +59,9 @@ void ringBufferInit(void) {
 		rxBuffer->elements[i].type = MSG_EMPTY;
 		rxBuffer->elements[i].addr = NULL;
 	}
+
+	globalQueryID = (int*)(sharedMemoryKernelBase + sizeof(Ringbuffer_t) * 2);
+	*globalQueryID = 1;
 
 	DEBUG_MSG(2,"txBuffer=0x%p (size=%d), rxBuffer=0x%p (size=%d), txMemory=0x%p\n",txBuffer,txBuffer->size, rxBuffer, rxBuffer->size, txMemory);
 #else

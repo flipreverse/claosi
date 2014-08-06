@@ -56,7 +56,7 @@ int registerProvider(DataModelElement_t *dm, Query_t *queries) {
 		}
 	}
 	if (queries != NULL) {
-		if ((ret = checkQueries(SLC_DATA_MODEL,queries,NULL,0)) < 0) {
+		if ((ret = checkQueries(SLC_DATA_MODEL,queries,NULL)) < 0) {
 			RELEASE_WRITE_LOCK(slcLock);
 			return ret;
 		}
@@ -96,7 +96,7 @@ int unregisterProvider(DataModelElement_t *dm, Query_t *queries) {
 		return -EPARAM;
 	}
 	if (queries != NULL) {
-		if ((ret = checkQueries(SLC_DATA_MODEL,queries,NULL,1)) < 0) {
+		if ((ret = checkQueries(SLC_DATA_MODEL,queries,NULL)) < 0) {
 			RELEASE_WRITE_LOCK(slcLock);
 			return ret;
 		}
@@ -143,7 +143,7 @@ int registerQuery(Query_t *queries) {
 	ACQUIRE_WRITE_LOCK(slcLock);
 
 	if (queries != NULL) {
-		if ((ret = checkQueries(SLC_DATA_MODEL,queries,NULL,1)) < 0) {
+		if ((ret = checkQueries(SLC_DATA_MODEL,queries,NULL)) < 0) {
 			RELEASE_WRITE_LOCK(slcLock);
 			return ret;
 		}
@@ -178,7 +178,7 @@ int unregisterQuery(Query_t *queries) {
 	ACQUIRE_WRITE_LOCK(slcLock);
 
 	if (queries != NULL) {
-		if ((ret = checkQueries(SLC_DATA_MODEL,queries,NULL,1)) < 0) {
+		if ((ret = checkQueries(SLC_DATA_MODEL,queries,NULL)) < 0) {
 			RELEASE_WRITE_LOCK(slcLock);
 			return ret;
 		}
@@ -236,7 +236,7 @@ void eventOccured(char *datamodelName, Tupel_t *tupel) {
 	for (i = 0; i < MAX_QUERIES_PER_DM; i++) {
 		if (query[i] != NULL) {
 			DEBUG_MSG(2,"Executing query(base@%p) %d: %p\n",query,i,query[i]);
-			enqueueQuery(query[i],tupel);
+			enqueueQuery(query[i],tupel,0);
 		}
 	}
 //	RELEASE_READ_LOCK(slcLock);
@@ -290,7 +290,7 @@ void objectChanged(char *datamodelName, Tupel_t *tupel, int event) {
 			}
 			if ((objStream->objectEvents & event) == event) {
 				DEBUG_MSG(3,"Executing %d-th query (base@%p) %p\n",i,query,query[i]);
-				enqueueQuery(query[i],tupel);
+				enqueueQuery(query[i],tupel,0);
 			} else {
 				DEBUG_MSG(3,"Not executing %d-th query(base@%p) %p, because the event does not match the one the query was registered for (%d != %d).\n",i,query,query[i],objStream->objectEvents,event);
 			}

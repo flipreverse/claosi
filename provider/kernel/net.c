@@ -9,7 +9,7 @@ DECLARE_ELEMENTS(nsNet, model)
 DECLARE_ELEMENTS(objSocket, objDevice, srcSocketType, srcSocketFlags, typePacketType, srcTXBytes, srcRXBytes, evtOnRX, evtOnTX)
 DECLARE_ELEMENTS(typeMacHdr, typeMacProt, typeNetHdr, typeNetProt, typeTranspHdr, typeTransProt, typeDataLen)
 static void initDatamodel(void);
-static void initQuery(void);
+static void setupQueries(void);
 static EventStream_t txStream;
 static Predicate_t filterTXPredicate;
 static Filter_t filter;
@@ -83,7 +83,7 @@ static Tupel_t* getSrc(void) {
 	return NULL;
 };
 
-static void printResult(QueryID_t id, Tupel_t *tupel) {
+static void printResult(unsigned int id, Tupel_t *tupel) {
 	struct timeval time;
 	unsigned long long timeMS = 0;
 
@@ -93,10 +93,8 @@ static void printResult(QueryID_t id, Tupel_t *tupel) {
 	freeTupel(SLC_DATA_MODEL,tupel);
 }
 
-static void initQuery(void) {
-	query.next = NULL;
-	query.queryType = ASYNC;
-	query.queryID = 0;
+static void setupQueries(void) {
+	initQuery(&query);
 	query.onQueryCompleted = printResult;
 	query.root = GET_BASE(txStream);
 
@@ -159,7 +157,7 @@ int __init net_init(void)
 {
 	int ret = 0;
 	initDatamodel();
-	initQuery();
+	setupQueries();
 
 	if ((ret = registerProvider(&model, &query)) < 0 ) {
 		ERR_MSG("Register failed: %d\n",-ret);
@@ -178,7 +176,7 @@ void __exit net_exit(void) {
 		ERR_MSG("Unregister failed: %d\n",-ret);
 	}
 
-	freeQuery(GET_BASE(txStream),0);
+	freeOperator(GET_BASE(txStream),0);
 	freeDataModel(&model,0);
 	DEBUG_MSG(1,"Unregistered net provider\n");
 }
