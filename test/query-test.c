@@ -34,6 +34,7 @@ void printResult(QueryID_t id, Tupel_t *tupel) {
 int main() {
 	int ret = 0;
 	Operator_t *errOperator = NULL;
+	Query_t *copyCollect = NULL, *copyRewrite = NULL;
 
 	query.next = NULL;
 	query.queryType = SYNC;
@@ -43,6 +44,8 @@ int main() {
 	initDatamodel();
 	initResultset();
 
+	printf("-------------------------\n");
+	printf("Checking txStream query: \n");
 	INIT_EVT_STREAM(txStream,"net.device.onTx",0,GET_BASE(filter))
 	INIT_FILTER(filter,GET_BASE(selectTest),2)
 	ADD_PREDICATE(filter,0,filterTXPredicate)
@@ -58,9 +61,36 @@ int main() {
 		printf("Failed. Reason: %d\n",-ret);
 	}
 	query.root = GET_BASE(txStream);
+	printf("-------------------------\n");
+	printf("Copy and collect txStream query: \n");
+	ret = calcQuerySize(&query);
+	printf("Query size = %d\n",ret);
+	copyCollect = (Query_t*)malloc(ret);
+	if (copyCollect == NULL) {
+		perror("malloc copyCollect");
+		return EXIT_FAILURE;
+	}
+	copyAndCollectQuery(&query,copyCollect);
+	printQuery(copyCollect->root);
+	printf("-------------------------\n");
+	printf("Copy collected txStream query and rewriting its addresses: \n");
+	copyRewrite = (Query_t*)malloc(ret);
+	if (copyRewrite == NULL) {
+		perror("malloc copyRewrite");
+		return EXIT_FAILURE;
+	}
+	memcpy(copyRewrite,copyCollect,ret);
+	rewriteQueryAddress(copyRewrite, copyCollect, copyRewrite);
+	free(copyCollect);
+	printQuery(copyRewrite->root);
+	free(copyRewrite);
+	printf("-------------------------\n");
+	printf("Executing txStream query: \n");
 	printTupel(&model1,tupel);
 	executeQuery(&model1,&query,&tupel);
+	printf("-------------------------\n");
 
+	printf("Checking txSrc query: \n");
 	INIT_SRC_STREAM(txSrc,"process.process.utime",0,GET_BASE(joinProcess),100)
 	INIT_JOIN(joinProcess,"process.process", GET_BASE(joinApp),1)
 	ADD_PREDICATE(joinProcess,0,joinProcessPredicate)
@@ -73,21 +103,26 @@ int main() {
 	} else {
 		printf("Failed. Reason: %d\n",-ret);
 	}
-	
+	printf("-------------------------\n");
+
+	printf("Checking processObj query: \n");
 	INIT_OBJ_STREAM(processObj,"process.process",0,NULL,OBJECT_CREATE)
 	if ((ret = checkQuerySyntax(&model1,GET_BASE(processObj),&errOperator)) == 0) {
 		printQuery(GET_BASE(processObj));
 	} else {
 		printf("Failed. Reason: %d\n",-ret);
 	}
-	
-	freeQuery(GET_BASE(processObj),0);
-	freeQuery(GET_BASE(txStream),0);
-	freeQuery(GET_BASE(txSrc),0);
+	printf("-------------------------\n");
+
+	printf("Freeing queries and datamodel: \n");
+	freeOperator(GET_BASE(processObj),0);
+	freeOperator(GET_BASE(txStream),0);
+	freeOperator(GET_BASE(txSrc),0);
 	if (tupel != NULL) {
 		freeTupel(&model1,tupel);
 	}
 	freeDataModel(&model1,0);
+	printf("-------------------------\n");
 
 	return EXIT_SUCCESS;
 }

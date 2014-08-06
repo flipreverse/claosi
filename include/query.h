@@ -58,6 +58,10 @@
 	varName.right.type = predRightType; \
 	strncpy((char*)&varName.right.value,predRightName,MAX_NAME_LEN);
 
+enum QueryFlags {
+	COMPACT		=	0x1
+};
+
 enum QueryType {
 	SYNC		=	0,
 	ASYNC		=	1
@@ -236,6 +240,7 @@ typedef struct __attribute__((packed)) Query {
 	struct Query *next;								// Since a provider can issue more than one query at a time the next pointer holds the address of the next query. The user has to set it to NULL, if the current instance is the last one.
 	Operator_t *root;								// Points to the first element of the actual query, which in fact is of type GEN_{OBJECT,SOURCE,EVENT}.
 	unsigned short queryType;						// Indicates an synchronous or synchronoues query. The letter one will be executed immediately. Therefore it can only be a source or object-status query. TODO: This member may be obsolete.
+	unsigned short flags;
 	QueryID_t queryID;								// An unique identifier for this query. The first byte is used to address the queries array of a node in the datamodel. The upper bytes contain a global id, which is incremented each time a new query is registered.
 	queryCompletedFunction onQueryCompleted;		// A function being called, if a query completes *and* the tupel is not rejected. The called code has to free the tupel!
 } Query_t;
@@ -254,7 +259,11 @@ int delQueries(DataModelElement_t *rootDM, Query_t *queries);
 #endif
 int checkAndSanitizeElementPath(char *elemPath, char **elemPathSani, char **objId);
 void printQuery(Operator_t *root);
-void freeQuery(Operator_t *op, int freeOperator);
+void freeQuery(Query_t* query);
 void executeQuery(DataModelElement_t *rootDM, Query_t *query, Tupel_t **tupel);
+int calcQuerySize(Query_t *query);
+void copyAndCollectQuery(Query_t *origin, void *freeMem);
+void rewriteQueryAddress(Query_t *query, void *oldBaseAddr, void *newBaseAddr);
+void freeOperator(Operator_t *op, int freeOperator);
 
 #endif // __QUERY_H__

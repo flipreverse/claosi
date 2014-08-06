@@ -221,10 +221,11 @@ void executeQuery(DataModelElement_t *rootDM, Query_t *query, Tupel_t **tupel) {
 /**
  * By default the function will just the memory which is definitely allocated by a *malloc, e.g.
  * a predicates pointer array. If {@link freeOperator} is not zero, the operator itself will be freed, too.
+ * It iterates over all children.
  * @param op a pointer to the first operator which should be freed
  * @param freeOperator indicates, if an operator should be freed as well
  */
-void freeQuery(Operator_t *op, int freeOperator) {
+void freeOperator(Operator_t *op, int freeOperator) {
 	Operator_t *cur = op, *prev = NULL;
 
 	do {
@@ -273,6 +274,22 @@ void freeQuery(Operator_t *op, int freeOperator) {
 			FREE(prev);
 		}	
 	} while (cur != NULL);
+}
+#ifdef __KERNEL__
+EXPORT_SYMBOL(freeOperator);
+#endif
+/**
+ * Frees {@link query} and all its operators including their additional information.
+ * It assumes that the operators are dynamically allocated as well. Hence, they are freed, too.
+ * @param query a pointer to the query which shoulbd be freed
+ */
+void freeQuery(Query_t *query) {
+	if ((query->flags & COMPACT) == COMPACT) {
+		FREE(query);
+		return;
+	}
+	freeOperator(query->root,1);
+	FREE(query);
 }
 #ifdef __KERNEL__
 EXPORT_SYMBOL(freeQuery);
@@ -518,7 +535,7 @@ int checkQuerySyntax(DataModelElement_t *rootDM, Operator_t *rootQuery, Operator
 int checkQueries(DataModelElement_t *rootDM, Query_t *queries, Operator_t **errOperator, int syncAllowed) {
 	int ret = 0;
 	Query_t *cur = queries;
-	
+
 	do {
 		if (cur->root == NULL) {
 			return -EPARAM;
@@ -804,4 +821,301 @@ int checkAndSanitizeElementPath(char *elemPath, char **elemPathSani, char **objI
 	FREE(elemPathCopy_);
 	
 	return 0;
+}
+/**
+ * Calculates the size in bytes needed to store {@link query} in one memory chunk.
+ * @param query a pointer to the query which size should be calculated
+ * @return the number of bytes 
+ */
+int calcQuerySize(Query_t *query) {
+	Operator_t *cur = query->root;
+	int size = 0;
+
+	size = sizeof(Query_t);
+	do {
+		switch (cur->type) {
+			case GEN_SOURCE:
+				size += sizeof(SourceStream_t);
+				break;
+
+			case GEN_OBJECT:
+				size += sizeof(ObjectStream_t);
+				break;
+
+			case GEN_EVENT:
+				size += sizeof(EventStream_t);
+				break;
+
+			case FILTER:
+				size += sizeof(Filter_t) + ((Filter_t*)cur)->predicateLen * (sizeof(Predicate_t*) + sizeof(Predicate_t));
+				break;
+
+			case SELECT:
+				size += sizeof(Select_t) + ((Select_t*)cur)->elementsLen * (sizeof(Element_t*) + sizeof(Element_t));
+				break;
+
+			case SORT:
+				size += sizeof(Sort_t) + ((Sort_t*)cur)->elementsLen * (sizeof(Element_t*) + sizeof(Element_t));
+				break;
+
+			case GROUP:
+				size += sizeof(Group_t) + ((Group_t*)cur)->elementsLen * (sizeof(Element_t*) + sizeof(Element_t));
+				break;
+
+			case JOIN:
+				size += sizeof(Join_t) + ((Join_t*)cur)->predicateLen * (sizeof(Predicate_t*) + sizeof(Predicate_t));
+				break;
+
+			case MAX:
+			case MIN:
+			case AVG:
+				size += sizeof(Aggregate_t) + ((Aggregate_t*)cur)->elementsLen * (sizeof(Element_t*) + sizeof(Element_t));
+				break;
+
+			default:
+				break;
+		}
+		cur = cur->child;
+	} while (cur != NULL);
+
+	return size;
+}
+/**
+ * Copies a {@link origin} and all its additional information,e.g. predicates or elements, to {@link freeMem}.
+ * @param freeMem a pointer to the usable memory area
+ * @param origin a pointer to the query we want to copy
+ * @param copy 
+ * @return the amount of bytes used to copy {@link origin}
+ */
+static int copyOperatorAdjacent(void *freeMem, Operator_t *origin, Operator_t **copy) {
+	int i = 0;
+	void *freeMem_ = freeMem;
+	Filter_t *filterOrigin = NULL, *filterCopy = NULL;
+	Select_t *selectOrigin = NULL, *selectCopy = NULL;
+	Sort_t *sortOrigin = NULL, *sortCopy = NULL;
+	Group_t *groupOrigin = NULL, *groupCopy = NULL;
+	Join_t *joinOrigin = NULL, *joinCopy = NULL;
+	Aggregate_t *aggregateOrigin = NULL, *aggregateCopy = NULL;
+
+	*copy = (Operator_t*)freeMem_;
+	switch (origin->type) {
+		case GEN_SOURCE:
+			freeMem_ += sizeof(SourceStream_t);
+			memcpy(*copy,origin,sizeof(SourceStream_t));
+			break;
+
+		case GEN_OBJECT:
+			freeMem_ += sizeof(ObjectStream_t);
+			memcpy(*copy,origin,sizeof(ObjectStream_t));
+			break;
+
+		case GEN_EVENT:
+			freeMem_ += sizeof(EventStream_t);
+			memcpy(*copy,origin,sizeof(EventStream_t));
+			break;
+
+		case FILTER:
+			filterOrigin = (Filter_t*)origin;
+			filterCopy = ((Filter_t*)*copy);
+			freeMem_ += sizeof(Filter_t);
+			memcpy(filterCopy,filterOrigin,sizeof(Filter_t));
+			filterCopy->predicates = freeMem_;
+			freeMem_ += filterCopy->predicateLen * sizeof(Predicate_t*);
+			for (i = 0; i < filterOrigin->predicateLen; i++) {
+				filterCopy->predicates[i] = freeMem_;
+				memcpy(filterCopy->predicates[i],filterOrigin->predicates[i],sizeof(Predicate_t));
+				freeMem_ += sizeof(Predicate_t);
+			}
+			break;
+
+		case SELECT:
+			selectOrigin = (Select_t*)origin;
+			selectCopy = ((Select_t*)*copy);
+			freeMem_ += sizeof(Select_t);
+			memcpy(selectCopy,selectOrigin,sizeof(Select_t));
+			selectCopy->elements = freeMem_;
+			freeMem_ += selectCopy->elementsLen * sizeof(Element_t*);
+			for (i = 0; i < selectOrigin->elementsLen; i++) {
+				selectCopy->elements[i] = freeMem_;
+				memcpy(selectCopy->elements[i],selectOrigin->elements[i],sizeof(Element_t));
+				freeMem_ += sizeof(Element_t);
+			}
+			break;
+
+		case SORT:
+			sortOrigin = (Sort_t*)origin;
+			sortCopy = ((Sort_t*)*copy);
+			freeMem_ += sizeof(Sort_t);
+			memcpy(sortCopy,sortOrigin,sizeof(Sort_t));
+			sortCopy->elements = freeMem_;
+			freeMem_ += sortCopy->elementsLen * sizeof(Element_t*);
+			for (i = 0; i < sortOrigin->elementsLen; i++) {
+				sortCopy->elements[i] = freeMem_;
+				memcpy(sortCopy->elements[i],sortOrigin->elements[i],sizeof(Element_t));
+				freeMem_ += sizeof(Element_t);
+			}
+			break;
+
+		case GROUP:
+			groupOrigin = (Group_t*)origin;
+			groupCopy = ((Group_t*)*copy);
+			freeMem_ += sizeof(Group_t);
+			memcpy(groupCopy,groupOrigin,sizeof(Group_t));
+			groupCopy->elements = freeMem_;
+			freeMem_ += groupCopy->elementsLen * sizeof(Element_t*);
+			for (i = 0; i < groupOrigin->elementsLen; i++) {
+				groupCopy->elements[i] = freeMem_;
+				memcpy(groupCopy->elements[i],groupOrigin->elements[i],sizeof(Element_t));
+				freeMem_ += sizeof(Element_t);
+			}
+			break;
+
+		case JOIN:
+			joinOrigin = (Join_t*)origin;
+			joinCopy = ((Join_t*)*copy);
+			freeMem_ += sizeof(Join_t);
+			memcpy(joinCopy,joinOrigin,sizeof(Join_t));
+			joinCopy->predicates = freeMem_;
+			freeMem_ += joinCopy->predicateLen * sizeof(Predicate_t*);
+			for (i = 0; i < joinOrigin->predicateLen; i++) {
+				joinCopy->predicates[i] = freeMem_;
+				memcpy(joinCopy->predicates[i],joinOrigin->predicates[i],sizeof(Predicate_t));
+				freeMem_ += sizeof(Predicate_t);
+			}
+			break;
+
+		case MAX:
+		case MIN:
+		case AVG:
+			aggregateOrigin = (Aggregate_t*)origin;
+			aggregateCopy = ((Aggregate_t*)*copy);
+			freeMem_ += sizeof(Aggregate_t);
+			memcpy(aggregateCopy,aggregateOrigin,sizeof(Aggregate_t));
+			aggregateCopy->elements = freeMem_;
+			freeMem_ += aggregateCopy->elementsLen * sizeof(Element_t*);
+			for (i = 0; i < aggregateOrigin->elementsLen; i++) {
+				aggregateCopy->elements[i] = freeMem_;
+				memcpy(aggregateCopy->elements[i],aggregateOrigin->elements[i],sizeof(Element_t));
+				freeMem_ += sizeof(Element_t);
+			}
+			break;
+
+		default:
+			break;
+	}
+	return freeMem_ - freeMem;
+}
+/**
+ * Copies query {@link origin}, its operators and their additional information, e.g. predicates, to {@link freeMem}.
+ * The caller has to ensure that {@link freeMem} points to a memory location which is large enough.
+ * It sets the COMPACT flag. 
+ * @param origin a pointer to the query which should be copied.
+ * @param freeMem a pointer to free memory
+ */
+void copyAndCollectQuery(Query_t *origin, void *freeMem) {
+	Query_t *curCopyQuery = NULL, *curOriginQuery = origin;
+	Operator_t **curCopyOp = NULL, *curOriginOp = origin->root;
+
+	curCopyQuery = (Query_t*)freeMem;
+	memcpy(curCopyQuery,curOriginQuery,sizeof(Query_t));
+	freeMem += sizeof(Query_t);
+	curCopyQuery->next = NULL;
+	curCopyQuery->root = NULL;
+	curCopyQuery->flags |= COMPACT;
+	curCopyOp = &curCopyQuery->root;
+
+	do {
+		freeMem += copyOperatorAdjacent(freeMem,curOriginOp,curCopyOp);
+		curOriginOp = curOriginOp->child;
+		curCopyOp = &(*curCopyOp)->child;
+	} while(curOriginOp != NULL);
+}
+/**
+ * Rewrites all pointers within {@link query}.
+ * @param query a pointer to the query which should be relocated
+ * @param oldBaseAddr the base address of the old memory location
+ * @param newBaseAddr the base address of the new memory location
+ */
+void rewriteQueryAddress(Query_t *query, void *oldBaseAddr, void *newBaseAddr) {
+	int i = 0;
+	Operator_t *curOp = NULL;
+	Filter_t *filter = NULL;
+	Select_t *select = NULL;
+	Sort_t *sort = NULL;
+	Group_t *group = NULL;
+	Join_t *join = NULL;
+	Aggregate_t *aggregate = NULL;
+	
+	if (query->next != NULL) {
+		query->next = REWRITE_ADDR(query->next,oldBaseAddr,newBaseAddr);
+	}
+	query->root = REWRITE_ADDR(query->root,oldBaseAddr,newBaseAddr);
+	curOp = query->root;
+
+	do {
+		if (curOp->child != NULL) {
+			curOp->child = REWRITE_ADDR(curOp->child,oldBaseAddr,newBaseAddr);
+		}
+
+		switch (curOp->type) {
+			case GEN_SOURCE:
+			case GEN_OBJECT:
+			case GEN_EVENT:
+				break;
+
+			case FILTER:
+				filter = (Filter_t*)curOp;
+				filter->predicates = REWRITE_ADDR(filter->predicates,oldBaseAddr,newBaseAddr);
+				for (i = 0; i < filter->predicateLen; i++) {
+					filter->predicates[i] = REWRITE_ADDR(filter->predicates[i],oldBaseAddr,newBaseAddr);
+				}
+				break;
+
+			case SELECT:
+				select = (Select_t*)curOp;
+				select->elements = REWRITE_ADDR(select->elements,oldBaseAddr,newBaseAddr);
+				for (i = 0; i < select->elementsLen; i++) {
+					select->elements[i] = REWRITE_ADDR(select->elements[i],oldBaseAddr,newBaseAddr);
+				}
+				break;
+
+			case SORT:
+				sort = (Sort_t*)curOp;
+				sort->elements = REWRITE_ADDR(sort->elements,oldBaseAddr,newBaseAddr);
+				for (i = 0; i < sort->elementsLen; i++) {
+					sort->elements[i] = REWRITE_ADDR(sort->elements[i],oldBaseAddr,newBaseAddr);
+				}
+				break;
+
+			case GROUP:
+				group = (Group_t*)curOp;
+				group->elements = REWRITE_ADDR(group->elements,oldBaseAddr,newBaseAddr);
+				for (i = 0; i < group->elementsLen; i++) {
+					group->elements[i] = REWRITE_ADDR(group->elements[i],oldBaseAddr,newBaseAddr);
+				}
+				break;
+
+			case JOIN:
+				join = (Join_t*)curOp;
+				join->predicates = REWRITE_ADDR(join->predicates,oldBaseAddr,newBaseAddr);
+				for (i = 0; i < join->predicateLen; i++) {
+					join->predicates[i] = REWRITE_ADDR(join->predicates[i],oldBaseAddr,newBaseAddr);
+				}
+				break;
+
+			case MAX:
+			case MIN:
+			case AVG:
+				aggregate = (Aggregate_t*)curOp;
+				aggregate->elements = REWRITE_ADDR(aggregate->elements,oldBaseAddr,newBaseAddr);
+				for (i = 0; i < aggregate->elementsLen; i++) {
+					aggregate->elements[i] = REWRITE_ADDR(aggregate->elements[i],oldBaseAddr,newBaseAddr);
+				}
+				break;
+
+			default:
+				break;
+		}
+		curOp = curOp->child;
+	} while(curOp != NULL);
 }
