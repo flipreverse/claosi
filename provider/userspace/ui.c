@@ -44,7 +44,7 @@ static void* displayEvtWork(void *data) {
 		}
 
 		srand(time(0));
-		printf("timeStart=%llu, id=%u, tuple=%p\n",timeUS,tuple->id,tuple);
+		//printf("timeStart=%llu, id=%u, tuple=%p\n",timeUS,tuple->id,tuple);
 		ACQUIRE_READ_LOCK(slcLock);
 		allocItem(SLC_DATA_MODEL,tuple,0,"ui.eventType");
 		setItemInt(SLC_DATA_MODEL,tuple,"ui.eventType.xPos",rand() % 1024);
