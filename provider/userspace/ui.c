@@ -7,7 +7,7 @@
 #include <time.h>
 
 #define REGISTER_QUERIES
-//#undef REGISTER_QUERIES
+#undef REGISTER_QUERIES
 
 DECLARE_ELEMENTS(nsUI, model)
 DECLARE_ELEMENTS(evtDisplay, typeEventType, srcForegroundApp, objApp)
@@ -29,7 +29,7 @@ static int displayEvtThreadRunning = 0;
 static void* displayEvtWork(void *data) {
 	Tupel_t *tuple = NULL;
 	struct timeval curTime;
-	unsigned long long timeMS = 0;
+	unsigned long long timeUS = 0;
 
 	while (1) {
 		sleep(3);
@@ -37,19 +37,20 @@ static void* displayEvtWork(void *data) {
 			break;
 		}
 		gettimeofday(&curTime,NULL);
-		timeMS = (long long)curTime.tv_sec * (long long)USEC_PER_MSEC + (long long)curTime.tv_usec;
-		tuple = initTupel(timeMS,1);
+		timeUS = (unsigned long long)curTime.tv_sec * (unsigned long long)USEC_PER_SEC + (unsigned long long)curTime.tv_usec;
+		tuple = initTupel(timeUS,1);
 		if (tuple == NULL) {
 			continue;
 		}
 
 		srand(time(0));
+		printf("timeStart=%llu, id=%u, tuple=%p\n",timeUS,tuple->id,tuple);
 		ACQUIRE_READ_LOCK(slcLock);
 		allocItem(SLC_DATA_MODEL,tuple,0,"ui.eventType");
 		setItemInt(SLC_DATA_MODEL,tuple,"ui.eventType.xPos",rand() % 1024);
 		setItemInt(SLC_DATA_MODEL,tuple,"ui.eventType.yPos",rand() % 1024);
-		RELEASE_READ_LOCK(slcLock);
 		eventOccured("ui.display",tuple);
+		RELEASE_READ_LOCK(slcLock);
 	}
 
 	pthread_exit(0);
@@ -85,11 +86,11 @@ static Tupel_t* statusApp(void) {
 	Tupel_t *tuple = NULL;
 	struct timeval curTime;
 	char *name = NULL;
-	unsigned long long timeMS = 0;
+	unsigned long long timeUS = 0;
 
 	gettimeofday(&curTime,NULL);
-	timeMS = (long long)curTime.tv_sec * (long long)USEC_PER_MSEC + (long long)curTime.tv_usec;
-	tuple = initTupel(timeMS,1);
+	timeUS = (unsigned long long)curTime.tv_sec * (unsigned long long)USEC_PER_SEC + (unsigned long long)curTime.tv_usec;
+	tuple = initTupel(timeUS,1);
 	if (tuple == NULL) {
 		return NULL;
 	}
@@ -109,11 +110,11 @@ static Tupel_t* sourceForegroundApp(void) {
 	Tupel_t *tuple = NULL;
 	struct timeval curTime;
 	char *name = NULL;
-	unsigned long long timeMS = 0;
+	unsigned long long timeUS = 0;
 
 	gettimeofday(&curTime,NULL);
-	timeMS = (long long)curTime.tv_sec * (long long)USEC_PER_MSEC + (long long)curTime.tv_usec;
-	tuple = initTupel(timeMS,1);
+	timeUS = (unsigned long long)curTime.tv_sec * (unsigned long long)USEC_PER_SEC + (unsigned long long)curTime.tv_usec;
+	tuple = initTupel(timeUS,1);
 	if (tuple == NULL) {
 		return NULL;
 	}
@@ -159,18 +160,18 @@ static void initDatamodel(void) {
 #ifdef REGISTER_QUERIES
 static void printResult(unsigned int id, Tupel_t *tupel) {
 	struct timeval time;
-	unsigned long long timeMS;
+	unsigned long long timeUS;
 
 	gettimeofday(&time,NULL);
-	timeMS = (long long)time.tv_sec * (long long)USEC_PER_MSEC + (long long)time.tv_usec;
-	printf("processing duration: %llu ms,",timeMS - tupel->timestamp);
+	timeUS = (unsigned long long)time.tv_sec * (unsigned long long)USEC_PER_SEC + (unsigned long long)time.tv_usec;
+	printf("processing duration: %llu us,",timeUS - tupel->timestamp);
 	printTupel(SLC_DATA_MODEL,tupel);
 	freeTupel(SLC_DATA_MODEL,tupel);
 }
 
 static void setupQueries(void) {
+	initQuery(&queryDisplay);
 	queryDisplay.next = &queryApp;
-	queryDisplay.queryID = 0;
 	queryDisplay.onQueryCompleted = printResult;
 	queryDisplay.root = GET_BASE(displayStream);
 	INIT_EVT_STREAM(displayStream,"ui.display",0,GET_BASE(posFilter))
@@ -180,14 +181,13 @@ static void setupQueries(void) {
 	ADD_PREDICATE(posFilter,1,yPosPred)
 	SET_PREDICATE(yPosPred,LEQ, STREAM, "ui.eventType.yPos", POD, "300")
 
+	initQuery(&queryApp);
 	queryApp.next = &queryForeground;
-	queryApp.queryID = 0;
 	queryApp.onQueryCompleted = printResult;
 	queryApp.root = GET_BASE(appStream);
 	INIT_OBJ_STREAM(appStream,"ui.app",0,NULL,OBJECT_STATUS)
 
-	queryForeground.next = NULL;
-	queryForeground.queryID = 0;
+	initQuery(&queryForeground);
 	queryForeground.onQueryCompleted = printResult;
 	queryForeground.root = GET_BASE(fappStream);
 	INIT_SRC_STREAM(fappStream,"ui.foregroundApp",0,NULL,1000)

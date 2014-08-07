@@ -58,6 +58,7 @@
 #define ACQUIRE_WRITE_LOCK(varName)			pthread_rwlock_rdlock(&varName)
 #define RELEASE_WRITE_LOCK(varName)			pthread_rwlock_unlock(&varName)
 #define USEC_PER_MSEC						1000L
+#define USEC_PER_SEC						1000000L
 #define TIMER_SIGNAL						SIGRTMIN
 #define SLEEP(x)							sleep(1)
 #define LAYER_CODE							0x2
