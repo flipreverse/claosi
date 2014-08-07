@@ -19,7 +19,7 @@ int main() {
 	Tupel_t *tupel = NULL, *tupelCompact = NULL, *tupelCompact2 = NULL, *tupleCopy = NULL;
 	char *string = NULL, values[] = {5,4,3,2,1};
 	clock_t startClock, endClock;
-	int size = 0;
+	int size = 0, ret = 0;
 
 	startClock = clock();
 	initDatamodel();
@@ -79,9 +79,9 @@ int main() {
 		tupelCompact = ALLOC(size);
 		if (tupelCompact != NULL) {
 			printf("Copy and collecting tuple....");
-			copyAndCollectTupel(&model1,tupel,tupelCompact,size);
+			ret = copyAndCollectTupel(&model1,tupel,tupelCompact,size);
 			freeTupel(&model1,tupel);
-			printf("... done. Freed the origin tuple.\n");
+			printf("... done. Used %d bytes. Freed the origin tuple.\n", ret);
 			printf("Trying to change rxBytes to LOOOOL\n");
 			setItemString(&model1,tupelCompact,"net.device.rxBytes","LOOOOL");
 			printTupel(&model1,tupelCompact);

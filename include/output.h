@@ -35,14 +35,17 @@
 	#ifdef  __KERNEL__
 		#define ERR_MSG(args...) printk(KERN_ERR TAG args);
 		#define WARN_MSG(args...) printk(KERN_WARN TAG args);
+		#define INFO_MSG(args...) printk(KERN_INFO TAG args);
 	#else
 		#define ERR_MSG(args...) fprintf(stderr,TAG args);
 		#define WARN_MSG(args...) printf(TAG args);
+		#define INFO_MSG(args...) printf(TAG args);
 	#endif
 #else
 	#define DEBUG_MSG(prio,...) do {} while(0);
 	#define ERR_MSG(prio,...) do {} while(0);
 	#define WARN_MSG(prio,...) do {} while(0);
+	#define INFO_MSG(prio,...) do {} while(0);
 #endif
 
 #endif // __OUTPUT_H__

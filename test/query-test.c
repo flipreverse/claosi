@@ -36,8 +36,7 @@ int main() {
 	Operator_t *errOperator = NULL;
 	Query_t *copyCollect = NULL, *copyRewrite = NULL;
 
-	query.next = NULL;
-	query.queryID = 0;
+	initQuery(&query);
 	query.onQueryCompleted = printResult;
 
 	initDatamodel();

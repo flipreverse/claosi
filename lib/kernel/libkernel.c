@@ -271,6 +271,7 @@ static int commThreadWork(void *data) {
 	Query_t *query = NULL, *queryCopy = NULL;
 	QueryContinue_t *queryCont = NULL;
 	QueryID_t *queryID = NULL;
+	Tupel_t *curTupleShm = NULL, *curTupleCopy = NULL, *headTupleCopy = NULL, *prevTupleCopy = NULL;
 	int ret = 0;
 	unsigned long flags;
 
@@ -279,26 +280,29 @@ static int commThreadWork(void *data) {
 		if (msg == NULL) {
 			msleep(1000);
 		} else {
-			DEBUG_MSG(1,"Read msg with type 0x%x and addr 0x%p (rewritten addr = 0x%p)\n",msg->type,msg->addr,REWRITE_ADDR(msg->addr,sharedMemoryUserBase,sharedMemoryKernelBase));
+			DEBUG_MSG(3,"Read msg with type 0x%x and addr 0x%p (rewritten addr = 0x%p)\n",msg->type,msg->addr,REWRITE_ADDR(msg->addr,sharedMemoryUserBase,sharedMemoryKernelBase));
 			switch (msg->type) {
 				case MSG_DM_ADD:
 					dm = (DataModelElement_t*)REWRITE_ADDR(msg->addr,sharedMemoryUserBase,sharedMemoryKernelBase);
+					// Rewrite all pointer within the datamodel
 					rewriteDatamodelAddress(dm,sharedMemoryUserBase,sharedMemoryKernelBase);
 					ACQUIRE_WRITE_LOCK(slcLock);
+					// It is not necessary to copy the datamodel, because mergeDataModel will do this in order to merge it into the existing model
 					ret = mergeDataModel(0,SLC_DATA_MODEL,dm);
 					if (ret < 0) {
-						ERR_MSG("Weird! Cannot merge datamodel received by kernel!\n");
+						ERR_MSG("Weird! Cannot merge datamodel received by userspace!\n");
 					}
 					RELEASE_WRITE_LOCK(slcLock);
 					break;
 
 				case MSG_DM_DEL:
 					dm = (DataModelElement_t*)REWRITE_ADDR(msg->addr,sharedMemoryUserBase,sharedMemoryKernelBase);
+					// Rewrite all pointer within the datamodel
 					rewriteDatamodelAddress(dm,sharedMemoryUserBase,sharedMemoryKernelBase);
 					ACQUIRE_WRITE_LOCK(slcLock);
 					ret = deleteSubtree(&SLC_DATA_MODEL,dm);
 					if (ret < 0) {
-						ERR_MSG("Weird! Cannot delete datamodel received by kernel!\n");
+						ERR_MSG("Weird! Cannot delete datamodel received by userspace!\n");
 					}
 					if (SLC_DATA_MODEL == NULL) {
 						initSLCDatamodel();
@@ -307,41 +311,91 @@ static int commThreadWork(void *data) {
 					break;
 
 				case MSG_QUERY_ADD:
-					DEBUG_MSG(1,"Received query\n");
 					query = (Query_t*)REWRITE_ADDR(msg->addr,sharedMemoryUserBase,sharedMemoryKernelBase);
-					rewriteQueryAddress(query,sharedMemoryUserBase,sharedMemoryKernelBase);
-					DEBUG_MSG(1,"Rewrote query\n");
+					//rewriteQueryAddress(query,sharedMemoryUserBase,sharedMemoryKernelBase);
+					// Allocate memory, because it is necessary to copy the query to this layer. Currently query points to the shared memory.
 					queryCopy = ALLOC(query->size);
 					if (queryCopy == NULL) {
 						break;
 					}
 					memcpy(queryCopy,query,query->size);
-					rewriteQueryAddress(queryCopy,query,queryCopy);
-					DEBUG_MSG(1,"Rewrote copied query, compact? %d\n",queryCopy->flags & COMPACT);
+					// Rewrite all pointers within this query to be able to access it.
+					rewriteQueryAddress(queryCopy,msg->addr,queryCopy);
 					ACQUIRE_WRITE_LOCK(slcLock);
 					if (addQueries(SLC_DATA_MODEL,queryCopy,&flags) != 0) {
 						freeQuery(queryCopy);
 					}
-					DEBUG_MSG(1,"Registered remote query with id %d\n",queryCopy->queryID);
+					DEBUG_MSG(2,"Registered remote query with id %d\n",queryCopy->queryID);
 					RELEASE_WRITE_LOCK(slcLock);
 					break;
 
 				case MSG_QUERY_DEL:
-					DEBUG_MSG(1,"Received del query\n");
 					queryID = (QueryID_t*)REWRITE_ADDR(msg->addr,sharedMemoryUserBase,sharedMemoryKernelBase);
 					ACQUIRE_READ_LOCK(slcLock);
-					query = resolveQuery(queryID);
+					// Try to resolve queryID to a pointer to a real query
+					query = resolveQuery(SLC_DATA_MODEL,queryID);
 					if (query == NULL) {
 						ERR_MSG("No such query: name=%s, id=%d\n",queryID->name, queryID->id);
 						RELEASE_READ_LOCK(slcLock);
 						break;
 					}
 					delQueries(SLC_DATA_MODEL,query,&flags);
+					/*
+					 * delQueries() does *not* free the query itself.
+					 * Normally a query is handed over by a module/shared library and directly registered.
+					 * Therefore, the module/shared library has to free. In this case the query was handed over by the remote layer.
+					 * So, it is freed now.
+					 */
 					freeQuery(query);
 					RELEASE_READ_LOCK(slcLock);
 					break;
 
 				case MSG_QUERY_CONTINUE:
+					queryCont = (QueryContinue_t*)REWRITE_ADDR(msg->addr,sharedMemoryUserBase,sharedMemoryKernelBase);
+					ACQUIRE_READ_LOCK(slcLock);
+					// Try to resolve queryID to a pointer to a real query
+					query = resolveQuery(SLC_DATA_MODEL,&queryCont->qID);
+					if (query == NULL) {
+						ERR_MSG("No such query: name=%s, id=%d\n",queryCont->qID.name, queryCont->qID.id);
+						RELEASE_READ_LOCK(slcLock);
+						break;
+					}
+					curTupleShm = (Tupel_t*)(queryCont + 1);
+					headTupleCopy = NULL;
+					prevTupleCopy = NULL;
+					ret = 0;
+					// Basically a MSG_QUERY_CONTINUE can have one or more tuples attached
+					do {
+						rewriteTupleAddress(SLC_DATA_MODEL,curTupleShm,sharedMemoryUserBase,sharedMemoryKernelBase);
+						curTupleCopy = copyTupel(SLC_DATA_MODEL,curTupleShm);
+						if (curTupleCopy == NULL) {
+							ERR_MSG("Cannot copy tuple from shared memory. Freeing all previous copied tuples. Query: name=%s, id=%d\n", queryCont->qID.name, queryCont->qID.id);
+							curTupleCopy = headTupleCopy;
+							// There was an error during copying curTupleShm --> free all tuples copied so far
+							while (curTupleCopy != NULL) {
+								prevTupleCopy = curTupleCopy->next;
+								freeTupel(SLC_DATA_MODEL,curTupleCopy);
+								curTupleCopy = prevTupleCopy;
+							}
+							headTupleCopy = NULL;
+							break;
+						}
+						if (prevTupleCopy != NULL) {
+							prevTupleCopy->next = curTupleCopy;
+						}
+						if (headTupleCopy == NULL) {
+							headTupleCopy = curTupleCopy;
+						}
+						prevTupleCopy = curTupleCopy;
+						curTupleShm = curTupleShm->next;
+						ret++;
+					} while (curTupleShm != NULL);
+					if (headTupleCopy != NULL) {
+						// Handover the tuples and the query to the executor
+						DEBUG_MSG(2,"Enqueueing %d remote tuple(s) for execution.\n",ret);
+						enqueueQuery(query,headTupleCopy,queryCont->steps);
+					}
+					RELEASE_READ_LOCK(slcLock);
 					break;
 
 				case MSG_EMPTY:
@@ -508,7 +562,7 @@ static int __init slc_init(void) {
 		}
 		kfree(sharedMemoryPages);
 	}
-	DEBUG_MSG(1,"Allocated %d pages and mapped them to address 0x%p\n",NUM_PAGES,sharedMemoryKernelBase);
+	INFO_MSG("Allocated %d pages and mapped them to address 0x%p\n",NUM_PAGES,sharedMemoryKernelBase);
 	ringBufferInit();
 
 	procfsSlcDir = proc_mkdir(PROCFS_DIR_NAME, NULL);
@@ -551,7 +605,7 @@ static int __init slc_init(void) {
 	// ... and start the communication thread which read from the rxBuffer and processes the received messages.
 	wake_up_process(commThread);
 
-	DEBUG_MSG(1,"Initialized SLC\n");
+	INFO_MSG("Initialized SLC\n");
 	return 0;
 }
 
@@ -576,8 +630,8 @@ static void __exit slc_exit(void) {
 	}
 	kfree(sharedMemoryPages);
 
-	DEBUG_MSG(1,"Missed %d timer\n", atomic_read(&missedTimer));
-	DEBUG_MSG(1,"Destroyed SLC\n");
+	INFO_MSG("Missed %d timer\n", atomic_read(&missedTimer));
+	INFO_MSG("Destroyed SLC\n");
 }
 
 module_init(slc_init);

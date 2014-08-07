@@ -102,15 +102,34 @@ enum SizeUnit {
 
 typedef void (*queryCompletedFunction)(unsigned int,Tupel_t*);
 
-
+/**
+ * Identifies a query across different layers
+ */
 typedef struct __attribute__((packed)) QueryID {
+	/**
+	 * Contains the path to the node within the datamodel which is the root (a.k.a. soruce)
+	 * of the query
+	 */
 	DECLARE_BUFFER(name);
+	/**
+	 * The global id of the query (assigned by addQueries())
+	 */
 	unsigned short id;
 } QueryID_t;
-
+/**
+ * Represents the status of query.
+ * It is used to handover the execution of a query to the other layer.
+ */
 typedef struct __attribute__((packed)) QueryContinue {
+	/**
+	 * Identifies the query the remote layer should continue to process.
+	 * It is not possible to pass a pointer. Hence, an abstraction is needed.
+	 */
 	QueryID_t qID;
-	unsigned short idx;
+	/**
+	 * The number of operators the remote layer has to skip before continuing execution.
+	 */
+	unsigned short steps;
 } QueryContinue_t;
 
 /**
@@ -276,6 +295,6 @@ int calcQuerySize(Query_t *query);
 void copyAndCollectQuery(Query_t *origin, void *freeMem);
 void rewriteQueryAddress(Query_t *query, void *oldBaseAddr, void *newBaseAddr);
 void freeOperator(Operator_t *op, int freeOperator);
-Query_t* resolveQuery(QueryID_t *id);
+Query_t* resolveQuery(DataModelElement_t *rootDM, QueryID_t *id);
 
 #endif // __QUERY_H__

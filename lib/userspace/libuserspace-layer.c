@@ -139,7 +139,9 @@ static void* commThreadWork(void *data) {
 	LayerMessage_t *msg = NULL;
 	DataModelElement_t *dm = NULL;
 	Query_t *query = NULL, *queryCopy = NULL;
+	QueryContinue_t *queryCont = NULL;
 	QueryID_t *queryID = NULL;
+	Tupel_t *curTupleShm = NULL, *curTupleCopy = NULL, *headTupleCopy = NULL, *prevTupleCopy = NULL;
 	int ret = 0;
 
 	while (commThreadRunning == 1) {
@@ -147,12 +149,14 @@ static void* commThreadWork(void *data) {
 		if (msg == NULL) {
 			sleep(1);
 		} else {
-			DEBUG_MSG(1,"Read msg with type 0x%x and addr %p (rewritten addr = %p)\n",msg->type,msg->addr,REWRITE_ADDR(msg->addr,sharedMemoryUserBase,sharedMemoryKernelBase));
+			DEBUG_MSG(3,"Read msg with type 0x%x and addr %p (rewritten addr = %p)\n",msg->type,msg->addr,REWRITE_ADDR(msg->addr,sharedMemoryUserBase,sharedMemoryKernelBase));
 			switch (msg->type) {
 				case MSG_DM_ADD:
 					dm = (DataModelElement_t*)REWRITE_ADDR(msg->addr,sharedMemoryKernelBase,sharedMemoryUserBase);
+					// Rewrite all pointer within the datamodel
 					rewriteDatamodelAddress(dm,sharedMemoryKernelBase,sharedMemoryUserBase);
 					ACQUIRE_WRITE_LOCK(slcLock);
+					// It is not necessary to copy the datamodel, because mergeDataModel will do this in order to merge it into the existing model
 					ret = mergeDataModel(0,SLC_DATA_MODEL,dm);
 					if (ret < 0) {
 						ERR_MSG("Weird! Cannot merge datamodel received by kernel!\n");
@@ -162,6 +166,7 @@ static void* commThreadWork(void *data) {
 
 				case MSG_DM_DEL:
 					dm = (DataModelElement_t*)REWRITE_ADDR(msg->addr,sharedMemoryKernelBase,sharedMemoryUserBase);
+					// Rewrite all pointer within the datamodel
 					rewriteDatamodelAddress(dm,sharedMemoryKernelBase,sharedMemoryUserBase);
 					ACQUIRE_WRITE_LOCK(slcLock);
 					ret = deleteSubtree(&SLC_DATA_MODEL,dm);
@@ -175,43 +180,91 @@ static void* commThreadWork(void *data) {
 					break;
 
 				case MSG_QUERY_ADD:
-					DEBUG_MSG(1,"Received query\n");
 					query = (Query_t*)REWRITE_ADDR(msg->addr,sharedMemoryKernelBase,sharedMemoryUserBase);
-					rewriteQueryAddress(query,sharedMemoryKernelBase,sharedMemoryUserBase);
-					DEBUG_MSG(1,"Rewrote query\n");
+					//rewriteQueryAddress(query,sharedMemoryKernelBase,sharedMemoryUserBase);
+					// Allocate memory, because it is necessary to copy the query to this layer. Currently query points to the shared memory.
 					queryCopy = ALLOC(query->size);
 					if (queryCopy == NULL) {
 						break;
 					}
 					memcpy(queryCopy,query,query->size);
-					rewriteQueryAddress(queryCopy,query,queryCopy);
-					DEBUG_MSG(1,"Rewrote copied query, compact? %d\n",queryCopy->flags & COMPACT);
+					rewriteQueryAddress(queryCopy,msg->addr,queryCopy);
 					ACQUIRE_WRITE_LOCK(slcLock);
 					if (addQueries(SLC_DATA_MODEL,queryCopy) != 0) {
 						freeQuery(queryCopy);
 					}
-					DEBUG_MSG(1,"Registered remote query with id %d\n",queryCopy->queryID);
+					DEBUG_MSG(2,"Registered remote query with id %d\n",queryCopy->queryID);
 					RELEASE_WRITE_LOCK(slcLock);
 					break;
 
 				case MSG_QUERY_DEL:
-					DEBUG_MSG(1,"Received del query\n");
 					queryID = (QueryID_t*)REWRITE_ADDR(msg->addr,sharedMemoryKernelBase,sharedMemoryUserBase);
 					ACQUIRE_READ_LOCK(slcLock);
-					query = resolveQuery(queryID);
+					// Try to resolve queryID to a pointer to a real query
+					query = resolveQuery(SLC_DATA_MODEL,queryID);
 					if (query == NULL) {
 						ERR_MSG("No such query: name=%s, id=%d\n",queryID->name, queryID->id);
 						RELEASE_READ_LOCK(slcLock);
 						break;
 					}
 					delQueries(SLC_DATA_MODEL,query);
+					/*
+					 * delQueries() does *not* free the query itself.
+					 * Normally a query is handed over by a module/shared library and directly registered.
+					 * Therefore, the module/shared library has to free. In this case the query was handed over by the remote layer.
+					 * So, it is freed now.
+					 */
 					freeQuery(query);
 					RELEASE_READ_LOCK(slcLock);
 					break;
 
 				case MSG_QUERY_CONTINUE:
+					queryCont = (QueryContinue_t*)REWRITE_ADDR(msg->addr,sharedMemoryKernelBase,sharedMemoryUserBase);
+					ACQUIRE_READ_LOCK(slcLock);
+					// Try to resolve queryID to a pointer to a real query
+					query = resolveQuery(SLC_DATA_MODEL,&queryCont->qID);
+					if (query == NULL) {
+						ERR_MSG("No such query: name=%s, id=%d\n",queryCont->qID.name, queryCont->qID.id);
+						RELEASE_READ_LOCK(slcLock);
+						break;
+					}
+					curTupleShm = (Tupel_t*)(queryCont + 1);
+					headTupleCopy = NULL;
+					prevTupleCopy = NULL;
+					ret = 0;
+					// Basically a MSG_QUERY_CONTINUE can have one or more tuples attached
+					do {
+						rewriteTupleAddress(SLC_DATA_MODEL,curTupleShm,sharedMemoryKernelBase,sharedMemoryUserBase);
+						curTupleCopy = copyTupel(SLC_DATA_MODEL,curTupleShm);
+						if (curTupleCopy == NULL) {
+							ERR_MSG("Cannot copy tuple from shared memory. Freeing all previous copied tuples. Query: name=%s, id=%d\n", queryCont->qID.name, queryCont->qID.id);
+							curTupleCopy = headTupleCopy;
+							// There was an error during copying curTupleShm --> free all tuples copied so far
+							while (curTupleCopy != NULL) {
+								prevTupleCopy = curTupleCopy->next;
+								freeTupel(SLC_DATA_MODEL,curTupleCopy);
+								curTupleCopy = prevTupleCopy;
+							}
+							headTupleCopy = NULL;
+							break;
+						}
+						if (prevTupleCopy != NULL) {
+							prevTupleCopy->next = curTupleCopy;
+						}
+						if (headTupleCopy == NULL) {
+							headTupleCopy = curTupleCopy;
+						}
+						prevTupleCopy = curTupleCopy;
+						curTupleShm = curTupleShm->next;
+						ret++;
+					} while (curTupleShm != NULL);
+					if (headTupleCopy != NULL) {
+						// Handover the tuples and the query to the executor
+						DEBUG_MSG(2,"Enqueueing %d remote tuple(s) for execution.\n",ret);
+						enqueueQuery(query,headTupleCopy,queryCont->steps);
+					}
+					RELEASE_READ_LOCK(slcLock);
 					break;
-
 
 				case MSG_EMPTY:
 					ERR_MSG("Read empty message!\n");
@@ -322,7 +375,7 @@ void startSourceTimer(DataModelElement_t *dm, Query_t *query) {
 		return;
 	}
 
-	DEBUG_MSG(1,"%s: Init posix timer for node %s\n",__FUNCTION__,srcStream->st_name);
+	DEBUG_MSG(2,"%s: Init posix timer for node %s\n",__FUNCTION__,srcStream->st_name);
 	timerJob->period = srcStream->period;
 	timerJob->query = query;
 	timerJob->dm = dm;
@@ -347,7 +400,7 @@ void startSourceTimer(DataModelElement_t *dm, Query_t *query) {
 		FREE(timerJob);
 		return;
 	}
-	DEBUG_MSG(1,"%s: Starting posixtimer for node %s. Will fire in %u ms.\n",__FUNCTION__,srcStream->st_name,srcStream->period);
+	DEBUG_MSG(2,"%s: Starting posixtimer for node %s. Will fire in %u ms.\n",__FUNCTION__,srcStream->st_name,srcStream->period);
 	// Fire it up.... :-)
 	if (timer_settime(timerJob->timerID, 0, &timerJob->timerValue, NULL) < 0) {
 		ERR_MSG("timer_settime failed: %s\n",strerror(errno));
@@ -372,13 +425,13 @@ void stopSourceTimer(Query_t *query) {
 		ERR_MSG("timer_settime - delete - failed: %s\n",strerror(errno));
 		return;
 	}
-	DEBUG_MSG(1,"%s: Canceling posix timer for node %s...\n",__FUNCTION__,srcStream->st_name);
+	DEBUG_MSG(2,"%s: Canceling posix timer for node %s...\n",__FUNCTION__,srcStream->st_name);
 	// Delete the timer
 	ret = timer_delete(timerJob->timerID);
 	if (ret < 0) {
 		ERR_MSG("timer_delete failed: %s\n",strerror(errno));
 	}
-	DEBUG_MSG(1,"%s: posix timer for node %s canceled. Was active: %d\n",__FUNCTION__,srcStream->st_name,ret);
+	DEBUG_MSG(2,"%s: posix timer for node %s canceled. Was active: %d\n",__FUNCTION__,srcStream->st_name,ret);
 	// Free the timer information
 	FREE(timerJob);
 	srcStream->timerInfo = NULL;
@@ -402,14 +455,14 @@ int initLayer(void) {
 		close(fdCommunicationFile);
 		return -1;
 	}
-	DEBUG_MSG(1,"Mapped the kernels shared memory at %p\n",sharedMemoryUserBase);
+	INFO_MSG("Mapped the kernels shared memory at %p\n",sharedMemoryUserBase);
 	if (read(fdCommunicationFile,buffer,20) < 0) {
 		ERR_MSG("Cannot read sharedMemoryKernelBase: %s\n",strerror(errno));
 		close(fdCommunicationFile);
 		return -1;
 	}
 	addr = strtoul(buffer,NULL,16);
-	DEBUG_MSG(1,"Kernel mapped shared memory at 0x%lx\n",addr);
+	INFO_MSG("Kernel mapped shared memory at 0x%lx\n",addr);
 	sharedMemoryKernelBase = (void*)addr;
 	ringBufferInit();
 
@@ -462,5 +515,5 @@ void exitLayer(void) {
 	close(fdCommunicationFile);
 	
 	pthread_mutex_destroy(&listLock);
-	DEBUG_MSG(1,"Missed %d timer\n", missedTimer);
+	INFO_MSG("Missed %d timer\n", missedTimer);
 }

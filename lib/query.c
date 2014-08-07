@@ -162,54 +162,74 @@ static int applySelect(DataModelElement_t *rootDM, Select_t *selectOperator, Tup
 	
 	return 1;
 }
-
+/**
+ * Allocates enough tx memory to store the tuple list starting at {@link tuple} and an instance of QueryContinue_t.
+ * Collects and copies all tuples to the memory. 
+ * @param query a pointer to the query that should be processed at the remote layer
+ * @param tuple a pointer to the first tuple
+ * @param steps the number of operators to skip before continuing execution 
+ */
 static void sendQueryContinue(Query_t *query, Tupel_t *tuple, int steps) {
 	QueryContinue_t *queryCont = NULL;
-	Tupel_t *nextTuple= NULL, *nextTuple_ = NULL;
+	Tupel_t *curTuple= NULL, *tempTuple = NULL;
 	void *freeMem = NULL;
 	int temp = 0, size = sizeof(QueryContinue_t);
 
-	nextTuple = tuple;
+	//TODO: communication is not available
+	curTuple = tuple;
+	// Calculate the amount of memory to allocate
 	do {
-		temp = getTupelSize(SLC_DATA_MODEL,tuple);
+		temp = getTupelSize(SLC_DATA_MODEL,curTuple);
 		if (temp == -1) {
 			ERR_MSG("Cannot determine size of tuple. Freeing all tuple and abort.\n");
-			nextTuple = tuple;
-			while (nextTuple != NULL) {
-				nextTuple_ = nextTuple->next;
-				freeTupel(SLC_DATA_MODEL,nextTuple);
-				nextTuple = nextTuple_;
+			curTuple = tuple;
+			while (curTuple != NULL) {
+				tempTuple = curTuple->next;
+				freeTupel(SLC_DATA_MODEL,curTuple);
+				curTuple = tempTuple;
 			}
 			return;
 		}
 		size += temp;
-		nextTuple = nextTuple->next;
-	} while (nextTuple != NULL);
+		curTuple = curTuple->next;
+	} while (curTuple != NULL);
 
 	freeMem = slcmalloc(size);
-	if (quefreeMemryCont == NULL) {
+	if (freeMem == NULL) {
 		ERR_MSG("Cannot allocate txMemory for QueryContinue_t\n");
 		return;
 	}
-	DEBUG_MSG(1,"Allocated %d bytes for query continue\n",size);
 
 	queryCont = (QueryContinue_t*)freeMem;
-	strncpy(queryCont->qID.name,(char*)&((GenStream_t*)query->root)->name,MAX_NAME_LEN);
+	strncpy((char*)&queryCont->qID.name,(char*)&((GenStream_t*)query->root)->name,MAX_NAME_LEN);
 	queryCont->qID.id = query->queryID;
-	queryCont->idx = steps;
-	freeMem += sizeof(QueryContinue_t*);
+	queryCont->steps = steps;
+	freeMem += sizeof(QueryContinue_t);
 
-	nextTuple = tuple;
+	curTuple = tuple;
+	// Copy all tuple to the tx memory
 	do {
-		
-		
-	} while(nextTuple != NULL);
+		tempTuple = (Tupel_t*)freeMem;
+		temp = copyAndCollectTupel(SLC_DATA_MODEL,curTuple,tempTuple,0);
+		freeMem += temp;
+		curTuple = curTuple->next;
+		if (curTuple != NULL) {
+			tempTuple->next = (Tupel_t*)freeMem;
+		}
+	} while(curTuple != NULL);
 	do {
 		temp = ringBufferWrite(txBuffer,MSG_QUERY_CONTINUE,(char*)queryCont);
 		if (temp == -1) {
 			SLEEP(1);
 		}
 	} while (temp == -1);
+	//Freeing origin tuple... They are no longer needed.
+	curTuple = tuple;
+	while (curTuple != NULL) {
+		tempTuple = curTuple->next;
+		freeTupel(SLC_DATA_MODEL,curTuple);
+		curTuple = tempTuple;
+	}
 }
 /**
  * Executes {@link query}. If one of the operators do not aplly to the {@link tupel}, the {@link tuple} will be freed.
@@ -229,6 +249,7 @@ void executeQuery(DataModelElement_t *rootDM, Query_t *query, Tupel_t *tupel, in
 	}
 	if (steps != -1) {
 		cur = query->root;
+		// Skip the first 'steps' operators
 		for (i = 0; i < steps && cur != NULL; i++) {
 			cur = cur->child;
 		}
@@ -270,13 +291,16 @@ void executeQuery(DataModelElement_t *rootDM, Query_t *query, Tupel_t *tupel, in
 			counter++;
 		}
 	} else {
-		DEBUG_MSG(1,"No further steps to process.\n");
+		// The query was completely executed at the remote layer.
+		DEBUG_MSG(2,"No further steps to process.\n");
 	}
+	// It is out query. Hence, query->onCompletedFunction should point to a valid memory location
 	if (query->layerCode == LAYER_CODE) {
 		if (query->onQueryCompleted != NULL) {
 			query->onQueryCompleted(query->queryID,tupel);
 		}
 	} else {
+		// The original query is located at the remote layer. Hand it over.
 		sendQueryContinue(query,tupel,-1);
 	}
 }
@@ -631,7 +655,11 @@ static int shouldTransferQuery(DataModelElement_t * rootDM, DataModelElement_t *
 	}
 	return 1;
 }
-
+/**
+ * Allocates memory to store {@link query} in one chunk of memory, copies {@link query} and sends
+ * a MSG_QUERY_ADD to the remote layer. It will block until the message could be send.
+ * @param query a pointer to the query whch should be added remotely
+ */
 static void sendAddQuery(Query_t *query) {
 	Query_t *copy = NULL;
 	int temp = 0;
@@ -643,16 +671,28 @@ static void sendAddQuery(Query_t *query) {
 		return;
 	}
 	copyAndCollectQuery(query,copy);
+	// To make things easier we transport the size of this query to the remote layer - for more information have a look lib/{kernel/libkernel.c,userspace/libuserspace-layer.c}:commThreadWork()
 	copy->size = temp;
 	do {
 		temp = ringBufferWrite(txBuffer,MSG_QUERY_ADD,(char*)copy);
 		if (temp == -1) {
+			/*
+			 * In fact, it is not a got design practice to do busy waiting.
+			 * But the system relies on the fact that the other layer gets informed about changes.
+			 * Therefore a message has to be send.
+			 * In addition, the receiving thread at the remote layer will look for new message very
+			 * frequently. So, it is very unlikely to fill the ringbuffer completely.
+			 */
 			SLEEP(1);
 		}
 	} while (temp == -1);
 	query->flags |= TRANSFERED;
 }
-
+/**
+ * Sets up a QueryID_t and initializes it to represent the query {@link query} points to.
+ * Afterwards it sends a MSG_QUERY_DEL message to the remote layer.
+ * @param query a pointer to the query whch should be deleted remotely
+ */
 static void sendDelQuery(Query_t *query) {
 	QueryID_t *queryID = NULL;
 	int temp = 0;
@@ -737,12 +777,12 @@ int addQueries(DataModelElement_t *rootDM, Query_t *queries) {
 		cur->idx = i;
 
 		if (shouldTransferQuery(rootDM,dm,cur) == 1) {
-			DEBUG_MSG(1,"Transfering query to other layer: 0x%lx\n",(unsigned long)cur);
+			DEBUG_MSG(2,"Transfering query to other layer: 0x%lx\n",(unsigned long)cur);
 			sendAddQuery(cur);
 		}
 
 		if (dm->layerCode == LAYER_CODE) {
-			DEBUG_MSG(1,"Stream origin (%s) is at our layer. Start it...\n",dm->name);
+			DEBUG_MSG(2,"Stream origin (%s) is at our layer. Start it...\n",dm->name);
 
 			switch (dm->dataModelType) {
 				case EVENT:
@@ -797,7 +837,7 @@ int addQueries(DataModelElement_t *rootDM, Query_t *queries) {
 				#endif
 			}
 		} else {
-			DEBUG_MSG(1,"Stream origin (%s) is at the remote layer. Doing nothing.\n",dm->name);
+			DEBUG_MSG(2,"Stream origin (%s) is at the remote layer. Doing nothing.\n",dm->name);
 		}
 
 		cur = cur->next;
@@ -834,11 +874,23 @@ int delQueries(DataModelElement_t *rootDM, Query_t *queries) {
 		}
 
 		dm = getDescription(rootDM,name);
+		switch (dm->dataModelType) {
+			case EVENT:
+				regQueries = ((Event_t*)dm->typeInfo)->queries;
+				break;
+
+			case OBJECT:
+				regQueries = ((Object_t*)dm->typeInfo)->queries;
+				break;
+
+			case SOURCE:
+				regQueries = ((Source_t*)dm->typeInfo)->queries;
+				break;
+		}
 		if (dm->layerCode == LAYER_CODE) {
-			DEBUG_MSG(1,"Stream origin (%s) is at our layer. Stopping it...\n",dm->name);
+			DEBUG_MSG(2,"Stream origin (%s) is at our layer. Stopping it...\n",dm->name);
 			switch (dm->dataModelType) {
 				case EVENT:
-					regQueries = ((Event_t*)dm->typeInfo)->queries;
 					((Event_t*)dm->typeInfo)->numQueries--;
 					if (((Event_t*)dm->typeInfo)->numQueries == 0) {
 						/*
@@ -862,7 +914,6 @@ int delQueries(DataModelElement_t *rootDM, Query_t *queries) {
 					break;
 
 				case OBJECT:
-					regQueries = ((Object_t*)dm->typeInfo)->queries;
 					((Object_t*)dm->typeInfo)->numQueries--;
 					if (((Object_t*)dm->typeInfo)->numQueries == 0) {
 						// Same applies here for an object.
@@ -878,11 +929,10 @@ int delQueries(DataModelElement_t *rootDM, Query_t *queries) {
 				case SOURCE:
 					stopSourceTimer(cur);
 					((Source_t*)dm->typeInfo)->numQueries--;
-					regQueries = ((Source_t*)dm->typeInfo)->queries;
 					break;
 			}
 		} else {
-			DEBUG_MSG(1,"Stream origin (%s) is at the remote layer. Doing nothing.\n",dm->name);
+			DEBUG_MSG(2,"Stream origin (%s) is at the remote layer. Doing nothing.\n",dm->name);
 		}
 		// Only a query with a valid id can safely be removed
 		if (cur->queryID > 0) {
@@ -892,7 +942,7 @@ int delQueries(DataModelElement_t *rootDM, Query_t *queries) {
 		}
 		// Query was registered on this layer and transfered to the remote layer
 		if (cur->layerCode == LAYER_CODE && (cur->flags & TRANSFERED) == TRANSFERED) {
-			DEBUG_MSG(1,"Query was transfered to the remote layer. Sending a DEL_QUERY: 0x%lx\n",(unsigned long)cur);
+			DEBUG_MSG(2,"Query was transfered to the remote layer. Sending a DEL_QUERY: 0x%lx\n",(unsigned long)cur);
 			sendDelQuery(cur);
 		}
 
@@ -1252,7 +1302,46 @@ void rewriteQueryAddress(Query_t *query, void *oldBaseAddr, void *newBaseAddr) {
 		curOp = curOp->child;
 	} while(curOp != NULL);
 }
+/**
+ * Resolves the meta description of a query (a.k.a QueryID_t) to a pointer to a Query_t.
+ * @param rootDm a pointer to the datamodel which should be used to resolve id->name
+ * @param id a pointer to QueryID_t
+ * @return a pointer to the real query on success, or NULL on failure.
+ */
+Query_t* resolveQuery(DataModelElement_t *rootDM, QueryID_t *id) {
+	DataModelElement_t *dm = NULL;
+	Query_t **regQueries = NULL;
+	int i = 0;
 
-Query_t* resolveQuery(QueryID_t *id) {
+	dm = getDescription(rootDM,id->name);
+	if (dm == NULL) {
+		return NULL;
+	}
+	switch (dm->dataModelType) {
+		case EVENT:
+			regQueries = ((Event_t*)dm->typeInfo)->queries;
+			break;
+
+		case OBJECT:
+			regQueries = ((Object_t*)dm->typeInfo)->queries;
+			break;
+
+		case SOURCE:
+			regQueries = ((Source_t*)dm->typeInfo)->queries;
+			break;
+
+		// wrong datamodel type
+		default:
+			return NULL;
+	}
+	for (i = 0; i < MAX_QUERIES_PER_DM; i++) {
+		if (regQueries[i] != NULL) {
+			// id and node name match. Got it! \o/
+			if (regQueries[i]->queryID == id->id && strcmp(id->name,((GenStream_t*)regQueries[i]->root)->name) == 0) {
+				return regQueries[i];
+			}
+		}
+	}
+
 	return NULL;
 }

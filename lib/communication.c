@@ -5,6 +5,7 @@
 
 #define isEmpty(var)		(var->read == var->write)
 #define isFull(var)			((var->write + 1) % var->size == var->read)
+#define FREE_THRESHOLD		(RING_BUFFER_SIZE / 2)
 
 /**
  * Start address of the shared memory within the kernel
@@ -60,7 +61,7 @@ void ringBufferInit(void) {
 		rxBuffer->elements[i].addr = NULL;
 	}
 
-	globalQueryID = (int*)(sharedMemoryKernelBase + sizeof(Ringbuffer_t) * 2);
+	globalQueryID = (unsigned int*)(sharedMemoryKernelBase + sizeof(Ringbuffer_t) * 2);
 	*globalQueryID = 1;
 
 	DEBUG_MSG(2,"txBuffer=0x%p (size=%d), rxBuffer=0x%p (size=%d), txMemory=0x%p\n",txBuffer,txBuffer->size, rxBuffer, rxBuffer->size, txMemory);
@@ -69,6 +70,8 @@ void ringBufferInit(void) {
 	// Swap the position of rx- and txBuffer in contrast to its location in the kernel
 	rxBuffer = (Ringbuffer_t*)sharedMemoryUserBase;
 	txBuffer = (Ringbuffer_t*)(sharedMemoryUserBase + sizeof(Ringbuffer_t));
+
+	globalQueryID = (unsigned int*)(sharedMemoryUserBase + sizeof(Ringbuffer_t) * 2);
 
 	DEBUG_MSG(2,"txBuffer=%p (size=%d), rxBuffer=%p (size=%d), txMemory=%p\n",txBuffer,txBuffer->size, rxBuffer, rxBuffer->size, txMemory);
 #endif
@@ -125,13 +128,13 @@ int ringBufferWrite(Ringbuffer_t *ringBuffer, int type, char *addr) {
 	if (isFull(ringBuffer)) {
 		return -1;
 	} else {
-		if (writeOps >= (RING_BUFFER_SIZE / 2)) {
-			DEBUG_MSG(1,"Reached %d write operations. Looking for unfreed memory...\n",writeOps);
+		if (writeOps >= FREE_THRESHOLD) {
+			DEBUG_MSG(2,"Reached %d write operations. Looking for unfreed memory... (read=%d, write=%d)\n",writeOps,ringBuffer->read,ringBuffer->write);
 			writeOps = 0;
-			for (i = ringBuffer->write; i < ringBuffer->read;) {
+			for (i = ringBuffer->write; 1 ;) {
 				if (ringBuffer->elements[i].type == MSG_EMPTY) {
 					if (ringBuffer->elements[i].addr != NULL) {
-						DEBUG_MSG(1,"Freeing memory of unused ringbuffer element %d: %p\n",i,ringBuffer->elements[i].addr);
+						DEBUG_MSG(2,"Freeing memory of unused ringbuffer element %d: %p\n",i,ringBuffer->elements[i].addr);
 						slcfree(ringBuffer->elements[i].addr);
 						ringBuffer->elements[i].addr = NULL;
 					}
@@ -139,6 +142,9 @@ int ringBufferWrite(Ringbuffer_t *ringBuffer, int type, char *addr) {
 					ERR_MSG("Ringbuffer element is not marked as empty. Although it should be. ringbuffer=0x%lx, element=%d\n",(unsigned long)ringBuffer,i);
 				}
 				i = (i + 1 == ringBuffer->size ? 0 : i + 1);
+				if (i == ringBuffer->read) {
+					break;
+				}
 			}
 		}
 		DEBUG_MSG(3,"Wrote message with type 0x%x and addr %p at %d\n",type,addr,ringBuffer->write);

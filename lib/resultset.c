@@ -370,22 +370,23 @@ static int copyAndCollectAdditionalMem(DataModelElement_t *rootDM, void *oldValu
  * @param tupel a pointer to Tupel
  * @param freeMem a pointer 
  * @param tupleSize the size of the allocated memory chunk which corresponds to the size of the tuple
- * @return a pointer to the new tupel on success. NULL otherwise
+ * @return the number of bytes used to copy the tuple to {@link freeMem}.
  * @see copyAndCollectAdditionalMem()
  */
-void copyAndCollectTupel(DataModelElement_t *rootDM, Tupel_t *tupel, void *freeMem, int tupleSize) {
+int copyAndCollectTupel(DataModelElement_t *rootDM, Tupel_t *tupel, void *freeMem, int tupleSize) {
 	int size = 0, i = 0, j = 0, numItems = 0;
 	Tupel_t *ret = NULL;
 	DataModelElement_t *element = NULL;
 	void *newValue = NULL;
 
 	if (freeMem == NULL) {
-		return;
+		return -1;
 	}
 	ret = (Tupel_t*)freeMem;
 	memcpy(ret,tupel,sizeof(Tupel_t));
 	// Mark it as compact and store its size
 	ret->isCompact = (tupleSize << 8) | 0x1;
+	ret->next = NULL;
 	ret->items = (Item_t**)(((void*)ret) + sizeof(Tupel_t));
 	// First, count the number of really present items. Due to delete operations one or more items might be deleted.
 	for (i = 0; i < tupel->itemLen; i++) {
@@ -422,6 +423,7 @@ void copyAndCollectTupel(DataModelElement_t *rootDM, Tupel_t *tupel, void *freeM
 		newValue += size;
 		j++;
 	}
+	return newValue - freeMem;
 }
 /**
  * Copies all indirectly used memory for {@link element} and sets the length information and all pointers in {@link newValue} appropriatly.
@@ -711,9 +713,9 @@ void rewriteTupleAddress(DataModelElement_t *rootDM, Tupel_t *tuple, void *oldBa
 			if (tuple->items[i] == NULL) {
 				continue;
 			}
-			element = getDescription(rootDM,tuple->items[i]->name);
 			tuple->items[i] = REWRITE_ADDR(tuple->items[i],oldBaseAddr,newBaseAddr);
 			tuple->items[i]->value = REWRITE_ADDR(tuple->items[i]->value,oldBaseAddr,newBaseAddr);
+			element = getDescription(rootDM,tuple->items[i]->name);
 			rewriteAdditionalMem(rootDM,tuple->items[i]->value,oldBaseAddr,newBaseAddr,element);
 		}
 	}

@@ -395,7 +395,7 @@ static inline int addItem(Tupel_t **tupel, int newItems) {
 void printTupel(DataModelElement_t *rootDM, Tupel_t *tupel);
 void freeTupel(DataModelElement_t *rootDM, Tupel_t *tupel);
 int getTupelSize(DataModelElement_t *rootDM, Tupel_t *tupel);
-void copyAndCollectTupel(DataModelElement_t *rootDM, Tupel_t *tupel, void *freeMem, int tupleSize);
+int copyAndCollectTupel(DataModelElement_t *rootDM, Tupel_t *tupel, void *freeMem, int tupleSize);
 void deleteItem(DataModelElement_t *rootDM, Tupel_t *tupel, int slot);
 Tupel_t* copyTupel(DataModelElement_t *rootDM, Tupel_t *tuple);
 void rewriteTupleAddress(DataModelElement_t *rootDM, Tupel_t *tuple, void *oldBaseAddr, void *newBaseAddr);
