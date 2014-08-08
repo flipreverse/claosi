@@ -11,15 +11,15 @@ static Predicate_t xPosPred, yPosPred;
 static Filter_t posFilter;
 
 static void printResult(unsigned int id, Tupel_t *tupel) {
-	struct timespec time;
+	struct timeval time;
 	unsigned long long timeUS;
 	int x = 0, y = 0;
 
-	getnstimeofday(&time);
+	do_gettimeofday(&time);
 	x = getItemInt(SLC_DATA_MODEL,tupel,"ui.eventType.xPos");
 	y = getItemInt(SLC_DATA_MODEL,tupel,"ui.eventType.yPos");
-	timeUS = (unsigned long long)time.tv_sec * (unsigned long long)USEC_PER_SEC + (unsigned long long)(time.tv_nsec/NSEC_PER_USEC);
-	//printk("timeStart=%llu, timeEnd=%llu, id=%u, tuple=0x%p\n",tupel->timestamp,timeUS,tupel->id,tupel);
+	timeUS = (unsigned long long)time.tv_sec * (unsigned long long)USEC_PER_SEC + (unsigned long long)time.tv_usec;
+	printk("timeStart=%llu, timeEnd=%llu, id=%u, tuple=0x%p\n",tupel->timestamp,timeUS,tupel->id,tupel);
 	printk("processing duration: %llu us, query id: %u,xPos=%d, yPos=%d\n",timeUS - tupel->timestamp,id,x,y);
 	freeTupel(SLC_DATA_MODEL,tupel);
 }
