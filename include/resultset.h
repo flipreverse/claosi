@@ -11,8 +11,9 @@
 
 DECLARE_LOCK_EXTERN(slcLock);
 
-#define IS_COMPACT(tupelVar)	((tupelVar->isCompact & 0x1) == 0x1)
-#define COMPACT_SIZE(tupelVar)	(tupelVar->isCompact >> 8)
+enum TupleFlags {
+	TUPLE_COMPACT		=	0x1
+};
 
 #define ALLOC_ITEM_ARRAY(size)	(Item_t**)ALLOC(sizeof(Item_t**) * size)
 
@@ -112,7 +113,7 @@ typedef struct __attribute__((packed)) Tupel {
 	struct Tupel *next;
 	unsigned long long timestamp;				// The current time since 1-1-1970 in ms
 	unsigned short itemLen;						// Number of items
-	unsigned int isCompact;						// If the first byte contains an one, the tupel and its items are stored in one large memory area. If so, the remaining bytes contain the size of thie area in bytes.
+	unsigned int flags;						// If the first byte contains an one, the tupel and its items are stored in one large memory area. If so, the remaining bytes contain the size of thie area in bytes.
 	Item_t **items;
 } Tupel_t;
 
@@ -147,7 +148,7 @@ static inline void setItemFloat(DataModelElement_t *rootDM, Tupel_t *tupel, char
 static inline void setItemString(DataModelElement_t *rootDM, Tupel_t *tupel, char *typeName, char *value) {
 	#define DEFAULT_RETURN_VALUE
 	GET_MEMBER_POINTER(tupel,rootDM,typeName);
-	if (IS_COMPACT(tupel)) {
+	if (TEST_BIT(tupel->flags,TUPLE_COMPACT)) {
 		DEBUG_MSG(1,"Refusing access (%s) to an item, because to tupel is compact.\n",__FUNCTION__);
 		return;
 	}
@@ -167,7 +168,7 @@ static inline void setItemArray(DataModelElement_t *rootDM, Tupel_t *tupel, char
 	int size = 0;
 	GET_MEMBER_POINTER(tupel,rootDM,typeName);
 	size = getSize(rootDM,dm);
-	if (IS_COMPACT(tupel)) {
+	if (TEST_BIT(tupel->flags,TUPLE_COMPACT)) {
 		DEBUG_MSG(1,"Refusing access (%s) to an item, because tupel is compact.\n",__FUNCTION__);
 		return;
 	}
@@ -219,7 +220,7 @@ static inline void setArraySlotFloat(DataModelElement_t *rootDM,Tupel_t *tupel,c
 static inline void setArraySlotString(DataModelElement_t *rootDM,Tupel_t *tupel,char *arrayTypeName,int arraySlot,char *value) {
 	#define DEFAULT_RETURN_VALUE
 	GET_MEMBER_POINTER(tupel,rootDM,arrayTypeName);
-	if (arraySlot >= *(int*)(*(PTR_TYPE*)valuePtr) || IS_COMPACT(tupel)) {
+	if (arraySlot >= *(int*)(*(PTR_TYPE*)valuePtr) || TEST_BIT(tupel->flags,TUPLE_COMPACT)) {
 		return;
 	}
 	*(char**)((*(PTR_TYPE*)(valuePtr)) + sizeof(int) + arraySlot * SIZE_STRING) = value;
@@ -325,7 +326,7 @@ static inline Tupel_t* initTupel(unsigned long long timestamp, int numItems) {
 	if ((ret = (Tupel_t*)ALLOC(sizeof(Tupel_t) + numItems * sizeof(Item_t**))) == NULL) {
 		return NULL;
 	}
-	ret->isCompact = 0;
+	ret->flags = 0;
 	ret->next = NULL;
 	ret->timestamp = timestamp;
 	ret->itemLen = numItems;
@@ -349,7 +350,7 @@ static inline int allocItem(DataModelElement_t *rootDM, Tupel_t *tupel, int slot
 	char *mem = NULL;
 	int ret = 0;
 
-	if (IS_COMPACT(tupel)) {
+	if (TEST_BIT(tupel->flags,TUPLE_COMPACT)) {
 		DEBUG_MSG(1,"Refusing access (%s) to an item, because to tupel is compact.\n",__FUNCTION__);
 		return -1;
 	}
@@ -379,7 +380,7 @@ static inline int allocItem(DataModelElement_t *rootDM, Tupel_t *tupel, int slot
 static inline int addItem(Tupel_t **tupel, int newItems) {
 	Tupel_t *temp = NULL;
 	
-	if (IS_COMPACT((*tupel))) {
+	if (TEST_BIT((*tupel)->flags,TUPLE_COMPACT)) {
 		DEBUG_MSG(1,"Refusing access (%s) to an item, because to tupel is compact.\n",__FUNCTION__);
 		return -1;
 	}

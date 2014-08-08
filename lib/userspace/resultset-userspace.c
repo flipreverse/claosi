@@ -86,10 +86,7 @@ static void printItem(DataModelElement_t *rootDM, Item_t *item) {
 void printTupel(DataModelElement_t *rootDM, Tupel_t *tupel) {
 	int i = 0;
 
-	PRINT_MSG("%llu,isCompact=%hhd,",tupel->timestamp,IS_COMPACT(tupel));
-	if (IS_COMPACT(tupel)) {
-		PRINT_MSG("size=%d,",COMPACT_SIZE(tupel));
-	}
+	PRINT_MSG("%llu,isCompact=%hhd,",tupel->timestamp,TEST_BIT(tupel->flags,TUPLE_COMPACT));
 
 	for(i = 0; i < tupel->itemLen; i++) {
 		if (tupel->items[i] == NULL) {

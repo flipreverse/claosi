@@ -89,7 +89,7 @@ void freeTupel(DataModelElement_t *rootDM, Tupel_t *tupel) {
 	DataModelElement_t *element = NULL;
 	int i = 0;
 	// The tupel is compact. Just one free is needed.
-	if (IS_COMPACT(tupel)) {
+	if (TEST_BIT(tupel->flags,TUPLE_COMPACT)) {
 		FREE(tupel);
 		return;
 	}
@@ -125,7 +125,7 @@ EXPORT_SYMBOL(freeTupel);
 void deleteItem(DataModelElement_t *rootDM, Tupel_t *tupel, int slot) {
 	DataModelElement_t *dm = NULL;
 	
-	if (!IS_COMPACT(tupel)) {
+	if (!TEST_BIT(tupel->flags,TUPLE_COMPACT)) {
 		dm = getDescription(rootDM,tupel->items[slot]->name);
 		freeItem(rootDM,tupel->items[slot]->value,dm);
 		FREE(tupel->items[slot]);
@@ -385,7 +385,7 @@ int copyAndCollectTupel(DataModelElement_t *rootDM, Tupel_t *tupel, void *freeMe
 	ret = (Tupel_t*)freeMem;
 	memcpy(ret,tupel,sizeof(Tupel_t));
 	// Mark it as compact and store its size
-	ret->isCompact = (tupleSize << 8) | 0x1;
+	SET_BIT(ret->flags,TUPLE_COMPACT);
 	ret->next = NULL;
 	ret->items = (Item_t**)(((void*)ret) + sizeof(Tupel_t));
 	// First, count the number of really present items. Due to delete operations one or more items might be deleted.

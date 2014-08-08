@@ -26,6 +26,9 @@
 #define PROCFS_COMMFILE						"comm"
 #define SLC_DATA_MODEL						(slcDataModel)
 #define REWRITE_ADDR(var,oldBase,newBase)	(typeof(var))(((void*)(var) - oldBase) + newBase)
+#define TEST_BIT(varName,bit)				((varName & bit) == bit)
+#define SET_BIT(varName,bit)				(varName |= bit)
+#define CLEAR_BIT(varName,bit)				(varName = varName & ~(1 << bit))
 
 #ifdef __KERNEL__
 #define	ALLOC(size)							kmalloc(size,GFP_KERNEL & ~__GFP_WAIT)
