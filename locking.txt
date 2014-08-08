@@ -1,6 +1,10 @@
 - registerProvider/registerQuery/unregisterProvider
 	writeLock_irqsave(slcLock)
 	...
+	add/delQueries()
+		lock(ringBufferLock)
+		...
+		unlock(ringBufferLocK)
 	writeUnlock_irqrestore(slcLock)
 
 - unregisterQuery
@@ -10,6 +14,10 @@
 			lock(listLock)
 			...
 			unlock(listLock)
+	add/delQueries()
+		lock(ringBufferLock)
+		...
+		unlock(ringBufferLocK)
 	writeUnlock_irqrestore(slcLock)
 
 - {hrtimer,timer}Handler
@@ -27,6 +35,9 @@
 	...
 	unlock(listLock)
 	executeQuery()
+		lock(ringBufferLock)
+		...
+		unlock(ringBufferLocK)
 	readUnlock_irqrestore(slcLock)
 
 - commThreadWork

@@ -28,7 +28,15 @@ static char *txMemory = NULL;
  * Each layer has just on txBuffer. Therefore, only one static writeOps is needed.
  */
 static int writeOps;
+
 unsigned int *globalQueryID;
+/**
+ * Used to protect the ringbuffer agains concurrent writes.
+ * For now, no write lock is needed. For detailed information have a look at looking.txt
+ */
+DECLARE_LOCK(ringBufferLock);
+#define USE_WRITELOCK
+//#undef USER_WRITELOCK
 
 /**
  * Initialize the ring buffer according to the current layer.
@@ -77,6 +85,7 @@ void ringBufferInit(void) {
 #endif
 	remainingPages = BUFFER_PAGES;
 	writeOps = 0;
+	INIT_LOCK(ringBufferLock);
 
 	DEBUG_MSG(2,"Initialized ring buffer using %d elements\n",RING_BUFFER_SIZE);
 }
@@ -121,11 +130,17 @@ void ringBufferReadEnd(Ringbuffer_t *ringBuffer) {
  */
 int ringBufferWrite(Ringbuffer_t *ringBuffer, int type, char *addr) {
 	int i = 0;
+#ifdef __KERNEL__
+	unsigned long flags;
+#endif
+
 	if (ringBuffer == NULL) {
 		return -1;
 	}
 
+	ACQUIRE_WRITE_LOCK(ringBufferLock);
 	if (isFull(ringBuffer)) {
+		RELEASE_WRITE_LOCK(ringBufferLock);
 		return -1;
 	} else {
 		if (writeOps >= FREE_THRESHOLD) {
@@ -152,6 +167,7 @@ int ringBufferWrite(Ringbuffer_t *ringBuffer, int type, char *addr) {
 		ringBuffer->elements[ringBuffer->write].addr = addr;
 		writeOps++;
 		ringBuffer->write = (ringBuffer->write + 1 == ringBuffer->size ? 0 : ringBuffer->write + 1);
+		RELEASE_WRITE_LOCK(ringBufferLock);
 		return 0;
 	}
 }
