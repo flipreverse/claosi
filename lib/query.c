@@ -175,6 +175,10 @@ static void sendQueryContinue(Query_t *query, Tupel_t *tuple, int steps) {
 	void *freeMem = NULL;
 	int temp = 0, size = sizeof(QueryContinue_t);
 
+	if (!ENDPOINT_CONNECTED()) {
+		DEBUG_MSG(3,"No endpoint connected. Aborting send.\n");
+		goto out;
+	}
 	//TODO: communication is not available
 	curTuple = tuple;
 	// Calculate the amount of memory to allocate
@@ -224,7 +228,7 @@ static void sendQueryContinue(Query_t *query, Tupel_t *tuple, int steps) {
 		}
 	} while (temp == -1);
 	//Freeing origin tuple... They are no longer needed.
-	curTuple = tuple;
+out:curTuple = tuple;
 	while (curTuple != NULL) {
 		tempTuple = curTuple->next;
 		freeTupel(SLC_DATA_MODEL,curTuple);
@@ -664,6 +668,10 @@ static void sendAddQuery(Query_t *query) {
 	Query_t *copy = NULL;
 	int temp = 0;
 
+	if (!ENDPOINT_CONNECTED()) {
+		DEBUG_MSG(3,"No endpoint connected. Aborting send.\n");
+		return;
+	}
 	temp = calcQuerySize(query);
 	copy = slcmalloc(temp);
 	if (copy == NULL) {
@@ -697,6 +705,10 @@ static void sendDelQuery(Query_t *query) {
 	QueryID_t *queryID = NULL;
 	int temp = 0;
 
+	if (!ENDPOINT_CONNECTED()) {
+		DEBUG_MSG(3,"No endpoint connected. Aborting send.\n");
+		return;
+	}
 	queryID = slcmalloc(sizeof(QueryID_t));
 	if (queryID == NULL) {
 		ERR_MSG("Cannot allocate txMemory for QueryID_t\n");

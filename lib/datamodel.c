@@ -1024,6 +1024,10 @@ void sendDatamodel(DataModelElement_t *root, int add) {
 	DataModelElement_t *copy = NULL;
 	int ret = 0;
 
+	if (!ENDPOINT_CONNECTED()) {
+		DEBUG_MSG(3,"No endpoint connected. Aborting send.\n");
+		return;
+	}
 	if (txBuffer == NULL) {
 		ERR_MSG("txBuffer not initialized. Abort sending datamodel.\n");
 		return;

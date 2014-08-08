@@ -29,7 +29,7 @@ typedef struct DataModelMmap_t {
 
 static struct proc_dir_entry *procfsSlcDir = NULL;
 static struct proc_dir_entry *procfsSlcDMFile = NULL;
-static atomic_t communicationFileRef;
+atomic_t communicationFileMmapRef;
 static struct task_struct *queryExecThread = NULL;
 static struct task_struct *commThread = NULL;
 /*
@@ -416,6 +416,7 @@ static void communicationFileMmapOpen(struct vm_area_struct *vma) {
 	DataModelMmap_t *info = (DataModelMmap_t *)vma->vm_private_data;
 
 	info->reference++;
+	atomic_inc(&communicationFileMmapRef);
 	DEBUG_MSG(3,"reference (open) = %d\n",info->reference);
 }
 
@@ -423,6 +424,7 @@ static void communicationFileMmapClose(struct vm_area_struct *vma) {
 	DataModelMmap_t *info = (DataModelMmap_t *)vma->vm_private_data;
 
 	info->reference--;
+	atomic_dec(&communicationFileMmapRef);
 	DEBUG_MSG(3,"reference (close) = %d\n",info->reference);
 }
 
@@ -482,13 +484,18 @@ static int communicationFileRead(struct file *fil, char __user *buffer, size_t b
 
 static int communicationFileMmap(struct file *filp, struct vm_area_struct *vma) {
 	DataModelMmap_t *info = NULL;
+
+	if (atomic_read(&communicationFileMmapRef) >= 1) {
+		return -EBUSY;
+	}
+
 	vma->vm_ops = &communicationFile_mmap_ops;
 	vma->vm_flags |= VM_RESERVED;
 	/* assign the file private data to the vm private data */
 	vma->vm_private_data = filp->private_data;
 
 	info = (DataModelMmap_t*)vma->vm_private_data;
-	DEBUG_MSG(1,"mapping datamodel space at 0x%lx from 0x%lx to 0x%lx\n",info->data,vma->vm_start,vma->vm_end);
+	DEBUG_MSG(2,"mapping datamodel space at 0x%lx from 0x%lx to 0x%lx\n",info->data,vma->vm_start,vma->vm_end);
 	sharedMemoryUserBase = (void*)vma->vm_start;
 
 	communicationFileMmapOpen(vma);
@@ -500,18 +507,18 @@ static int communicationFileClose(struct inode *inode, struct file *filp) {
 
 	kfree(info);
 	filp->private_data = NULL;
-	atomic_dec(&communicationFileRef);
+	atomic_dec(&communicationFileMmapRef);
 
 	return 0;
 }
 
 static int communicationFileOpen(struct inode *inode, struct file *filp) {
-	DataModelMmap_t *info = kmalloc(sizeof(DataModelMmap_t), GFP_KERNEL);
+	DataModelMmap_t *info = NULL;
 
-	if (atomic_read(&communicationFileRef) >= 1) {
-		return -EBUSY;
+	info = kmalloc(sizeof(DataModelMmap_t), GFP_KERNEL);
+	if (info == NULL) {
+		return -ENOMEM;
 	}
-	atomic_inc(&communicationFileRef);
 	/* obtain new memory */
 	info->data = (unsigned long)sharedMemoryKernelBase;
 	/* assign this info struct to the file */
@@ -581,7 +588,7 @@ static int __init slc_init(void) {
 	proc_set_user(procfsSlcDMFile,fileUID,fileGID);
 	proc_set_size(procfsSlcDMFile,7);
 
-	atomic_set(&communicationFileRef,0);
+	atomic_set(&communicationFileMmapRef,0);
 
 	if (initSLC() == -1) {
 		return -1;

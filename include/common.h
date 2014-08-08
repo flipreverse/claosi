@@ -43,6 +43,8 @@
 #define RELEASE_WRITE_LOCK(varName)			write_unlock_irqrestore(&varName,flags)
 #define SLEEP(x)							ssleep(1)
 #define LAYER_CODE							0x1
+#define ENDPOINT_CONNECTED()				(atomic_read(&communicationFileMmapRef) >= 1)
+extern atomic_t communicationFileMmapRef;
 #else
 #define	ALLOC(size)							malloc(size)
 #define	FREE(ptr)							free(ptr)
@@ -62,6 +64,7 @@
 #define TIMER_SIGNAL						SIGRTMIN
 #define SLEEP(x)							sleep(1)
 #define LAYER_CODE							0x2
+#define ENDPOINT_CONNECTED()				(1)
 
 #endif
 

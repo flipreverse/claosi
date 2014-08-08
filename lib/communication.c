@@ -28,7 +28,11 @@ static char *txMemory = NULL;
  * Each layer has just on txBuffer. Therefore, only one static writeOps is needed.
  */
 static int writeOps;
-
+/**
+ * Points to a memory location within the shared memory.
+ * It gets initialized by ringBufferInit().
+ * Each addQuery() fetches and increments this variable atomically.
+ */
 unsigned int *globalQueryID;
 /**
  * Used to protect the ringbuffer agains concurrent writes.
@@ -162,7 +166,7 @@ int ringBufferWrite(Ringbuffer_t *ringBuffer, int type, char *addr) {
 				}
 			}
 		}
-		DEBUG_MSG(3,"Wrote message with type 0x%x and addr %p at %d\n",type,addr,ringBuffer->write);
+		DEBUG_MSG(2,"Wrote message with type 0x%x and addr %p at %d\n",type,addr,ringBuffer->write);
 		ringBuffer->elements[ringBuffer->write].type = type;
 		ringBuffer->elements[ringBuffer->write].addr = addr;
 		writeOps++;
