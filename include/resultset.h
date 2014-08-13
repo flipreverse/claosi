@@ -35,20 +35,28 @@ enum TupleFlags {
  */
 #define GET_MEMBER_POINTER_ALGO_ONLY(tupelVar, rootDatamodelVar, typeName, datamodelElementVar, valuePtrVar) int ret = 0, i = 0; \
 char *token = NULL, *tokInput = NULL, *tokInput_ = NULL, *childName = NULL; \
+ret = -1; \
 for (i = 0; i < tupelVar->itemLen; i++) { \
 	if (tupelVar->items[i] == NULL) { \
 		continue; \
 	} \
-	if ((childName = strstr(typeName,tupelVar->items[i]->name)) != NULL) { \
+	if (strcmp(typeName,tupelVar->items[i]->name) == 0) { \
+		childName = typeName; \
+		ret = i; \
 		break; \
+	} else { \
+		childName = strstr(typeName,tupelVar->items[i]->name); \
+		if (childName != NULL) { \
+			ret = i; \
+		} \
 	} \
 } \
-if (i >= tupelVar->itemLen) { \
+if (ret == -1) { \
 	return DEFAULT_RETURN_VALUE; \
 } \
-valuePtrVar = tupelVar->items[i]->value; \
-childName += strlen(tupelVar->items[i]->name); \
-if ((datamodelElementVar = getDescription(rootDatamodelVar,tupelVar->items[i]->name)) == NULL) { \
+valuePtrVar = tupelVar->items[ret]->value; \
+childName += strlen(tupelVar->items[ret]->name); \
+if ((datamodelElementVar = getDescription(rootDatamodelVar,tupelVar->items[ret]->name)) == NULL) { \
 	return DEFAULT_RETURN_VALUE; \
 } \
 if (strlen(childName) > 0) { \

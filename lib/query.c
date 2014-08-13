@@ -320,6 +320,14 @@ void freeOperator(Operator_t *op, int freeOperator) {
 
 	do {
 		switch (cur->type) {
+			case GEN_EVENT:
+			case GEN_OBJECT:
+			case GEN_SOURCE:
+				if (((GenStream_t*)cur)->selectorsLen > 0) {
+					FREE(((GenStream_t*)cur)->selectors);
+				}
+				break;
+
 			case FILTER:
 				if (((Filter_t*)cur)->predicateLen > 0) {
 					FREE(((Filter_t*)cur)->predicates);
@@ -466,7 +474,7 @@ EXPORT_SYMBOL(freeQuery);
  * @return 0 on success and a value below zero, if an error was discovered.
  */
 int checkQuerySyntax(DataModelElement_t *rootDM, Operator_t *rootQuery, Operator_t **errOperator) {
-	int i = 0, j = 0;
+	int i = 0, j = 0, counter = 0;
 	Operator_t *cur = rootQuery;
 	GenStream_t *stream = NULL;
 	SourceStream_t *srcStream = NULL;
@@ -476,7 +484,7 @@ int checkQuerySyntax(DataModelElement_t *rootDM, Operator_t *rootQuery, Operator
 	Sort_t *sort = NULL;
 	Join_t *join = NULL;
 	Aggregate_t *aggregate = NULL;
-	DataModelElement_t *dm = NULL;
+	DataModelElement_t *dm = NULL, *dmIter = NULL;
 
 
 	do {
@@ -495,7 +503,6 @@ int checkQuerySyntax(DataModelElement_t *rootDM, Operator_t *rootQuery, Operator
 				if (dm == NULL) {
 					return -ENOELEMENT;
 				}
-				
 				if (cur->type == GEN_SOURCE) {
 					if (dm->dataModelType != SOURCE) {
 						return -EWRONGSTREAMTYPE;
@@ -516,6 +523,17 @@ int checkQuerySyntax(DataModelElement_t *rootDM, Operator_t *rootQuery, Operator
 					if (objStream->objectEvents > (OBJECT_CREATE | OBJECT_DELETE | OBJECT_STATUS)) {
 						return -ENOOBJSTATUS;
 					}
+				}
+				counter = 0;
+				dmIter = dm;
+				while (dmIter != NULL) {
+					if (dmIter->dataModelType == OBJECT) {
+						counter++;
+					}
+					dmIter = dmIter->parent;
+				};
+				if (counter != stream->selectorsLen) {
+					return -ESELECTORS;
 				}
 				break;
 
@@ -737,6 +755,7 @@ int addQueries(DataModelElement_t *rootDM, Query_t *queries) {
 #endif
 	DataModelElement_t *dm = NULL;
 	Query_t *cur = queries, **regQueries = NULL;
+	GenStream_t *stream = NULL;
 	char *name = NULL;
 	int i = 0, events = 0, statusQuery = 0, temp = 0;
 	#ifdef __KERNEL__
@@ -745,14 +764,15 @@ int addQueries(DataModelElement_t *rootDM, Query_t *queries) {
 
 	do {
 		statusQuery = 0;
-		switch (cur->root->type) {
+		stream = (GenStream_t*)cur->root;
+		switch (stream->op_type) {
 			case GEN_OBJECT:
-				events = ((ObjectStream_t*)cur->root)->objectEvents;
+				events = ((ObjectStream_t*)stream)->objectEvents;
 				// Need to start the generate status thread?
 				statusQuery = events & OBJECT_STATUS;
 			case GEN_EVENT:
 			case GEN_SOURCE:
-				name = ((GenStream_t*)cur->root)->name;
+				name = stream->name;
 				break;
 		}
 
@@ -798,7 +818,7 @@ int addQueries(DataModelElement_t *rootDM, Query_t *queries) {
 
 			switch (dm->dataModelType) {
 				case EVENT:
-					if (((Event_t*)dm->typeInfo)->numQueries == 0) {
+					//if (((Event_t*)dm->typeInfo)->numQueries == 0) {
 						/*
 						 * The slc-core component does *not* know, which steps are necessary to 'activate'
 						 * an event. Therefore, the write lock will be released to avoid any kind of race conditions.
@@ -810,25 +830,25 @@ int addQueries(DataModelElement_t *rootDM, Query_t *queries) {
 						 * Well.... for now, we don't care. :-D This would be a rare corner case. :-)
 						 */
 						RELEASE_WRITE_LOCK(slcLock);
-						((Event_t*)dm->typeInfo)->activate();
+						((Event_t*)dm->typeInfo)->activate(cur);
 						ACQUIRE_WRITE_LOCK(slcLock);
 						#ifdef __KERNEL__
 						*__flags = flags;
 						#endif
-					}
+					//}
 					((Event_t*)dm->typeInfo)->numQueries++;
 					break;
 
 				case OBJECT:
-					if (((Object_t*)dm->typeInfo)->numQueries == 0) {
+					//if (((Object_t*)dm->typeInfo)->numQueries == 0) {
 						// Same applies here for an object.
 						RELEASE_WRITE_LOCK(slcLock);
-						((Object_t*)dm->typeInfo)->activate();
+						((Object_t*)dm->typeInfo)->activate(cur);
 						ACQUIRE_WRITE_LOCK(slcLock);
 						#ifdef __KERNEL__
 						*__flags = flags;
 						#endif
-					}
+					//}
 					((Object_t*)dm->typeInfo)->numQueries++;
 					break;
 
@@ -871,17 +891,19 @@ int delQueries(DataModelElement_t *rootDM, Query_t *queries) {
 #endif 
 	DataModelElement_t *dm = NULL;
 	Query_t *cur = queries, **regQueries = NULL;
+	GenStream_t *stream = NULL;
 	char *name = NULL;
 	#ifdef __KERNEL__
 	unsigned long flags = *__flags;
 	#endif
 
 	do {
-		switch (cur->root->type) {
+		stream = (GenStream_t*)cur->root;
+		switch (stream->op_type) {
 			case GEN_EVENT:
 			case GEN_OBJECT:
 			case GEN_SOURCE:
-				name = ((GenStream_t*)cur->root)->name;
+				name = stream->name;
 				break;
 		}
 
@@ -904,7 +926,7 @@ int delQueries(DataModelElement_t *rootDM, Query_t *queries) {
 			switch (dm->dataModelType) {
 				case EVENT:
 					((Event_t*)dm->typeInfo)->numQueries--;
-					if (((Event_t*)dm->typeInfo)->numQueries == 0) {
+					//if (((Event_t*)dm->typeInfo)->numQueries == 0) {
 						/*
 						 * The slc-core component does *not* know, which steps are necessary to 'deactivate'
 						 * an event. Therefore, the write lock will be released to avoid any kind of race conditions.
@@ -916,26 +938,26 @@ int delQueries(DataModelElement_t *rootDM, Query_t *queries) {
 						 * Well.... for now, we don't care. :-D This would be a rare corner case. :-)
 						 */
 						RELEASE_WRITE_LOCK(slcLock);
-						((Event_t*)dm->typeInfo)->deactivate();
+						((Event_t*)dm->typeInfo)->deactivate(cur);
 						ACQUIRE_WRITE_LOCK(slcLock);
 						#ifdef __KERNEL__
 						*__flags = flags;
 						#endif
 
-					}
+					//}
 					break;
 
 				case OBJECT:
 					((Object_t*)dm->typeInfo)->numQueries--;
-					if (((Object_t*)dm->typeInfo)->numQueries == 0) {
+					//if (((Object_t*)dm->typeInfo)->numQueries == 0) {
 						// Same applies here for an object.
 						RELEASE_WRITE_LOCK(slcLock);
-						((Object_t*)dm->typeInfo)->deactivate();
+						((Object_t*)dm->typeInfo)->deactivate(cur);
 						ACQUIRE_WRITE_LOCK(slcLock);
 						#ifdef __KERNEL__
 						*__flags = flags;
 						#endif
-					}
+					//}
 					break;
 
 				case SOURCE:
@@ -1030,15 +1052,15 @@ int calcQuerySize(Query_t *query) {
 	do {
 		switch (cur->type) {
 			case GEN_SOURCE:
-				size += sizeof(SourceStream_t);
+				size += sizeof(SourceStream_t) + ((GenStream_t*)cur)->selectorsLen * sizeof(Selector_t);
 				break;
 
 			case GEN_OBJECT:
-				size += sizeof(ObjectStream_t);
+				size += sizeof(ObjectStream_t) + ((GenStream_t*)cur)->selectorsLen * sizeof(Selector_t);
 				break;
 
 			case GEN_EVENT:
-				size += sizeof(EventStream_t);
+				size += sizeof(EventStream_t) + ((GenStream_t*)cur)->selectorsLen * sizeof(Selector_t);
 				break;
 
 			case FILTER:
@@ -1085,6 +1107,7 @@ int calcQuerySize(Query_t *query) {
 static int copyOperatorAdjacent(void *freeMem, Operator_t *origin, Operator_t **copy) {
 	int i = 0;
 	void *freeMem_ = freeMem;
+	GenStream_t *streamOrigin = NULL, *streamCopy = NULL;
 	Filter_t *filterOrigin = NULL, *filterCopy = NULL;
 	Select_t *selectOrigin = NULL, *selectCopy = NULL;
 	Sort_t *sortOrigin = NULL, *sortCopy = NULL;
@@ -1095,18 +1118,33 @@ static int copyOperatorAdjacent(void *freeMem, Operator_t *origin, Operator_t **
 	*copy = (Operator_t*)freeMem_;
 	switch (origin->type) {
 		case GEN_SOURCE:
+			streamOrigin = (GenStream_t*)origin;
+			streamCopy = (GenStream_t*)*copy;
 			freeMem_ += sizeof(SourceStream_t);
-			memcpy(*copy,origin,sizeof(SourceStream_t));
+			memcpy(streamCopy,streamOrigin,sizeof(SourceStream_t));
+			streamCopy->selectors = freeMem_;
+			freeMem_ += sizeof(Selector_t) * streamOrigin->selectorsLen;
+			memcpy(streamCopy->selectors,streamOrigin->selectors,sizeof(Selector_t) * streamOrigin->selectorsLen);
 			break;
 
 		case GEN_OBJECT:
+			streamOrigin = (GenStream_t*)origin;
+			streamCopy = (GenStream_t*)*copy;
 			freeMem_ += sizeof(ObjectStream_t);
-			memcpy(*copy,origin,sizeof(ObjectStream_t));
+			memcpy(streamCopy,streamOrigin,sizeof(ObjectStream_t));
+			streamCopy->selectors = freeMem_;
+			freeMem_ += sizeof(Selector_t) * streamOrigin->selectorsLen;
+			memcpy(streamCopy->selectors,streamOrigin->selectors,sizeof(Selector_t) * streamOrigin->selectorsLen);
 			break;
 
 		case GEN_EVENT:
+			streamOrigin = (GenStream_t*)origin;
+			streamCopy = (GenStream_t*)*copy;
 			freeMem_ += sizeof(EventStream_t);
-			memcpy(*copy,origin,sizeof(EventStream_t));
+			memcpy(streamCopy,streamOrigin,sizeof(EventStream_t));
+			streamCopy->selectors = freeMem_;
+			freeMem_ += sizeof(Selector_t) * streamOrigin->selectorsLen;
+			memcpy(streamCopy->selectors,streamOrigin->selectors,sizeof(Selector_t) * streamOrigin->selectorsLen);
 			break;
 
 		case FILTER:

@@ -73,7 +73,7 @@ static struct kprobe exitKP = {
 	.pre_handler = exit_handler
 };
 
-static void activate(void) {
+static void activate(Query_t *query) {
 	int ret = 0;
 	
 	if ((ret = register_kretprobe(&forkKP)) < 0) {
@@ -89,14 +89,14 @@ static void activate(void) {
 	DEBUG_MSG(1,"Registered kprobe at %s\n",exitKP.symbol_name);
 }
 
-static void deactivate(void) {
+static void deactivate(Query_t *query) {
 	unregister_kretprobe(&forkKP);
 	DEBUG_MSG(1,"Unregistered kretprobe at %s\n",forkKP.kp.symbol_name);
 	unregister_kprobe(&exitKP);
 	DEBUG_MSG(1,"Unregistered kprobe at %s\n",exitKP.symbol_name);
 }
 
-static Tupel_t* generateStatusObject(void) {
+static Tupel_t* generateStatusObject(Selector_t *selectors, int len) {
 	struct task_struct *curTask = NULL;
 	Tupel_t *head = NULL, *curTuple = NULL, *prevTuple = NULL;
 	struct timeval time;
@@ -124,7 +124,7 @@ static Tupel_t* generateStatusObject(void) {
 	return head;
 }
 
-static Tupel_t* getSrc(void) {
+static Tupel_t* getSrc(Selector_t *selectors, int len) {
 	Tupel_t *tuple = NULL;
 	struct timeval time;
 	unsigned long long timeUS = 0;
@@ -188,25 +188,25 @@ static void setupQueries(void) {
 	queryFork.next = &queryExit;
 	queryFork.onQueryCompleted = printResultFork;
 	queryFork.root = GET_BASE(processObjCreate);
-	INIT_OBJ_STREAM(processObjCreate,"process.process",0,NULL,OBJECT_CREATE);
+	INIT_OBJ_STREAM(processObjCreate,"process.process",0,0,NULL,OBJECT_CREATE);
 
 	initQuery(&queryExit);
 	queryExit.next = &queryStatus;
 	queryExit.onQueryCompleted = printResultExit;
 	queryExit.root = GET_BASE(processObjExit);
-	INIT_OBJ_STREAM(processObjExit,"process.process",0,NULL,OBJECT_DELETE);
+	INIT_OBJ_STREAM(processObjExit,"process.process",0,0,NULL,OBJECT_DELETE);
 
 	initQuery(&queryStatus);
 	queryStatus.next = &querySrc;
 	queryStatus.onQueryCompleted = printResultStatus;
 	queryStatus.root = GET_BASE(processObjStatus);
-	INIT_OBJ_STREAM(processObjStatus,"process.process",0,NULL,OBJECT_STATUS);
+	INIT_OBJ_STREAM(processObjStatus,"process.process",0,0,NULL,OBJECT_STATUS);
 
 	initQuery(&querySrc);
 	querySrc.next = NULL;
 	querySrc.onQueryCompleted = printResultSource;
 	querySrc.root = GET_BASE(processUTimeStr);
-	INIT_SRC_STREAM(processUTimeStr,"process.process.utime",0,NULL,700);
+	INIT_SRC_STREAM(processUTimeStr,"process.process.utime",0,0,NULL,700);
 }
 #endif
 

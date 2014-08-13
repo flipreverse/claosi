@@ -99,7 +99,8 @@ enum {
 	EPARAM,							// At least one parameter has a wrong value
 	ERESULTFUNCPTR,					// At least one of the provided queries have no onCompletedFunction pointer set
 	EQUERYTYPE,						// 
-	EMAXQUERIES						// The maximum number of queries assigned to a node is reached
+	EMAXQUERIES,					// The maximum number of queries assigned to a node is reached
+	ESELECTORS						//
 };
 
 #endif // __COMMON_H__

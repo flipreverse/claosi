@@ -19,7 +19,7 @@ static void printResult(unsigned int id, Tupel_t *tupel) {
 	x = getItemInt(SLC_DATA_MODEL,tupel,"ui.eventType.xPos");
 	y = getItemInt(SLC_DATA_MODEL,tupel,"ui.eventType.yPos");
 	timeUS = (unsigned long long)time.tv_sec * (unsigned long long)USEC_PER_SEC + (unsigned long long)time.tv_usec;
-	printk("timeStart=%llu, timeEnd=%llu, id=%u, tuple=0x%p\n",tupel->timestamp,timeUS,tupel->id,tupel);
+	//printk("timeStart=%llu, timeEnd=%llu, id=%u, tuple=0x%p\n",tupel->timestamp,timeUS,tupel->id,tupel);
 	printk("processing duration: %llu us, query id: %u,xPos=%d, yPos=%d\n",timeUS - tupel->timestamp,id,x,y);
 	freeTupel(SLC_DATA_MODEL,tupel);
 }
@@ -28,7 +28,7 @@ static void setupQueries(void) {
 	initQuery(&queryDisplay);
 	queryDisplay.onQueryCompleted = printResult;
 	queryDisplay.root = GET_BASE(displayStream);
-	INIT_EVT_STREAM(displayStream,"ui.display",0,NULL) /*GET_BASE(posFilter))
+	INIT_EVT_STREAM(displayStream,"ui.display",0,0,NULL) /*GET_BASE(posFilter))
 	INIT_FILTER(posFilter,NULL,2)
 	ADD_PREDICATE(posFilter,0,xPosPred)
 	SET_PREDICATE(xPosPred,GEQ, STREAM, "ui.eventType.xPos", POD, "700")
