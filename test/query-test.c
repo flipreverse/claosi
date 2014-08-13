@@ -44,7 +44,8 @@ int main() {
 
 	printf("-------------------------\n");
 	printf("Checking txStream query: \n");
-	INIT_EVT_STREAM(txStream,"net.device.onTx",0,GET_BASE(filter))
+	INIT_EVT_STREAM(txStream,"net.device.onTx",1,0,GET_BASE(filter))
+	SET_SELECTOR_STRING_STREAM(txStream,0,"eth0")
 	INIT_FILTER(filter,GET_BASE(selectTest),2)
 	ADD_PREDICATE(filter,0,filterTXPredicate)
 	ADD_PREDICATE(filter,1,filterRXPredicate)
@@ -56,7 +57,7 @@ int main() {
 	if ((ret = checkQuerySyntax(&model1,GET_BASE(txStream),&errOperator)) == 0) {
 		printQuery(GET_BASE(txStream));
 	} else {
-		printf("Failed. Reason: %d\n",-ret);
+		printf("Failed. Reason: %d,%d\n",-ret,ESELECTORS);
 	}
 	query.root = GET_BASE(txStream);
 	printf("-------------------------\n");
@@ -89,11 +90,11 @@ int main() {
 	printf("-------------------------\n");
 
 	printf("Checking txSrc query: \n");
-	INIT_SRC_STREAM(txSrc,"process.process.utime",0,GET_BASE(joinProcess),100)
-	INIT_JOIN(joinProcess,"process.process", GET_BASE(joinApp),1)
+	INIT_SRC_STREAM(txSrc,"process.process.utime",0,0,GET_BASE(joinProcess),100)
+	INIT_JOIN(joinProcess,"process.process", 0,GET_BASE(joinApp),1)
 	ADD_PREDICATE(joinProcess,0,joinProcessPredicate)
 	SET_PREDICATE(joinProcessPredicate,IN, STREAM, "net.packetType.socket", STREAM, "process.process.sockets")
-	INIT_JOIN(joinApp,"ui.app", NULL,1)
+	INIT_JOIN(joinApp,"ui.app",0, NULL,1)
 	ADD_PREDICATE(joinApp,0,joinAppPredicate)
 	SET_PREDICATE(joinAppPredicate,IN, STREAM, "process.process", STREAM, "ui.app.processes")
 	if ((ret = checkQuerySyntax(&model1,GET_BASE(txSrc),&errOperator)) == 0) {
@@ -104,7 +105,7 @@ int main() {
 	printf("-------------------------\n");
 
 	printf("Checking processObj query: \n");
-	INIT_OBJ_STREAM(processObj,"process.process",0,NULL,OBJECT_CREATE)
+	INIT_OBJ_STREAM(processObj,"process.process",0,0,NULL,OBJECT_CREATE)
 	if ((ret = checkQuerySyntax(&model1,GET_BASE(processObj),&errOperator)) == 0) {
 		printQuery(GET_BASE(processObj));
 	} else {
@@ -125,27 +126,27 @@ int main() {
 	return EXIT_SUCCESS;
 }
 
-static void regEventCallback(void) {
+static void regEventCallback(Query_t *query) {
 	
 }
 
-static void unregEventCallback(void) {
+static void unregEventCallback(Query_t *query) {
 	
 }
 
-static Tupel_t* getSrc(void) {
+static Tupel_t* getSrc(Selector_t *selectors, int len) {
 	return NULL;
 };
 
-static void regObjectCallback(void) {
+static void regObjectCallback(Query_t *query) {
 	
 };
 
-static void unregObjectCallback(void) {
+static void unregObjectCallback(Query_t *query) {
 	
 };
 
-static Tupel_t* generateStatusObject(void) {
+static Tupel_t* generateStatusObject(Selector_t *selectors, int len) {
 	return NULL;
 }
 

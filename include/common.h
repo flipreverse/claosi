@@ -33,7 +33,7 @@
 #ifdef __KERNEL__
 #define	ALLOC(size)							kmalloc(size,GFP_KERNEL & ~__GFP_WAIT)
 #define	FREE(ptr)							kfree(ptr)
-#define REALLOC(ptr,size)					krealloc(ptr,size,GFP_KERNEL)
+#define REALLOC(ptr,size)					krealloc(ptr,size,GFP_KERNEL & ~__GFP_WAIT)
 #define STRTOINT(strVar,intVar)				kstrtos32(strVar,10,&intVar)
 #define STRTOCHAR(strVar,charVar)			kstrtos8(strVar,10,&charVar)
 #define DECLARE_LOCK(varName)				rwlock_t varName
@@ -99,7 +99,8 @@ enum {
 	EPARAM,							// At least one parameter has a wrong value
 	ERESULTFUNCPTR,					// At least one of the provided queries have no onCompletedFunction pointer set
 	EQUERYTYPE,						// 
-	EMAXQUERIES						// The maximum number of queries assigned to a node is reached
+	EMAXQUERIES,					// The maximum number of queries assigned to a node is reached
+	ESELECTORS						//
 };
 
 #endif // __COMMON_H__

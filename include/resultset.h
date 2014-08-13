@@ -34,24 +34,33 @@ enum TupleFlags {
  * #undef DEFAULT_RETURN_VALUE
  */
 #define GET_MEMBER_POINTER_ALGO_ONLY(tupelVar, rootDatamodelVar, typeName, datamodelElementVar, valuePtrVar) int ret = 0, i = 0; \
-char *token = NULL, *tokInput = NULL, *tokInput_ = NULL, *childName = NULL; \
+char *token = NULL, *tokInput = NULL, *tokInput_ = NULL, *childName = typeName; \
+ret = -1; \
 for (i = 0; i < tupelVar->itemLen; i++) { \
 	if (tupelVar->items[i] == NULL) { \
 		continue; \
 	} \
-	if ((childName = strstr(typeName,tupelVar->items[i]->name)) != NULL) { \
+	if (strcmp(typeName,tupelVar->items[i]->name) == 0) { \
+		ret = i; \
 		break; \
+	} else { \
+		if (strstr(typeName,tupelVar->items[i]->name) != NULL) { \
+			ret = i; \
+		} \
 	} \
 } \
-if (i >= tupelVar->itemLen) { \
+if (ret == -1) { \
 	return DEFAULT_RETURN_VALUE; \
 } \
-valuePtrVar = tupelVar->items[i]->value; \
-childName += strlen(tupelVar->items[i]->name); \
-if ((datamodelElementVar = getDescription(rootDatamodelVar,tupelVar->items[i]->name)) == NULL) { \
+valuePtrVar = tupelVar->items[ret]->value; \
+childName += strlen(tupelVar->items[ret]->name); \
+if ((datamodelElementVar = getDescription(rootDatamodelVar,tupelVar->items[ret]->name)) == NULL) { \
 	return DEFAULT_RETURN_VALUE; \
 } \
 if (strlen(childName) > 0) { \
+	if (datamodelElementVar->dataModelType != TYPE) { \
+		return DEFAULT_RETURN_VALUE; \
+	} \
 	if (*childName == '.') { \
 		childName++; \
 	} \
@@ -240,7 +249,7 @@ static inline void copyArrayByte(DataModelElement_t *rootDM,Tupel_t *tupel,char 
 	#define DEFAULT_RETURN_VALUE
 	GET_MEMBER_POINTER(tupel,rootDM,arrayTypeName);
 	size = *(int*)(*(PTR_TYPE*)valuePtr);
-	if (startingSlot >= size) {
+	if (startingSlot >= size || valueArray == NULL) {
 		return;
 	}
 	toCopy = ((size - startingSlot) > n ? n : (size - startingSlot));

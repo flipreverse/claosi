@@ -87,6 +87,18 @@ typedef struct QueryTimerJob {
 	#endif
 } QueryTimerJob_t;
 
+typedef struct QuerySelectors {
+	/**
+	 * Auxiliary member to maintain each query in a linked-list
+	 */
+	#ifdef __KERNEL__
+	struct list_head list;
+	#else
+	STAILQ_ENTRY(QueryJob) listEntry;
+	#endif
+	Query_t *query;
+} QuerySelectors_t;
+
 int registerProvider(DataModelElement_t *dm, Query_t *queries);
 int unregisterProvider(DataModelElement_t *dm, Query_t *queries);
 int registerQuery(Query_t *queries);
@@ -95,7 +107,8 @@ int initSLC(void);
 void destroySLC(void);
 int initSLCDatamodel(void);
 
-void eventOccured(char *datamodelName, Tupel_t *tupel);
+void eventOccuredBroadcast(char *datamodelName, Tupel_t *tupel);
+void eventOccuredUnicast(Query_t *query, Tupel_t *tupel);
 void objectChanged(char *datamodelName, Tupel_t *tupel, int event);
 
 /*

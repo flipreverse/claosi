@@ -200,6 +200,23 @@ int unregisterQuery(Query_t *queries) {
 #ifdef __KERNEL__
 EXPORT_SYMBOL(unregisterQuery);
 #endif
+void eventOccuredUnicast(Query_t *query, Tupel_t *tupel) {
+	/*	#ifdef __KERNEL__
+	unsigned long flags;
+	#endif
+	ACQUIRE_READ_LOCK(slcLock);*/
+
+	if (tupel == NULL || query == NULL) {
+//		RELEASE_READ_LOCK(slcLock);
+		return;
+	}
+
+	enqueueQuery(query,tupel,0);
+//	RELEASE_READ_LOCK(slcLock);
+}
+#ifdef __KERNEL__
+EXPORT_SYMBOL(eventOccuredUnicast);
+#endif
 /**
  * Notifies the slc about a recently occured event
  * The caller has to ensure that all items noted in itemLen are allocated and initialized. Furthermore
@@ -207,7 +224,7 @@ EXPORT_SYMBOL(unregisterQuery);
  * @param datamodelName the path to the event, e.g. net.device.onTx
  * @param tupel the tupel
  */
-void eventOccured(char *datamodelName, Tupel_t *tupel) {
+void eventOccuredBroadcast(char *datamodelName, Tupel_t *tupel) {
 	DataModelElement_t *dm = NULL;
 	Query_t **query = NULL;
 	int i = 0;
@@ -242,7 +259,7 @@ void eventOccured(char *datamodelName, Tupel_t *tupel) {
 //	RELEASE_READ_LOCK(slcLock);
 }
 #ifdef __KERNEL__
-EXPORT_SYMBOL(eventOccured);
+EXPORT_SYMBOL(eventOccuredBroadcast);
 #endif
 /**
  * Notifies the slc about a recently chaned object.

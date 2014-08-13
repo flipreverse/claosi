@@ -104,8 +104,8 @@ void freeTupel(DataModelElement_t *rootDM, Tupel_t *tupel) {
 			//}
 			continue;
 		}
-		freeItem(rootDM,tupel->items[i]->value,element);
 		DEBUG_MSG(2,"Freeing %s (%p)\n",element->name,tupel->items[i]->value);
+		freeItem(rootDM,tupel->items[i]->value,element);
 		FREE(tupel->items[i]);
 	}
 

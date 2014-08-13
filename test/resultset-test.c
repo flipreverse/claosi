@@ -17,7 +17,7 @@ static void initDatamodel(void);
 
 int main() {
 	Tupel_t *tupel = NULL, *tupelCompact = NULL, *tupelCompact2 = NULL, *tupleCopy = NULL;
-	char *string = NULL, values[] = {5,4,3,2,1};
+	char *string = NULL, values[] = {66,4,3,2,1};
 	clock_t startClock, endClock;
 	int size = 0, ret = 0;
 
@@ -118,27 +118,27 @@ int main() {
 }
 
 
-static void regEventCallback(void) {
+static void regEventCallback(Query_t *query) {
 	
 }
 
-static void unregEventCallback(void) {
+static void unregEventCallback(Query_t *query) {
 	
 }
 
-static Tupel_t* getSrc(void) {
+static Tupel_t* getSrc(Selector_t *selectors, int len) {
 	return NULL;
 };
 
-static void regObjectCallback(void) {
+static void regObjectCallback(Query_t *query) {
 	
 };
 
-static void unregObjectCallback(void) {
+static void unregObjectCallback(Query_t *query) {
 	
 };
 
-static Tupel_t* generateStatusObject(void) {
+static Tupel_t* generateStatusObject(Selector_t *selectors, int len) {
 	return NULL;
 }
 

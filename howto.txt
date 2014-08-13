@@ -1,0 +1,61 @@
+General information about ...
+=============================
+
+- selectors:
+	The order of values within the selectors array corresponds to the order nodes within the datamodel from top to bottom.
+	Consider the following example:
+	datamodel:			namepsace1.object1.object2.object3.event1		(identifier types:	object1=int, object2=string, object3=float
+	selectors array:	[0]=int, [1]=string, [2]=float
+	All non-string datatypes are written to the selectors array in binary format. Hence, you can compare to an array entry by casting it to a pointer of the corresponding type
+	and derefrence it, e.g. *(int*)(&selectors[0].value) == 42.
+	No additional work using atoi or something similar is needed.
+
+- activating/deactivating an event/object:
+	The callbacks get called each time a query register on the corresponding node. Your code has to ensure that for example a kprobe gets armed just once.
+	The caller provides a pointer to the query that was recently registered. You have to store this pointer in order to compare to its selectors, when an events occurs.
+
+- generateStatusObject:
+	Depending on the position of the node the caller maight not provide a selectors array.
+
+How to write an event/object provider for a nested event/object?
+================================================================
+
+	... initTupel();
+	ACQUIRE_READ_LOCK(slcLock);
+	// add the requested information
+	/* additionally, add an item for each object on the path to this event/object
+	 * for "net.device.onRx" add an item "net.device". Its value has to be the identifier of the object used by the query.
+	 * For example, if the user registers a query for the event onRx it has to
+	 * provide a selector with the name of the device ("net.device") he wants to
+	 * register for. This might be "eth0". Hence, a tuple must have an item
+	 * "net.device=eth0"
+	 */
+	// Both function need the slclock hold by the caller
+	eventOccuredUnicast(query,tuple);
+	or
+	objectChangedUnicast(query,tuple);
+	RELEASE_WRITE_LOCK(slcLock);
+
+
+
+How to write an event/object provider for a normal event/object?
+================================================================
+
+	... initTupel();
+	ACQUIRE_READ_LOCK(slcLock);
+	// add the requested information
+	// Both function need the slclock hold by the caller
+	eventOccuredBroadcast("path.to.the.node",tuple);
+	or
+	objectChangedBroadcast("path.to.the.node",tuple);
+	RELEASE_WRITE_LOCK(slcLock);
+
+
+How to write a source provider?
+===============================
+
+	// DO NOT ACQUIRE ANY LOCK! The caller will handle any locking
+	// If this source does *not* belong to any object, its selector parameter will be NULL and len will be zero.
+	.. initTupel();
+	// do some stuff
+	return ptrToFirstTuple;
