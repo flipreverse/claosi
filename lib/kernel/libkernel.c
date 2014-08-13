@@ -85,9 +85,10 @@ EXPORT_SYMBOL(enqueueQuery);
 static int generateObjectStatus(void *data) {
 	QueryStatusJob_t *statusJob = (QueryStatusJob_t*)data;
 	Tupel_t *curTuple = NULL;
+	GenStream_t *stream = (GenStream_t*)statusJob->query->root;
 
 	// The object may return a linked-list of Tuple_t
-	curTuple = statusJob->statusFn();
+	curTuple = statusJob->statusFn(stream->selectors,stream->selectorsLen);
 	while (curTuple != NULL) {
 		// Forward any query to the execution thread
 		enqueueQuery(statusJob->query,curTuple,0);
@@ -153,7 +154,9 @@ static enum hrtimer_restart hrtimerHandler(struct hrtimer *curTimer) {
 	// Obtain the surrounding datatype
 	QueryTimerJob_t *timerJob = container_of(curTimer,QueryTimerJob_t,timer);
 	Source_t *src = (Source_t*)timerJob->dm->typeInfo;
+	GenStream_t *stream = (GenStream_t*)timerJob->query->root;
 	Tupel_t *tuple= NULL;
+	
 	unsigned long flags;
 	
 	/*
@@ -173,7 +176,7 @@ static enum hrtimer_restart hrtimerHandler(struct hrtimer *curTimer) {
 	DEBUG_MSG(2,"%s: Creating tuple\n",__FUNCTION__);
 	// Only one timer at a time is allowed to access this source
 	ACQUIRE_WRITE_LOCK(src->lock);
-	tuple = src->callback();
+	tuple = src->callback(stream->selectors,stream->selectorsLen);
 	RELEASE_WRITE_LOCK(src->lock);
 	if (tuple != NULL) {
 		DEBUG_MSG(2,"Enqueue tuple\n");

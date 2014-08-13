@@ -13,27 +13,27 @@ DECLARE_ELEMENTS(objSocket, objDevice, srcSocketType, srcSocketFlags, typePacket
 DECLARE_ELEMENTS(typeMacHdr, typeMacProt, typeNetHdr, typeNetProt, typeTranspHdr, typeTransProt, typeDataLen, typeSockRef)
 DECLARE_ELEMENTS(model2, srcDelayTolerance, typePacketType2, nsNet2, objDevice2, srcState)
 
-static void regEventCallback(void) {
+static void regEventCallback(Query_t *query) {
 	
 }
 
-static void unregEventCallback(void) {
+static void unregEventCallback(Query_t *query) {
 	
 }
 
-static Tupel_t* getSrc(void) {
+static Tupel_t* getSrc(Selector_t *selectors, int len) {
 	return NULL;
 };
 
-static void regObjectCallback(void) {
+static void regObjectCallback(Query_t *query) {
 	
 };
 
-static void unregObjectCallback(void) {
+static void unregObjectCallback(Query_t *query) {
 	
 };
 
-static Tupel_t* generateStatusObject(void) {
+static Tupel_t* generateStatusObject(Selector_t *selectors, int len) {
 	return NULL;
 }
 

@@ -26,7 +26,7 @@ static void setupQueries(void) {
 	initQuery(&queryUtime);
 	queryUtime.onQueryCompleted = printResult;
 	queryUtime.root = GET_BASE(utimeStream);
-	INIT_SRC_STREAM(utimeStream,"process.process.utime",0,GET_BASE(utimeFilter),2000)
+	INIT_SRC_STREAM(utimeStream,"process.process.utime",0,0,GET_BASE(utimeFilter),2000)
 	INIT_FILTER(utimeFilter,NULL,1)
 	ADD_PREDICATE(utimeFilter,0,utimePred)
 	SET_PREDICATE(utimePred,GEQ, STREAM, "process.process.utime", POD, "4710")

@@ -6,33 +6,66 @@
 #include <datamodel.h>
 #include <resultset.h>
 
+#define MAX_SELECTOR_LEN	20
 #define GET_BASE(varName)	(Operator_t*)&varName
 #define ADD_PREDICATE(varOperator,slot,predicateVar)	varOperator.predicates[slot] = &predicateVar;
 #define ADD_ELEMENT(varOperator,slot,elementVar,elementName)	varOperator.elements[slot] = &elementVar; \
 	strncpy((char*)&elementVar.name,elementName,MAX_NAME_LEN);
 
-#define INIT_SRC_STREAM(varName,srcName,isUrgent,childVar,srcPeriod)	strncpy((char*)&varName.st_name,srcName,MAX_NAME_LEN); \
+#define GET_SELECTORS(varName)			((GenStream_t*)varName->root)->selectors
+#define GET_SELECTORS_LEN(varName)			((GenStream_t*)varName->root)->selectorsLen
+#define SET_SELECTOR_STRING_JOIN(varOperator,slot,selectorValue)	strncpy((char*)&varOperator.selectors[slot].value,selectorValue,MAX_SELECTOR_LEN);
+#define SET_SELECTOR_STRING_STREAM(varOperator,slot,selectorValue)	strncpy((char*)&varOperator.st_selectors[slot].value,selectorValue,MAX_SELECTOR_LEN);
+
+#define SET_SELECTOR_INT_JOIN(varOperator,slot,selectorValue)	*(int*)(&varOperator.selectors[slot].value) = selectorValue;
+#define SET_SELECTOR_INT_STREAM(varOperator,slot,selectorValue)	*(int*)(&varOperator.st_selectors[slot].value) =selectorValue;
+
+#define INIT_SRC_STREAM(varName,srcName,numSelectors,isUrgent,childVar,srcPeriod)	strncpy((char*)&varName.st_name,srcName,MAX_NAME_LEN); \
 	varName.st_type = GEN_SOURCE; \
 	varName.st_child = childVar; \
 	varName.st_urgent = isUrgent; \
 	varName.period = srcPeriod; \
+	varName.st_selectorsLen = numSelectors; \
+	if (varName.st_selectorsLen > 0) { \
+		varName.st_selectors = ALLOC(sizeof(Selector_t) * varName.st_selectorsLen); \
+	} else { \
+		varName.st_selectors = NULL; \
+	} \
 	varName.timerInfo = NULL;
 
-#define INIT_OBJ_STREAM(varName,objName,isUrgent,childVar,listObjEvents)	strncpy((char*)&varName.st_name,objName,MAX_NAME_LEN); \
+#define INIT_OBJ_STREAM(varName,objName,numSelectors,isUrgent,childVar,listObjEvents)	strncpy((char*)&varName.st_name,objName,MAX_NAME_LEN); \
 	varName.st_type = GEN_OBJECT; \
 	varName.st_child = childVar; \
 	varName.st_urgent = isUrgent; \
+	varName.st_selectorsLen = numSelectors; \
+	if (varName.st_selectorsLen > 0) { \
+		varName.st_selectors = ALLOC(sizeof(Selector_t) * varName.st_selectorsLen); \
+	} else { \
+		varName.st_selectors = NULL; \
+	} \
 	varName.objectEvents = listObjEvents;
 
-#define INIT_EVT_STREAM(varName,evtName,isUrgent,childVar)	strncpy((char*)&varName.st_name,evtName,MAX_NAME_LEN); \
+#define INIT_EVT_STREAM(varName,evtName,numSelectors,isUrgent,childVar)	strncpy((char*)&varName.st_name,evtName,MAX_NAME_LEN); \
 	varName.st_type = GEN_EVENT; \
 	varName.st_child = childVar; \
+	varName.st_selectorsLen = numSelectors; \
+	if (varName.st_selectorsLen > 0) { \
+		varName.st_selectors = ALLOC(sizeof(Selector_t) * varName.st_selectorsLen); \
+	} else { \
+		varName.st_selectors = NULL; \
+	} \
 	varName.st_urgent = isUrgent;
 
-#define INIT_JOIN(varName,joinElement,childVar,numPredicates)	strncpy((char*)&varName.element.name,joinElement,MAX_NAME_LEN); \
+#define INIT_JOIN(varName,joinElement,numSelectors,childVar,numPredicates)	strncpy((char*)&varName.element.name,joinElement,MAX_NAME_LEN); \
 	varName.op_type = JOIN; \
 	varName.op_child = childVar; \
 	varName.predicateLen = numPredicates; \
+	varName.selectorsLen = numSelectors; \
+	if (varName.selectorsLen > 0) { \
+		varName.selectors = ALLOC(sizeof(Selector_t) * varName.selectorsLen); \
+	} else { \
+		varName.selectors = NULL; \
+	} \
 	varName.predicates = (Predicate_t**)ALLOC(sizeof(Predicate_t**) * numPredicates);
 
 #define INIT_FILTER(varName,childVar,numPredicates)	varName.op_type = FILTER; \
@@ -101,7 +134,26 @@ enum SizeUnit {
 };
 
 typedef void (*queryCompletedFunction)(unsigned int,Tupel_t*);
-
+/**
+ * An object, event or source someone registers on may be nested into
+ * severeal objects. Hence, the data provider must be aware for which instance of parent objects 
+ * someone registered on a object, event or source.
+ * That's the reason why each GenStream_t or Join which points to such a datasource needs number of parent
+ * objects selectors attached to it.
+ * Each selector holds a string describing in which instance of an object the caller is interested in.
+ * Imagine the following example:
+ * model {
+ * 		obj process[int] {
+ * 			src utime;
+ * 		}
+ * }
+ * 
+ * A caller wants to know the utime of a certain process. He creates a SourceStream_t having on Selector_t.
+ * Its value is the process id of the process he wants to observe.
+ */
+typedef struct Selector {
+	char value[MAX_SELECTOR_LEN];
+} Selector_t;
 /**
  * Identifies a query across different layers
  */
@@ -160,6 +212,8 @@ typedef struct __attribute__((packed)) GenStream {
 	#define op_child	base.child
 	char urgent;
 	DECLARE_BUFFER(name)
+	Selector_t *selectors;
+	int selectorsLen;
 } GenStream_t;
 
 typedef struct __attribute__((packed)) EventStream {
@@ -168,12 +222,18 @@ typedef struct __attribute__((packed)) EventStream {
 	#define st_name streamBase.name
 	#define st_type streamBase.op_type
 	#define st_child streamBase.op_child
+	#define st_selectors streamBase.selectors
+	#define st_selectorsLen streamBase.selectorsLen
 } EventStream_t;
 
 typedef struct __attribute__((packed)) SourceStream {
 	GenStream_t streamBase;
 	#define st_urgent streamBase.urgent
 	#define st_name streamBase.name
+	#define st_type streamBase.op_type
+	#define st_child streamBase.op_child
+	#define st_selectors streamBase.selectors
+	#define st_selectorsLen streamBase.selectorsLen
 	int period;
 	void *timerInfo;
 } SourceStream_t;
@@ -182,6 +242,10 @@ typedef struct __attribute__((packed)) ObjectStream {
 	GenStream_t streamBase;
 	#define st_urgent streamBase.urgent
 	#define st_name streamBase.name
+	#define st_type streamBase.op_type
+	#define st_child streamBase.op_child
+	#define st_selectors streamBase.selectors
+	#define st_selectorsLen streamBase.selectorsLen
 	int objectEvents;
 } ObjectStream_t;
 
@@ -232,6 +296,8 @@ typedef struct __attribute__((packed)) Join {
 	Element_t element;
 	unsigned short predicateLen;
 	Predicate_t **predicates;
+	Selector_t *selectors;
+	int selectorsLen;
 } Join_t;
 /**
  * Datamodell: Object: +Fkt für 

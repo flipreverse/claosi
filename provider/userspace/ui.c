@@ -49,7 +49,7 @@ static void* displayEvtWork(void *data) {
 		allocItem(SLC_DATA_MODEL,tuple,0,"ui.eventType");
 		setItemInt(SLC_DATA_MODEL,tuple,"ui.eventType.xPos",rand() % 1024);
 		setItemInt(SLC_DATA_MODEL,tuple,"ui.eventType.yPos",rand() % 1024);
-		eventOccured("ui.display",tuple);
+		eventOccuredBroadcast("ui.display",tuple);
 		RELEASE_READ_LOCK(slcLock);
 	}
 
@@ -57,7 +57,7 @@ static void* displayEvtWork(void *data) {
 	return NULL;
 }
 
-static void activateDisplay(void) {
+static void activateDisplay(Query_t *query) {
 
 	displayEvtThreadRunning = 1;
 	pthread_attr_init(&displayEvtThreadAttr);
@@ -68,21 +68,21 @@ static void activateDisplay(void) {
 
 }
 
-static void deactivateDisplay(void) {
+static void deactivateDisplay(Query_t *query) {
 	displayEvtThreadRunning = 0;
 	pthread_join(displayEvtThread,NULL);
 	pthread_attr_destroy(&displayEvtThreadAttr);
 }
 
-static void activateApp(void) {
+static void activateApp(Query_t *query) {
 	
 }
 
-static void deactivateApp(void) {
+static void deactivateApp(Query_t *query) {
 	
 }
 
-static Tupel_t* statusApp(void) {
+static Tupel_t* statusApp(Selector_t *selectors, int len) {
 	Tupel_t *tuple = NULL;
 	struct timeval curTime;
 	char *name = NULL;
@@ -106,7 +106,7 @@ static Tupel_t* statusApp(void) {
 	return tuple;
 }
 
-static Tupel_t* sourceForegroundApp(void) {
+static Tupel_t* sourceForegroundApp(Selector_t *selectors, int len) {
 	Tupel_t *tuple = NULL;
 	struct timeval curTime;
 	char *name = NULL;
@@ -174,7 +174,7 @@ static void setupQueries(void) {
 	queryDisplay.next = &queryApp;
 	queryDisplay.onQueryCompleted = printResult;
 	queryDisplay.root = GET_BASE(displayStream);
-	INIT_EVT_STREAM(displayStream,"ui.display",0,GET_BASE(posFilter))
+	INIT_EVT_STREAM(displayStream,"ui.display",0,0,GET_BASE(posFilter))
 	INIT_FILTER(posFilter,NULL,2)
 	ADD_PREDICATE(posFilter,0,xPosPred)
 	SET_PREDICATE(xPosPred,GEQ, STREAM, "ui.eventType.xPos", POD, "700")
@@ -185,12 +185,12 @@ static void setupQueries(void) {
 	queryApp.next = &queryForeground;
 	queryApp.onQueryCompleted = printResult;
 	queryApp.root = GET_BASE(appStream);
-	INIT_OBJ_STREAM(appStream,"ui.app",0,NULL,OBJECT_STATUS)
+	INIT_OBJ_STREAM(appStream,"ui.app",0,0,NULL,OBJECT_STATUS)
 
 	initQuery(&queryForeground);
 	queryForeground.onQueryCompleted = printResult;
 	queryForeground.root = GET_BASE(fappStream);
-	INIT_SRC_STREAM(fappStream,"ui.foregroundApp",0,NULL,1000)
+	INIT_SRC_STREAM(fappStream,"ui.foregroundApp",0,0,NULL,1000)
 }
 #endif
 

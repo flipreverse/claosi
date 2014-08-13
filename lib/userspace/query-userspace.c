@@ -58,17 +58,17 @@ void printQuery(Operator_t *rootQuery) {
 		switch (cur->type) {
 			case GEN_SOURCE:
 				srcStream = (SourceStream_t*)cur;
-				printf("Source(element=%s,urgency=%u,period=%u ms)\n", srcStream->st_name,srcStream->st_urgent,srcStream->period);
+				printf("Source(element=%s,urgency=%u,period=%u ms, selectors=%u)\n", srcStream->st_name,srcStream->st_urgent,srcStream->period,srcStream->st_selectorsLen);
 				break;
 
 			case GEN_OBJECT:
 				objStream = (ObjectStream_t*)cur;
-				printf("Object(element=%s,urgency=%u,objevtevents=0x%x)\n", objStream->st_name,objStream->st_urgent,objStream->objectEvents);
+				printf("Object(element=%s,urgency=%u,objevtevents=0x%x, selectors=%u)\n", objStream->st_name,objStream->st_urgent,objStream->objectEvents,objStream->st_selectorsLen);
 				break;
 
 			case GEN_EVENT:
 				evtStream = (EventStream_t*)cur;
-				printf("Event(element=%s,urgency=%u)\n", evtStream->st_name,evtStream->st_urgent);
+				printf("Event(element=%s,urgency=%u, selectors=%u)\n", evtStream->st_name,evtStream->st_urgent,evtStream->st_selectorsLen);
 				break;
 
 			case SELECT:

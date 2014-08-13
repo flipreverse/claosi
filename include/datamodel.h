@@ -69,10 +69,12 @@ typedef struct TypeItem {
 	DECLARE_BUFFER(name);
 } TypeItem_t;
 
-typedef void (*activateEventCallback)(void);
-typedef void (*deactivateEventCallback)(void);
+typedef struct Selector Selector_t;
+typedef struct Query Query_t;
 
-struct Query;
+typedef void (*activateEventCallback)(Query_t *query);
+typedef void (*deactivateEventCallback)(Query_t *query);
+
 typedef struct Tupel Tupel_t;
 
 typedef struct Event {
@@ -84,7 +86,7 @@ typedef struct Event {
 	int numQueries;
 } Event_t;
 
-typedef Tupel_t* (*getSource)(void);
+typedef Tupel_t* (*getSource)(Selector_t *selectors, int len);
 
 typedef struct Source {
 	unsigned short returnType;
@@ -97,9 +99,9 @@ typedef struct Source {
 
 typedef struct Tupel Tupel_t;
 
-typedef void (*activateObject)(void);
-typedef void (*deactivateObject)(void);
-typedef Tupel_t* (*generateStatus)(void);
+typedef void (*activateObject)(Query_t *query);
+typedef void (*deactivateObject)(Query_t *query);
+typedef Tupel_t* (*generateStatus)(Selector_t *selectors, int len);
 
 typedef struct Object {
 	unsigned short identifierType;

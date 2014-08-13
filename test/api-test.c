@@ -71,27 +71,27 @@ int main() {
 }
 
 
-static void regEventCallback(void) {
+static void regEventCallback(Query_t *query) {
 	
 }
 
-static void unregEventCallback(void) {
+static void unregEventCallback(Query_t *query) {
 	
 }
 
-static Tupel_t* getSrc(void) {
+static Tupel_t* getSrc(Selector_t *selectors, int len) {
 	return NULL;
 };
 
-static void regObjectCallback(void) {
+static void regObjectCallback(Query_t *query) {
 	
 };
 
-static void unregObjectCallback(void) {
+static void unregObjectCallback(Query_t *query) {
 	
 };
 
-static Tupel_t* generateStatusObject(void) {
+static Tupel_t* generateStatusObject(Selector_t *selectors, int len) {
 	return NULL;
 }
 
@@ -109,16 +109,16 @@ static void issueEvent(void) {
 	setArraySlotByte(SLC_DATA_MODEL,tupel,"net.packetType.macHdr",3,4);
 	setItemByte(SLC_DATA_MODEL,tupel,"net.packetType.macProtocol",65);
 	
-	eventOccured("net.device.onTx",tupel);
+	eventOccuredBroadcast("net.device.onTx",tupel);
 }
 
 static void setupQueries(void) {
-	query.next = NULL;
-	query.queryID = 0;
+	initQuery(&query);
 	query.onQueryCompleted = printResult;
 	query.root = GET_BASE(txStream);
 
-	INIT_EVT_STREAM(txStream,"net.device.onTx",0,GET_BASE(filter))
+	INIT_EVT_STREAM(txStream,"net.device.onTx",1,0,GET_BASE(filter))
+	SET_SELECTOR_STRING_STREAM(txStream,0,"eth0")
 	INIT_FILTER(filter,GET_BASE(selectTest),1)
 	ADD_PREDICATE(filter,0,filterTXPredicate)
 	SET_PREDICATE(filterTXPredicate,EQUAL, STREAM, "net.packetType.macProtocol", POD, "65")
