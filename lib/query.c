@@ -526,13 +526,17 @@ int checkQuerySyntax(DataModelElement_t *rootDM, Operator_t *rootQuery, Operator
 				}
 				counter = 0;
 				dmIter = dm;
+				// 
+				if (dmIter->dataModelType == OBJECT) {
+					dmIter = dmIter->parent;
+				}
 				while (dmIter != NULL) {
 					if (dmIter->dataModelType == OBJECT) {
 						counter++;
 					}
 					dmIter = dmIter->parent;
 				};
-				if (counter != stream->selectorsLen) {
+				if (counter > stream->selectorsLen) {
 					return -ESELECTORS;
 				}
 				break;

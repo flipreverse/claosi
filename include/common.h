@@ -33,7 +33,7 @@
 #ifdef __KERNEL__
 #define	ALLOC(size)							kmalloc(size,GFP_KERNEL & ~__GFP_WAIT)
 #define	FREE(ptr)							kfree(ptr)
-#define REALLOC(ptr,size)					krealloc(ptr,size,GFP_KERNEL)
+#define REALLOC(ptr,size)					krealloc(ptr,size,GFP_KERNEL & ~__GFP_WAIT)
 #define STRTOINT(strVar,intVar)				kstrtos32(strVar,10,&intVar)
 #define STRTOCHAR(strVar,charVar)			kstrtos8(strVar,10,&charVar)
 #define DECLARE_LOCK(varName)				rwlock_t varName

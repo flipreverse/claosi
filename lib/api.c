@@ -269,7 +269,7 @@ EXPORT_SYMBOL(eventOccuredBroadcast);
  * @param tupel the tupel
  * @param event a bitmask describing the event type
  */
-void objectChanged(char *datamodelName, Tupel_t *tupel, int event) {
+void objectChangedBroadcast(char *datamodelName, Tupel_t *tupel, int event) {
 	int i = 0;
 /*	#ifdef __KERNEL__
 	unsigned long flags;
@@ -316,8 +316,27 @@ void objectChanged(char *datamodelName, Tupel_t *tupel, int event) {
 //	RELEASE_READ_LOCK(slcLock);
 }
 #ifdef __KERNEL__
-EXPORT_SYMBOL(objectChanged);
+EXPORT_SYMBOL(objectChangedBroadcast);
 #endif
+
+void objectChangedUnicast(Query_t *query, Tupel_t *tupel) {
+	/*	#ifdef __KERNEL__
+	unsigned long flags;
+	#endif
+	ACQUIRE_READ_LOCK(slcLock);*/
+
+	if (tupel == NULL || query == NULL) {
+//		RELEASE_READ_LOCK(slcLock);
+		return;
+	}
+
+	enqueueQuery(query,tupel,0);
+//	RELEASE_READ_LOCK(slcLock);
+}
+#ifdef __KERNEL__
+EXPORT_SYMBOL(objectChangedUnicast);
+#endif
+
 /**
  * Does all common initialization stuff
  */

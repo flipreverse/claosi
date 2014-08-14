@@ -14,6 +14,9 @@ General information about ...
 	The callbacks get called each time a query register on the corresponding node. Your code has to ensure that for example a kprobe gets armed just once.
 	The caller provides a pointer to the query that was recently registered. You have to store this pointer in order to compare to its selectors, when an events occurs.
 
+- generateStatusObject:
+	Depending on the position of the node the caller maight not provide a selectors array.
+
 How to write an event/object provider for a nested event/object?
 ================================================================
 

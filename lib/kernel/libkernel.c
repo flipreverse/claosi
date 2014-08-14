@@ -202,7 +202,7 @@ void startSourceTimer(DataModelElement_t *dm, Query_t *query) {
 		return;
 	}
 
-	DEBUG_MSG(2,"%s: Init hrtimer for node %s\n",__FUNCTION__,srcStream->st_name);
+	DEBUG_MSG(1,"%s: Init hrtimer for node %s,%s\n",__FUNCTION__,srcStream->st_name,dm->name);
 	// Setup the timer using timing information relative to the current clock which will be the monotonic one.
 	hrtimer_init(&timerJob->timer, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
 	timerJob->period = srcStream->period;

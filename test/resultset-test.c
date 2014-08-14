@@ -17,7 +17,7 @@ static void initDatamodel(void);
 
 int main() {
 	Tupel_t *tupel = NULL, *tupelCompact = NULL, *tupelCompact2 = NULL, *tupleCopy = NULL;
-	char *string = NULL, values[] = {5,4,3,2,1};
+	char *string = NULL, values[] = {66,4,3,2,1};
 	clock_t startClock, endClock;
 	int size = 0, ret = 0;
 
