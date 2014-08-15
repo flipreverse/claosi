@@ -10,19 +10,16 @@
 DECLARE_ELEMENTS(nsNet, model)
 DECLARE_ELEMENTS(objSocket, objDevice, srcSocketType, srcSocketFlags, typePacketType, srcTXBytes, srcRXBytes, evtOnRX, evtOnTX)
 DECLARE_ELEMENTS(typeMacHdr, typeMacProt, typeNetHdr, typeNetProt, typeTranspHdr, typeTransProt, typeDataLen)
-static void initDatamodel(void);
-static int rxProbeActive = 0;
-static LIST_HEAD(rxQueriesList);
-static DEFINE_SPINLOCK(rxListLock);
-static int txProbeActive = 0;
-static LIST_HEAD(txQueriesList);
-static DEFINE_SPINLOCK(txListLock);
-static int devOpenProbeActive = 0;
-static LIST_HEAD(devOpenQueriesList);
-static DEFINE_SPINLOCK(devOpenListLock);
-static int devCloseProbeActive = 0;
-static LIST_HEAD(devCloseQueriesList);
-static DEFINE_SPINLOCK(devCloseListLock);
+
+DECLARE_QUERY_LIST(rx);
+DECLARE_QUERY_LIST(tx);
+DECLARE_QUERY_LIST(dev);
+
+static struct kprobe rxKP;
+static char txSymbolName[] = "dev_hard_start_xmit";
+static struct kprobe txKP;
+static char rxSymbolName[] = "__netif_receive_skb";
+
 
 
 static int handlerTX(struct kprobe *p, struct pt_regs *regs) {
@@ -47,12 +44,7 @@ skb = (struct sk_buff*)regs->ARM_r0;
 
 	do_gettimeofday(&time);
 	timeUS = (unsigned long long)time.tv_sec * (unsigned long long)USEC_PER_SEC + (unsigned long long)time.tv_usec;
-
-	// Acquire the slcLock to avoid change in the datamodel while creating the tuple
-	ACQUIRE_READ_LOCK(slcLock);
-	spin_lock(&txListLock);
-	list_for_each(pos,&txQueriesList) {
-		querySelec = container_of(pos,QuerySelectors_t,list);
+	forEachQueryEvent(slcLock,tx,pos,querySelec)
 		if (strcmp(skb->dev->name,GET_SELECTORS(querySelec->query)[0].value) != 0) {
 			continue;
 		}
@@ -72,9 +64,7 @@ skb = (struct sk_buff*)regs->ARM_r0;
 		copyArrayByte(SLC_DATA_MODEL,tupel,"net.packetType.macHdr",0,skb->data,ETH_HLEN);
 		setItemByte(SLC_DATA_MODEL,tupel,"net.packetType.macProtocol",42);
 		eventOccuredUnicast(querySelec->query,tupel);
-	}
-	spin_unlock(&txListLock);
-	RELEASE_READ_LOCK(slcLock);
+	endForEachQueryEvent(slcLock,tx)
 
 	return 0;
 }
@@ -103,10 +93,7 @@ skb = (struct sk_buff*)regs->ARM_r0;
 	timeUS = (unsigned long long)time.tv_sec * (unsigned long long)USEC_PER_SEC + (unsigned long long)time.tv_usec;
 
 	// Acquire the slcLock to avoid change in the datamodel while creating the tuple
-	ACQUIRE_READ_LOCK(slcLock);
-	spin_lock(&rxListLock);
-	list_for_each(pos,&rxQueriesList) {
-		querySelec = container_of(pos,QuerySelectors_t,list);
+	forEachQueryEvent(slcLock,rx,pos,querySelec)
 		if (strcmp(skb->dev->name,GET_SELECTORS(querySelec->query)[0].value) != 0) {
 			continue;
 		}
@@ -126,64 +113,40 @@ skb = (struct sk_buff*)regs->ARM_r0;
 		copyArrayByte(SLC_DATA_MODEL,tupel,"net.packetType.macHdr",0,skb->data,ETH_HLEN);
 		setItemByte(SLC_DATA_MODEL,tupel,"net.packetType.macProtocol",42);
 		eventOccuredUnicast(querySelec->query,tupel);
-	}
-	spin_unlock(&rxListLock);
-	RELEASE_READ_LOCK(slcLock);
+	endForEachQueryEvent(slcLock,rx)
 
 	return 0;
 }
-
-static struct kprobe rxKP = {
-	.symbol_name	= "__netif_receive_skb",
-	.pre_handler = handlerRX
-};
-
-static struct kprobe txKP = {
-	.symbol_name	= "dev_hard_start_xmit",
-	.pre_handler = handlerTX
-};
 
 static void activateTX(Query_t *query) {
 	int ret = 0;
 	QuerySelectors_t *querySelec = NULL;
 
-	querySelec = (QuerySelectors_t*)ALLOC(sizeof(QuerySelectors_t));
-	if (querySelec == NULL) {
-		return;
-	}
-	querySelec->query = query;
-	spin_lock(&txListLock);
-	list_add_tail(&querySelec->list,&txQueriesList);
-	spin_unlock(&txListLock);
-	if (txProbeActive == 0) {
-		if ((ret = register_kprobe(&txKP)) < 0) {
-			ERR_MSG("register_kprobe failed. Reason: %d\n",ret);
+	addAndEnqueueQuery(tx,ret, querySelec, query)
+	// list was empty before insertion
+	if (ret == 1) {
+		memset(&txKP,0,sizeof(struct kprobe));
+		txKP.pre_handler = handlerTX;
+		txKP.symbol_name = txSymbolName;
+		ret = register_kprobe(&txKP);
+		if (ret < 0) {
+			ERR_MSG("register_kprobe at %s failed. Reason: %d\n",txKP.symbol_name,ret);
 			return;
 		}
-		txProbeActive = 1;
+		DEBUG_MSG(1,"Registered kprobe at %s\n",txKP.symbol_name);
 	}
-	DEBUG_MSG(1,"Registered kprobe at %s\n",txKP.symbol_name);
 }
 
 static void deactivateTX(Query_t *query) {
+	int ret = 0;
 	struct list_head *pos = NULL, *next = NULL;
 	QuerySelectors_t *querySelec = NULL;
 
-	spin_lock(&txListLock);
-	list_for_each_safe(pos,next,&txQueriesList) {
-		querySelec = container_of(pos,QuerySelectors_t,list);
-		if (querySelec->query == query) {
-			list_del(&querySelec->list);
-			break;
-		}
-	}
-	spin_unlock(&txListLock);
-	if (list_empty(&txQueriesList)) {
-		if (txProbeActive == 1) {
-			unregister_kprobe(&txKP);
-			DEBUG_MSG(1,"Unregistered kprobes at %s\n",txKP.symbol_name);
-			txProbeActive = 0;
-		}
+	findAndDeleteQuery(tx,ret, querySelec, query, pos, next)
+	// list is now empty
+	if (ret == 1) {
+		unregister_kprobe(&txKP);
+		DEBUG_MSG(1,"Unregistered kprobe at %s. Missed it %ld times.\n",txKP.symbol_name,txKP.nmissed);
 	}
 }
 
@@ -191,44 +154,31 @@ static void activateRX(Query_t *query) {
 	int ret = 0;
 	QuerySelectors_t *querySelec = NULL;
 
-	querySelec = (QuerySelectors_t*)ALLOC(sizeof(QuerySelectors_t));
-	if (querySelec == NULL) {
-		return;
-	}
-	querySelec->query = query;
-	spin_lock(&rxListLock);
-	list_add_tail(&querySelec->list,&rxQueriesList);
-	spin_unlock(&rxListLock);
-	if (rxProbeActive == 0) {
+	addAndEnqueueQuery(rx,ret, querySelec, query)
+	// list was empty before insertion
+	if (ret == 1) {
+		memset(&rxKP,0,sizeof(struct kprobe));
+		rxKP.pre_handler = handlerRX;
+		rxKP.symbol_name = rxSymbolName;
 		ret = register_kprobe(&rxKP);
 		if (ret < 0) {
-			ERR_MSG("register_kprobe failed. Reason: %d\n",ret);
+			ERR_MSG("register_kprobe at %s failed. Reason: %d\n",rxKP.symbol_name,ret);
 			return;
 		}
-		rxProbeActive = 1;
+		DEBUG_MSG(1,"Registered kprobe at %s\n",rxKP.symbol_name);
 	}
-	DEBUG_MSG(1,"Registered kprobe at %s\n",rxKP.symbol_name);
 }
 
 static void deactivateRX(Query_t *query) {
+	int ret = 0;
 	struct list_head *pos = NULL, *next = NULL;
 	QuerySelectors_t *querySelec = NULL;
 
-	spin_lock(&rxListLock);
-	list_for_each_safe(pos,next,&rxQueriesList) {
-		querySelec = container_of(pos,QuerySelectors_t,list);
-		if (querySelec->query == query) {
-			list_del(&querySelec->list);
-			break;
-		}
-	}
-	spin_unlock(&rxListLock);
-	if (list_empty(&rxQueriesList)) {
-		if (rxProbeActive == 1) {
-			unregister_kprobe(&rxKP);
-			DEBUG_MSG(1,"Unregistered kprobes at %s\n",rxKP.symbol_name);
-			rxProbeActive = 0;
-		}
+	findAndDeleteQuery(rx,ret, querySelec, query, pos, next)
+	// list is now empty
+	if (ret == 1) {
+		unregister_kprobe(&rxKP);
+		DEBUG_MSG(1,"Unregistered kprobe at %s. Missed it %ld times.\n",rxKP.symbol_name,rxKP.nmissed);
 	}
 }
 
@@ -245,6 +195,7 @@ static Tupel_t* getRxBytes(Selector_t *selectors, int len) {
 	if (len == 0 || selectors == NULL) {
 		return NULL;
 	}
+	// the user has to provide one selector which is the device name
 	dev = dev_get_by_name(&init_net,selectors[0].value);
 	if (dev == NULL) {
 		return NULL;
@@ -257,6 +208,7 @@ static Tupel_t* getRxBytes(Selector_t *selectors, int len) {
 		return NULL;
 	}
 	strcpy(devName,dev->name);
+	// Give the device back to the kernel
 	dev_put(dev);
 
 	do_gettimeofday(&time);
@@ -286,6 +238,7 @@ static Tupel_t* getTxBytes(Selector_t *selectors, int len) {
 	if (len == 0 || selectors == NULL) {
 		return NULL;
 	}
+	// the user has to provide one selector which is the device name
 	dev = dev_get_by_name(&init_net,selectors[0].value);
 	if (dev == NULL) {
 		return NULL;
@@ -298,6 +251,7 @@ static Tupel_t* getTxBytes(Selector_t *selectors, int len) {
 		return NULL;
 	}
 	strcpy(devName,dev->name);
+	// Give the device back to the kernel
 	dev_put(dev);
 
 	do_gettimeofday(&time);
@@ -338,11 +292,9 @@ dev = (struct net_device*)regs->ARM_r0;
 	do_gettimeofday(&time);
 	timeUS = (unsigned long long)time.tv_sec * (unsigned long long)USEC_PER_SEC + (unsigned long long)time.tv_usec;
 	// Acquire the slcLock to avoid change in the datamodel while creating the tuple
-	ACQUIRE_READ_LOCK(slcLock);
-	spin_lock(&devOpenListLock);
-	list_for_each(pos,&devOpenQueriesList) {
-		querySelec = container_of(pos,QuerySelectors_t,list);
+	forEachQueryObject(slcLock, dev, pos, querySelec, OBJECT_CREATE)
 		stream = ((GenStream_t*)querySelec->query->root);
+		// Consider the selector the user may provide
 		if (stream->selectorsLen > 0) {
 			if (strcmp(dev->name,GET_SELECTORS(querySelec->query)[0].value) != 0) {
 				continue;
@@ -359,10 +311,8 @@ dev = (struct net_device*)regs->ARM_r0;
 		}
 		allocItem(SLC_DATA_MODEL,tupel,0,"net.device");
 		setItemString(SLC_DATA_MODEL,tupel,"net.device",devName);
-		eventOccuredUnicast(querySelec->query,tupel);
-	}
-	spin_unlock(&devOpenListLock);
-	RELEASE_READ_LOCK(slcLock);
+		objectChangedUnicast(querySelec->query,tupel);
+	endForEachQueryEvent(slcLock,dev)
 
 	return 0;
 }
@@ -391,11 +341,9 @@ dev = (struct net_device*)regs->ARM_r0;
 	do_gettimeofday(&time);
 	timeUS = (unsigned long long)time.tv_sec * (unsigned long long)USEC_PER_SEC + (unsigned long long)time.tv_usec;
 	// Acquire the slcLock to avoid change in the datamodel while creating the tuple
-	ACQUIRE_READ_LOCK(slcLock);
-	spin_lock(&devCloseListLock);
-	list_for_each(pos,&devCloseQueriesList) {
-		querySelec = container_of(pos,QuerySelectors_t,list);
+	forEachQueryObject(slcLock, dev, pos, querySelec, OBJECT_DELETE)
 		stream = ((GenStream_t*)querySelec->query->root);
+		// Consider the selector the user may provide
 		if (stream->selectorsLen > 0) {
 			if (strcmp(dev->name,GET_SELECTORS(querySelec->query)[0].value) != 0) {
 				continue;
@@ -413,9 +361,7 @@ dev = (struct net_device*)regs->ARM_r0;
 		allocItem(SLC_DATA_MODEL,tupel,0,"net.device");
 		setItemString(SLC_DATA_MODEL,tupel,"net.device",devName);
 		eventOccuredUnicast(querySelec->query,tupel);
-	}
-	spin_unlock(&devCloseListLock);
-	RELEASE_READ_LOCK(slcLock);
+	endForEachQueryEvent(slcLock,dev)
 
 	return 0;
 }
@@ -431,92 +377,34 @@ static struct kprobe devCloseKP = {
 };
 
 static void activateDevice(Query_t *query) {
-	int ret = 0, events = 0;
+	int ret = 0;
 	QuerySelectors_t *querySelec = NULL;
 
-	events = ((ObjectStream_t*)query->root)->objectEvents;
-	if ((events & OBJECT_CREATE) == OBJECT_CREATE) {
-		querySelec = (QuerySelectors_t*)ALLOC(sizeof(QuerySelectors_t));
-		if (querySelec == NULL) {
-			return;
+	addAndEnqueueQuery(dev,ret, querySelec, query)
+	// list was empty
+	if (ret == 1) {
+		ret = register_kprobe(&devOpenKP);
+		if (ret < 0) {
+			ERR_MSG("register_kprobe at %s failed. Reason: %d\n",devOpenKP.symbol_name,ret);
 		}
-		querySelec->query = query;
-		spin_lock(&devOpenListLock);
-		list_add_tail(&querySelec->list,&devOpenQueriesList);
-		spin_unlock(&devOpenListLock);
-		if (devOpenProbeActive == 0) {
-			ret = register_kprobe(&devOpenKP);
-			if (ret < 0) {
-				ERR_MSG("register_kprobe failed. Reason: %d\n",ret);
-			} else {
-				devOpenProbeActive = 1;
-				DEBUG_MSG(1,"Registered kprobe at %s\n",devOpenKP.symbol_name);
-			}
+		ret = register_kprobe(&devCloseKP);
+		if (ret < 0) {
+			ERR_MSG("register_kprobe at %s failed. Reason: %d\n",devCloseKP.symbol_name,ret);
 		}
-	}
-	if ((events & OBJECT_DELETE) == OBJECT_DELETE) {
-		querySelec = (QuerySelectors_t*)ALLOC(sizeof(QuerySelectors_t));
-		if (querySelec == NULL) {
-			return;
-		}
-		querySelec->query = query;
-		spin_lock(&devCloseListLock);
-		list_add_tail(&querySelec->list,&devCloseQueriesList);
-		spin_unlock(&devCloseListLock);
-		if (devCloseProbeActive == 0) {
-			ret = register_kprobe(&devCloseKP);
-			if (ret < 0) {
-				ERR_MSG("register_kprobe failed. Reason: %d\n",ret);
-				return;
-			} else {
-				devCloseProbeActive = 1;
-				DEBUG_MSG(1,"Registered kprobe at %s\n",devCloseKP.symbol_name);
-			}
-		}
+		DEBUG_MSG(1,"Registered kprobe at %s and %s\n",devOpenKP.symbol_name,devCloseKP.symbol_name);
 	}
 }
 
 static void deactivateDevice(Query_t *query) {
 	struct list_head *pos = NULL, *next = NULL;
 	QuerySelectors_t *querySelec = NULL;
-	int events = 0;
+	int listEmpty = 0;
 
-	events = ((ObjectStream_t*)query->root)->objectEvents;
-	if ((events & OBJECT_CREATE) == OBJECT_CREATE) {
-		spin_lock(&devOpenListLock);
-		list_for_each_safe(pos,next,&devOpenQueriesList) {
-			querySelec = container_of(pos,QuerySelectors_t,list);
-			if (querySelec->query == query) {
-				list_del(&querySelec->list);
-				break;
-			}
-		}
-		spin_unlock(&devOpenListLock);
-		if (list_empty(&devOpenQueriesList)) {
-			if (devOpenProbeActive == 1) {
-				unregister_kprobe(&devOpenKP);
-				DEBUG_MSG(1,"Unregistered kprobes at %s\n",devOpenKP.symbol_name);
-				devOpenProbeActive = 0;
-			}
-		}
-	}
-	if ((events & OBJECT_DELETE) == OBJECT_DELETE) {
-		spin_lock(&devCloseListLock);
-		list_for_each_safe(pos,next,&devCloseQueriesList) {
-			querySelec = container_of(pos,QuerySelectors_t,list);
-			if (querySelec->query == query) {
-				list_del(&querySelec->list);
-				break;
-			}
-		}
-		spin_unlock(&devCloseListLock);
-		if (list_empty(&devCloseQueriesList)) {
-			if (devCloseProbeActive == 1) {
-				unregister_kprobe(&devCloseKP);
-				DEBUG_MSG(1,"Unregistered kprobes at %s\n",devCloseKP.symbol_name);
-				devCloseProbeActive = 0;
-			}
-		}
+	findAndDeleteQuery(dev,listEmpty, querySelec, query, pos, next)
+	if (listEmpty == 1) {
+		unregister_kprobe(&devOpenKP);
+		unregister_kprobe(&devCloseKP);
+		DEBUG_MSG(1,"Unregistered kprobes at %s (missed=%ld) and %s (missed=%ld)\n",devOpenKP.symbol_name,devOpenKP.nmissed,devCloseKP.symbol_name,devCloseKP.nmissed);
 	}
 }
 
@@ -543,7 +431,6 @@ static Tupel_t* generateDeviceStatus(Selector_t *selectors, int len) {
 			head = curTuple;
 		}
 		strcpy(devName,curDev->name);
-		// Acquire the slcLock to avoid change in the datamodel while creating the tuple
 		allocItem(SLC_DATA_MODEL,curTuple,0,"net.device");
 		setItemString(SLC_DATA_MODEL,curTuple,"net.device",devName);
 		if (prevTuple != NULL) {

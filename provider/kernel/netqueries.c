@@ -3,12 +3,12 @@
 #include <query.h>
 #include <api.h>
 
-static EventStream_t rxStream, txStream;
+static EventStream_t rxStream, txStream, txStream2;
 static SourceStream_t rxBytesSrc, txBytesSrc;
 static ObjectStream_t devStatusStream, devObjStream;
 static Predicate_t filterRXPredicate;
 static Filter_t filter;
-static Query_t queryRX, queryTX, queryRXBytes, queryTXBytes, queryDevStatus, queryDevObj;
+static Query_t queryRX, queryTX,queryTX2, queryRXBytes, queryTXBytes, queryDevStatus, queryDevObj;
 
 
 static void printResultRx(unsigned int id, Tupel_t *tupel) {
@@ -92,9 +92,16 @@ static void setupQueries(void) {
 	initQuery(&queryTX);
 	queryTX.onQueryCompleted = printResultTx;
 	queryTX.root = GET_BASE(txStream);
-	queryTX.next = &queryTXBytes;
+	queryTX.next = &queryTX2;
 	INIT_EVT_STREAM(txStream,"net.device.onTx",1,0,NULL)
 	SET_SELECTOR_STRING_STREAM(txStream,0,"eth1")
+
+	initQuery(&queryTX2);
+	queryTX2.onQueryCompleted = printResultTx;
+	queryTX2.root = GET_BASE(txStream2);
+	queryTX2.next = &queryTXBytes;
+	INIT_EVT_STREAM(txStream2,"net.device.onTx",1,0,NULL)
+	SET_SELECTOR_STRING_STREAM(txStream2,0,"eth0")
 
 	initQuery(&queryTXBytes);
 	queryTXBytes.onQueryCompleted = printResultTxBytes;
@@ -120,7 +127,7 @@ int __init netqueries_init(void)
 	int ret = 0;
 	setupQueries();
 
-	if ((ret = registerQuery(&queryRXBytes)) < 0 ) {
+	if ((ret = registerQuery(&queryRX)) < 0 ) {
 		ERR_MSG("Register failed: %d\n",-ret);
 		return -1;
 	}
@@ -132,7 +139,7 @@ int __init netqueries_init(void)
 void __exit netqueries_exit(void) {
 	int ret = 0;
 
-	ret = unregisterQuery(&queryRXBytes);
+	ret = unregisterQuery(&queryRX);
 	if (ret < 0 ) {
 		ERR_MSG("Unregister failed: %d\n",-ret);
 	}
@@ -140,6 +147,7 @@ void __exit netqueries_exit(void) {
 	freeOperator(GET_BASE(rxStream),0);
 	freeOperator(GET_BASE(rxBytesSrc),0);
 	freeOperator(GET_BASE(txStream),0);
+	freeOperator(GET_BASE(txStream2),0);
 	freeOperator(GET_BASE(txBytesSrc),0);
 	freeOperator(GET_BASE(devStatusStream),0);
 	freeOperator(GET_BASE(devObjStream),0);

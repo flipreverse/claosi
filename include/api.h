@@ -94,7 +94,7 @@ typedef struct QuerySelectors {
 	#ifdef __KERNEL__
 	struct list_head list;
 	#else
-	STAILQ_ENTRY(QueryJob) listEntry;
+	LIST_ENTRY(QuerySelectors) listEntry;
 	#endif
 	Query_t *query;
 } QuerySelectors_t;
@@ -109,7 +109,8 @@ int initSLCDatamodel(void);
 
 void eventOccuredBroadcast(char *datamodelName, Tupel_t *tupel);
 void eventOccuredUnicast(Query_t *query, Tupel_t *tupel);
-void objectChanged(char *datamodelName, Tupel_t *tupel, int event);
+void objectChangedBroadcast(char *datamodelName, Tupel_t *tupel, int event);
+void objectChangedUnicast(Query_t *query, Tupel_t *tupel);
 
 /*
  * The following function need to be implemented by the instance of a certain layer , e.g. the kernel.

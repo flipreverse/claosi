@@ -766,7 +766,7 @@ int addQueries(DataModelElement_t *rootDM, Query_t *queries) {
 	unsigned long flags = *__flags;
 	#endif
 
-	do {
+	for (cur = queries;cur != NULL;cur = cur->next) {
 		statusQuery = 0;
 		stream = (GenStream_t*)cur->root;
 		switch (stream->op_type) {
@@ -805,7 +805,7 @@ int addQueries(DataModelElement_t *rootDM, Query_t *queries) {
 			return -EMAXQUERIES;
 		}
 		regQueries[i] = cur;
-		// Only assign a new global id, if the query on its origin layer
+		// Only assign a new global id, if we are on its origin layer
 		if (cur->layerCode == LAYER_CODE) {
 			temp = __sync_fetch_and_add(globalQueryID,1);
 			cur->queryID = temp;
@@ -820,64 +820,62 @@ int addQueries(DataModelElement_t *rootDM, Query_t *queries) {
 		if (dm->layerCode == LAYER_CODE) {
 			DEBUG_MSG(2,"Stream origin (%s) is at our layer. Start it...\n",dm->name);
 
-			switch (dm->dataModelType) {
-				case EVENT:
-					//if (((Event_t*)dm->typeInfo)->numQueries == 0) {
-						/*
-						 * The slc-core component does *not* know, which steps are necessary to 'activate'
-						 * an event. Therefore, the write lock will be released to avoid any kind of race conditions.
-						 * For example, if the kernel has to register a kprobe it may sleep or call schedule, which
-						 * is *not* allowed in an atomic context.
-						 * Moreover it is safe to release the lock, because there are no onging modifications. One may argue that
-						 * during this short period of time without a lock held someone else deletes this particular node (dm)
-						 * from the datamodel and the following code will explode.
-						 * Well.... for now, we don't care. :-D This would be a rare corner case. :-)
-						 */
-						RELEASE_WRITE_LOCK(slcLock);
-						((Event_t*)dm->typeInfo)->activate(cur);
-						ACQUIRE_WRITE_LOCK(slcLock);
-						#ifdef __KERNEL__
-						*__flags = flags;
-						#endif
-					//}
-					((Event_t*)dm->typeInfo)->numQueries++;
-					break;
-
-				case OBJECT:
-					//if (((Object_t*)dm->typeInfo)->numQueries == 0) {
-						// Same applies here for an object.
-						RELEASE_WRITE_LOCK(slcLock);
-						((Object_t*)dm->typeInfo)->activate(cur);
-						ACQUIRE_WRITE_LOCK(slcLock);
-						#ifdef __KERNEL__
-						*__flags = flags;
-						#endif
-					//}
-					((Object_t*)dm->typeInfo)->numQueries++;
-					break;
-
-				case SOURCE:
-					if (((Source_t*)dm->typeInfo)->numQueries == 0) {
-						INIT_LOCK(((Source_t*)dm->typeInfo)->lock);
-					}
-					((Source_t*)dm->typeInfo)->numQueries++;
-					startSourceTimer(dm,cur);
-					break;
-			}
-
 			if (statusQuery) {
 				#ifdef __KERNEL__
 				startObjStatusThread(cur,((Object_t*)dm->typeInfo)->status,__flags);
 				#else
 				startObjStatusThread(cur,((Object_t*)dm->typeInfo)->status);
 				#endif
+			} else {
+				switch (dm->dataModelType) {
+					case EVENT:
+						//if (((Event_t*)dm->typeInfo)->numQueries == 0) {
+							/*
+							 * The slc-core component does *not* know, which steps are necessary to 'activate'
+							 * an event. Therefore, the write lock will be released to avoid any kind of race conditions.
+							 * For example, if the kernel has to register a kprobe it may sleep or call schedule, which
+							 * is *not* allowed in an atomic context.
+							 * Moreover it is safe to release the lock, because there are no onging modifications. One may argue that
+							 * during this short period of time without a lock held someone else deletes this particular node (dm)
+							 * from the datamodel and the following code will explode.
+							 * Well.... for now, we don't care. :-D This would be a rare corner case. :-)
+							 */
+							RELEASE_WRITE_LOCK(slcLock);
+							((Event_t*)dm->typeInfo)->activate(cur);
+							ACQUIRE_WRITE_LOCK(slcLock);
+							#ifdef __KERNEL__
+							*__flags = flags;
+							#endif
+						//}
+						((Event_t*)dm->typeInfo)->numQueries++;
+						break;
+
+					case OBJECT:
+						//if (((Object_t*)dm->typeInfo)->numQueries == 0) {
+							// Same applies here for an object.
+							RELEASE_WRITE_LOCK(slcLock);
+							((Object_t*)dm->typeInfo)->activate(cur);
+							ACQUIRE_WRITE_LOCK(slcLock);
+							#ifdef __KERNEL__
+							*__flags = flags;
+							#endif
+						//}
+						((Object_t*)dm->typeInfo)->numQueries++;
+						break;
+
+					case SOURCE:
+						if (((Source_t*)dm->typeInfo)->numQueries == 0) {
+							INIT_LOCK(((Source_t*)dm->typeInfo)->lock);
+						}
+						((Source_t*)dm->typeInfo)->numQueries++;
+						startSourceTimer(dm,cur);
+						break;
+				}
 			}
 		} else {
 			DEBUG_MSG(2,"Stream origin (%s) is at the remote layer. Doing nothing.\n",dm->name);
 		}
-
-		cur = cur->next;
-	} while(cur != NULL);
+	}
 
 	return 0;
 }
@@ -901,7 +899,16 @@ int delQueries(DataModelElement_t *rootDM, Query_t *queries) {
 	unsigned long flags = *__flags;
 	#endif
 
-	do {
+	for (cur = queries;cur != NULL;cur = cur->next) {
+		// Only a query with a valid id can safely be removed
+		if (cur->queryID <= 0) {
+			ERR_MSG("Query does not have a valid id. Skipping its unregistration!\n");
+			continue;
+		}
+		if (cur->idx >= MAX_QUERIES_PER_DM) {
+			ERR_MSG("Query does not have a valid idx. Skipping its unregistration!\n");
+			continue;
+		}
 		stream = (GenStream_t*)cur->root;
 		switch (stream->op_type) {
 			case GEN_EVENT:
@@ -947,7 +954,6 @@ int delQueries(DataModelElement_t *rootDM, Query_t *queries) {
 						#ifdef __KERNEL__
 						*__flags = flags;
 						#endif
-
 					//}
 					break;
 
@@ -972,20 +978,15 @@ int delQueries(DataModelElement_t *rootDM, Query_t *queries) {
 		} else {
 			DEBUG_MSG(2,"Stream origin (%s) is at the remote layer. Doing nothing.\n",dm->name);
 		}
-		// Only a query with a valid id can safely be removed
-		if (cur->queryID > 0) {
-			DEBUG_MSG(2,"Removing all pending query: 0x%lx\n",(unsigned long)regQueries[cur->idx]);
-			delPendingQuery(regQueries[cur->idx]);
-			regQueries[cur->idx] = NULL;
-		}
+		DEBUG_MSG(2,"Removing all pending query: 0x%lx\n",(unsigned long)regQueries[cur->idx]);
+		delPendingQuery(regQueries[cur->idx]);
+		regQueries[cur->idx] = NULL;
 		// Query was registered on this layer and transfered to the remote layer
 		if (cur->layerCode == LAYER_CODE && (cur->flags & TRANSFERED) == TRANSFERED) {
 			DEBUG_MSG(2,"Query was transfered to the remote layer. Sending a DEL_QUERY: 0x%lx\n",(unsigned long)cur);
 			sendDelQuery(cur);
 		}
-
-		cur = cur->next;
-	} while(cur != NULL);
+	}
 
 	return 0;
 }

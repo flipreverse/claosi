@@ -16,6 +16,7 @@
 #include <stdio.h>
 #include <pthread.h>
 #include <unistd.h>
+#include <sys/queue.h>
 #define PAGE_SIZE 4096
 #endif
 
@@ -48,6 +49,78 @@
 #define LAYER_CODE							0x1
 #define ENDPOINT_CONNECTED()				(atomic_read(&communicationFileMmapRef) >= 1)
 extern atomic_t communicationFileMmapRef;
+
+/**
+ * Declares a list named <varNamePrefix>QueriesList which is intended to store a query registered to a source, event or object.
+ * Furthermore, it declares a lock named <varNamePrefix>ListLock which is used to protect the list against concurrent access.
+ */
+#define DECLARE_QUERY_LIST(varNamePrefix) static LIST_HEAD(varNamePrefix ## QueriesList); \
+static DEFINE_SPINLOCK(varNamePrefix ## ListLock);
+/**
+ * Acquires the read lock on slcLockVar and <varNamePrefix>ListLock.
+ * Iterates over every entry in <varNamePrefix>QueriesList. The current element will be stored in tempListVar.
+ * It's intended to use in conjunction with events.
+ */
+#define forEachQueryEvent(slcLockVar, varNamePrefix, tempListVar, tempVar)		ACQUIRE_READ_LOCK(slcLockVar); \
+	spin_lock(&varNamePrefix ## ListLock); \
+	list_for_each(tempListVar,&varNamePrefix ## QueriesList) { \
+	tempVar = container_of(tempListVar,QuerySelectors_t,list);
+/**
+ * Releases the <varNamePrefix>ListLock and the slcLockVar
+ */
+#define endForEachQueryEvent(slcLockVar,varNamePrefix)				} \
+	spin_unlock(&varNamePrefix ## ListLock); \
+	RELEASE_READ_LOCK(slcLockVar);
+/**
+ * Acquires the read lock on slcLockVar and <varNamePrefix>ListLock.
+ * Iterates over every entry in <varNamePrefix>QueriesList. The current element will be stored in tempListVar.
+ * It's intended to use in conjunction with objects. Therefore it has an additional parameter newEvent. Each query
+ * in the list which does not registered for newEvent will be skipped.
+ */
+#define forEachQueryObject(slcLockVar, varNamePrefix, tempListVar, tempVar, newEvent)	ACQUIRE_READ_LOCK(slcLockVar); \
+	spin_lock(&varNamePrefix ## ListLock); \
+	list_for_each(tempListVar,&varNamePrefix ## QueriesList) { \
+	tempVar = container_of(tempListVar,QuerySelectors_t,list); \
+	if ((((ObjectStream_t*)tempVar->query->root)->objectEvents & newEvent) != newEvent) { \
+		continue; \
+	}
+/**
+ * Releases the <varNamePrefix>ListLock and the slcLockVar
+ */
+#define endForEachQueryObject(slcLockVar,varNamePrefix)				} \
+	spin_unlock(&varNamePrefix ## ListLock); \
+	RELEASE_READ_LOCK(slcLockVar);
+/**
+ * Allocates a QuerySeletor_t, assigns the query (queryVar) to it, acquires <varNamePrefix>ListLock and inserts 
+ * it in the <varNamePrefix>QueriesList.
+ * listEmptyVar will be 1, if the list was empty before insertion.
+ */
+#define addAndEnqueueQuery(varNamePrefix,listEmptyVar, tempVar, queryVar) tempVar = (QuerySelectors_t*)ALLOC(sizeof(QuerySelectors_t)); \
+	if (tempVar == NULL) { \
+		return; \
+	} \
+	listEmptyVar = list_empty(&varNamePrefix ## QueriesList); \
+	tempVar->query = queryVar; \
+	spin_lock(&varNamePrefix ## ListLock); \
+	list_add_tail(&tempVar->list,&varNamePrefix ## QueriesList); \
+	spin_unlock(&varNamePrefix ## ListLock);
+/**
+ * Searches the <varNamePrefix>QueriesList for an element which query member is equal to queryVar.
+ * If it was found, it will be safely removed from list while holding the <varNamePrefix>ListLock.
+ * listEmptyVar will be 1, if the list is empty after removal.
+ */
+#define findAndDeleteQuery(varNamePrefix,listEmptyVar, tempVar, queryVar, listPos, listNext)	spin_lock(&varNamePrefix ## ListLock); \
+	list_for_each_safe(listPos,listNext,&varNamePrefix ## QueriesList) { \
+		tempVar = container_of(listPos,QuerySelectors_t,list); \
+		if (tempVar->query == query) { \
+			list_del(&tempVar->list); \
+			FREE(tempVar); \
+			break; \
+		} \
+	} \
+	listEmptyVar = list_empty(&varNamePrefix ## QueriesList); \
+	spin_unlock(&varNamePrefix ## ListLock);
+
 #else
 #define	ALLOC(size)							malloc(size)
 #define	FREE(ptr)							free(ptr)
@@ -68,6 +141,51 @@ extern atomic_t communicationFileMmapRef;
 #define SLEEP(x)							sleep(1)
 #define LAYER_CODE							0x2
 #define ENDPOINT_CONNECTED()				(1)
+
+#define DECLARE_QUERY_LIST(varNamePrefix) static LIST_HEAD(varNamePrefix ## QueriesListHEAD,QuerySelectors) varNamePrefix ## QueriesList = LIST_HEAD_INITIALIZER(varNamePrefix ## QueriesList); \
+static pthread_mutex_t varNamePrefix ## ListLock;
+
+#define forEachQueryEvent(slcLockVar, varNamePrefix, tempListVar, tempVar)		ACQUIRE_READ_LOCK(slcLockVar); \
+	pthread_mutex_lock(&varNamePrefix ## ListLock); \
+	LIST_FOREACH(tempListVar,&varNamePrefix ## QueriesList,listEntry) { 
+
+#define endForEachQueryEvent(slcLockVar,varNamePrefix)				} \
+	pthread_mutex_unlock(&varNamePrefix ## ListLock); \
+	RELEASE_READ_LOCK(slcLockVar);
+
+#define forEachQueryObject(slcLockVar, varNamePrefix, tempListVar, tempVar, newEvent)	ACQUIRE_READ_LOCK(slcLockVar); \
+	pthread_mutex_lock(&varNamePrefix ## ListLock); \
+	LIST_FOREACH(tempListVar,&varNamePrefix ## QueriesList,listEntry) { \
+	if ((((ObjectStream_t*)tempVar->query->root)->objectEvents & newEvent) != newEvent) { \
+		continue; \
+	}
+
+#define endForEachQueryObject(slcLockVar,varNamePrefix)				} \
+	pthread_mutex_unlock(&varNamePrefix ## ListLock); \
+	RELEASE_READ_LOCK(slcLockVar);
+
+#define addAndEnqueueQuery(varNamePrefix,listEmptyVar, tempVar, queryVar) tempVar = (QuerySelectors_t*)ALLOC(sizeof(QuerySelectors_t)); \
+	if (tempVar == NULL) { \
+		return; \
+	} \
+	listEmptyVar = LIST_EMPTY(&varNamePrefix ## QueriesList); \
+	tempVar->query = queryVar; \
+	pthread_mutex_lock(&varNamePrefix ## ListLock); \
+	LIST_INSERT_HEAD(&varNamePrefix ## QueriesList,tempVar,listEntry); \
+	pthread_mutex_unlock(&varNamePrefix ## ListLock);
+
+#define findAndDeleteQuery(varNamePrefix,listEmptyVar, tempVar, queryVar, listNext)	pthread_mutex_lock(&varNamePrefix ## ListLock); \
+	for (tempVar = LIST_FIRST(&varNamePrefix ## QueriesList); tempVar != NULL; tempVar = listNext) { \
+		listNext = LIST_NEXT(tempVar,listEntry); \
+		if (tempVar->query == query) { \
+			LIST_REMOVE(tempVar,listEntry); \
+			FREE(tempVar); \
+			break; \
+		} \
+	} \
+	listEmptyVar = LIST_EMPTY(&varNamePrefix ## QueriesList); \
+	pthread_mutex_unlock(&varNamePrefix ## ListLock);
+
 
 #endif
 

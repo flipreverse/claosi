@@ -200,18 +200,24 @@ int unregisterQuery(Query_t *queries) {
 #ifdef __KERNEL__
 EXPORT_SYMBOL(unregisterQuery);
 #endif
-void eventOccuredUnicast(Query_t *query, Tupel_t *tupel) {
+/**
+ * Informs the slc that there is a new {@link tuple} for {@link query}.
+ * {@link query} is registered to an event.
+ * @param query a pointer to the query which is registered to the caller
+ * @param tuple a pointer to the newly created tuple
+ */
+void eventOccuredUnicast(Query_t *query, Tupel_t *tuple) {
 	/*	#ifdef __KERNEL__
 	unsigned long flags;
 	#endif
 	ACQUIRE_READ_LOCK(slcLock);*/
 
-	if (tupel == NULL || query == NULL) {
+	if (tuple == NULL || query == NULL) {
 //		RELEASE_READ_LOCK(slcLock);
 		return;
 	}
-
-	enqueueQuery(query,tupel,0);
+	// for now, just forward the tuple as well as the query to the layer-specific code and enqueue it for execution
+	enqueueQuery(query,tuple,0);
 //	RELEASE_READ_LOCK(slcLock);
 }
 #ifdef __KERNEL__
@@ -224,36 +230,53 @@ EXPORT_SYMBOL(eventOccuredUnicast);
  * @param datamodelName the path to the event, e.g. net.device.onTx
  * @param tupel the tupel
  */
-void eventOccuredBroadcast(char *datamodelName, Tupel_t *tupel) {
+void eventOccuredBroadcast(char *datamodelName, Tupel_t *tuple) {
 	DataModelElement_t *dm = NULL;
-	Query_t **query = NULL;
-	int i = 0;
+	Tupel_t *copyTuple = NULL, *curTuple = NULL;
+	Query_t **queries = NULL;
+	int i = 0, j = 0, numQueries = 0;
 /*	#ifdef __KERNEL__
 	unsigned long flags;
 	#endif
 	ACQUIRE_READ_LOCK(slcLock);*/
 
-	if (tupel == NULL) {
+	if (tuple == NULL) {
 //		RELEASE_READ_LOCK(slcLock);
 		return;
 	}
-	if ((dm = getDescription(SLC_DATA_MODEL,datamodelName)) == NULL) {
-		freeTupel(SLC_DATA_MODEL,tupel);
+	dm = getDescription(SLC_DATA_MODEL,datamodelName);
+	if (dm == NULL) {
+		freeTupel(SLC_DATA_MODEL,tuple);
 //		RELEASE_READ_LOCK(slcLock);
 		return;
 	}
 	if (dm->dataModelType == EVENT) {
-		query = ((Event_t*)dm->typeInfo)->queries;
+		queries = ((Event_t*)dm->typeInfo)->queries;
+		numQueries = ((Event_t*)dm->typeInfo)->numQueries;
 	} else {
-		freeTupel(SLC_DATA_MODEL,tupel);
+		freeTupel(SLC_DATA_MODEL,tuple);
 //		RELEASE_READ_LOCK(slcLock);
 		return;
 	}
 
+	curTuple = tuple;
 	for (i = 0; i < MAX_QUERIES_PER_DM; i++) {
-		if (query[i] != NULL) {
-			DEBUG_MSG(2,"Executing query(base@%p) %d: %p\n",query,i,query[i]);
-			enqueueQuery(query[i],tupel,0);
+		if (queries[i] != NULL) {
+			if (j + 1 < numQueries) {
+				copyTuple = copyTupel(SLC_DATA_MODEL,curTuple);
+				if (copyTuple == NULL) {
+					ERR_MSG("Cannot copy tuple!\n");
+					freeTupel(SLC_DATA_MODEL,curTuple);
+//					RELEASE_READ_LOCK(slcLock);
+					return;
+				}
+				j++;
+			} else {
+				copyTuple = NULL;
+			}
+			DEBUG_MSG(2,"Executing query(base@%p) %d: %p\n",queries,i,queries[i]);
+			enqueueQuery(queries[i],curTuple,0);
+			curTuple = copyTuple;
 		}
 	}
 //	RELEASE_READ_LOCK(slcLock);
@@ -269,47 +292,64 @@ EXPORT_SYMBOL(eventOccuredBroadcast);
  * @param tupel the tupel
  * @param event a bitmask describing the event type
  */
-void objectChangedBroadcast(char *datamodelName, Tupel_t *tupel, int event) {
-	int i = 0;
+void objectChangedBroadcast(char *datamodelName, Tupel_t *tuple, int event) {
+	int i = 0, j = 0, numQueries;
 /*	#ifdef __KERNEL__
 	unsigned long flags;
 	#endif*/
 	DataModelElement_t *dm = NULL;
-	Query_t **query = NULL;
+	Query_t **queries = NULL;
 	ObjectStream_t *objStream = NULL;
+	Tupel_t *copyTuple = NULL, *curTuple = NULL;
 
 //	ACQUIRE_READ_LOCK(slcLock);
 
-	if (tupel == NULL) {
+	if (tuple == NULL) {
 //		RELEASE_READ_LOCK(slcLock);
 		return;
 	}
-	if ((dm = getDescription(SLC_DATA_MODEL,datamodelName)) == NULL) {
-		freeTupel(SLC_DATA_MODEL,tupel);
+	dm = getDescription(SLC_DATA_MODEL,datamodelName);
+	if (dm == NULL) {
+		freeTupel(SLC_DATA_MODEL,tuple);
 //		RELEASE_READ_LOCK(slcLock);
 		return;
 	}
 	if (dm->dataModelType == OBJECT) {
-		query = ((Object_t*)dm->typeInfo)->queries;
+		queries = ((Object_t*)dm->typeInfo)->queries;
+		numQueries = ((Object_t*)dm->typeInfo)->numQueries;
 	} else {
-		freeTupel(SLC_DATA_MODEL,tupel);
+		freeTupel(SLC_DATA_MODEL,tuple);
 //		RELEASE_READ_LOCK(slcLock);
 		return;
 	}
 
+	curTuple = tuple;
 	for (i = 0; i < MAX_QUERIES_PER_DM; i++) {
-		if (query[i] != NULL) {
-			if (query[i]->root->type == GEN_OBJECT) {
-				objStream = (ObjectStream_t*)query[i]->root;
+		if (queries[i] != NULL) {
+			if (queries[i]->root->type == GEN_OBJECT) {
+				objStream = (ObjectStream_t*)queries[i]->root;
 			} else {
 				ERR_MSG("Weird! This should not happen! The root operator of a query registered to an object is not of type GEN_OBJECT!\n");
 				continue;
 			}
 			if ((objStream->objectEvents & event) == event) {
-				DEBUG_MSG(3,"Executing %d-th query (base@%p) %p\n",i,query,query[i]);
-				enqueueQuery(query[i],tupel,0);
+				if (j + 1 < numQueries) {
+					copyTuple = copyTupel(SLC_DATA_MODEL,curTuple);
+					if (copyTuple == NULL) {
+						ERR_MSG("Cannot copy tuple!\n");
+						freeTupel(SLC_DATA_MODEL,curTuple);
+	//					RELEASE_READ_LOCK(slcLock);
+						return;
+					}
+					j++;
+				} else {
+					copyTuple = NULL;
+				}
+				DEBUG_MSG(3,"Executing %d-th query (base@%p) %p\n",i,queries,queries[i]);
+				enqueueQuery(queries[i],curTuple,0);
+				curTuple = copyTuple;
 			} else {
-				DEBUG_MSG(3,"Not executing %d-th query(base@%p) %p, because the event does not match the one the query was registered for (%d != %d).\n",i,query,query[i],objStream->objectEvents,event);
+				DEBUG_MSG(3,"Not executing %d-th query(base@%p) %p, because the event does not match the one the query was registered for (%d != %d).\n",i,queries,queries[i],objStream->objectEvents,event);
 			}
 		}
 	}
@@ -318,19 +358,24 @@ void objectChangedBroadcast(char *datamodelName, Tupel_t *tupel, int event) {
 #ifdef __KERNEL__
 EXPORT_SYMBOL(objectChangedBroadcast);
 #endif
-
-void objectChangedUnicast(Query_t *query, Tupel_t *tupel) {
+/**
+ * Informs the slc that there is a new {@link tuple} for {@link query}.
+ * {@link query} is registered to an object.
+ * @param query a pointer to the query which is registered to the caller
+ * @param tuple a pointer to the newly created tuple
+ */
+void objectChangedUnicast(Query_t *query, Tupel_t *tuple) {
 	/*	#ifdef __KERNEL__
 	unsigned long flags;
 	#endif
 	ACQUIRE_READ_LOCK(slcLock);*/
 
-	if (tupel == NULL || query == NULL) {
+	if (tuple == NULL || query == NULL) {
 //		RELEASE_READ_LOCK(slcLock);
 		return;
 	}
-
-	enqueueQuery(query,tupel,0);
+	// for now, just forward the tuple as well as the query to the layer-specific code and enqueue it for execution
+	enqueueQuery(query,tuple,0);
 //	RELEASE_READ_LOCK(slcLock);
 }
 #ifdef __KERNEL__

@@ -6,25 +6,16 @@
 #include <pthread.h>
 #include <time.h>
 
-#define REGISTER_QUERIES
-#undef REGISTER_QUERIES
 
 DECLARE_ELEMENTS(nsUI, model)
 DECLARE_ELEMENTS(evtDisplay, typeEventType, srcForegroundApp, objApp)
 DECLARE_ELEMENTS(typeXPos, typeYPos)
 
-#ifdef REGISTER_QUERIES
-static Query_t queryDisplay, queryApp, queryForeground;
-static EventStream_t displayStream;
-static ObjectStream_t appStream;
-static SourceStream_t fappStream;
-static Predicate_t xPosPred, yPosPred;
-static Filter_t posFilter;
-#endif
-
 static pthread_t displayEvtThread;
 static pthread_attr_t displayEvtThreadAttr;
 static int displayEvtThreadRunning = 0;
+static int numQueriesForDisplay = 0;
+DECLARE_QUERY_LIST(app);
 
 static void* displayEvtWork(void *data) {
 	Tupel_t *tuple = NULL;
@@ -58,28 +49,48 @@ static void* displayEvtWork(void *data) {
 }
 
 static void activateDisplay(Query_t *query) {
+	numQueriesForDisplay++;
 
-	displayEvtThreadRunning = 1;
-	pthread_attr_init(&displayEvtThreadAttr);
-	pthread_attr_setdetachstate(&displayEvtThreadAttr, PTHREAD_CREATE_JOINABLE);
-	if (pthread_create(&displayEvtThread,&displayEvtThreadAttr,displayEvtWork,NULL) < 0) {
-		perror("pthread_create displayEvtThread");
+	if (numQueriesForDisplay == 1)  {
+		displayEvtThreadRunning = 1;
+		pthread_attr_init(&displayEvtThreadAttr);
+		pthread_attr_setdetachstate(&displayEvtThreadAttr, PTHREAD_CREATE_JOINABLE);
+		if (pthread_create(&displayEvtThread,&displayEvtThreadAttr,displayEvtWork,NULL) < 0) {
+			perror("pthread_create displayEvtThread");
+		}
 	}
-
 }
 
 static void deactivateDisplay(Query_t *query) {
-	displayEvtThreadRunning = 0;
-	pthread_join(displayEvtThread,NULL);
-	pthread_attr_destroy(&displayEvtThreadAttr);
+	numQueriesForDisplay--;
+
+	if (numQueriesForDisplay == 0) {
+		displayEvtThreadRunning = 0;
+		pthread_join(displayEvtThread,NULL);
+		pthread_attr_destroy(&displayEvtThreadAttr);
+	}
 }
 
 static void activateApp(Query_t *query) {
-	
+	int listEmpty = 0;
+	QuerySelectors_t *querySelec = NULL;
+
+	addAndEnqueueQuery(app,listEmpty, querySelec, query)
+	if (listEmpty == 1) {
+		/* Shut the fuck up GCC */
+		printf("Was empty\n");
+	}
 }
 
 static void deactivateApp(Query_t *query) {
-	
+	int listEmpty = 0;
+	QuerySelectors_t *querySelec = NULL, *next = NULL;
+
+	findAndDeleteQuery(app,listEmpty, querySelec, query, next)
+	if (listEmpty == 1) {
+		/* Shut the fuck up GCC */
+		printf("Is now empty\n");
+	}
 }
 
 static Tupel_t* statusApp(Selector_t *selectors, int len) {
@@ -157,88 +168,30 @@ static void initDatamodel(void) {
 	ADD_CHILD(model,0,nsUI)
 }
 
-#ifdef REGISTER_QUERIES
-static void printResult(unsigned int id, Tupel_t *tupel) {
-	struct timeval time;
-	unsigned long long timeUS;
-
-	gettimeofday(&time,NULL);
-	timeUS = (unsigned long long)time.tv_sec * (unsigned long long)USEC_PER_SEC + (unsigned long long)time.tv_usec;
-	printf("processing duration: %llu us,",timeUS - tupel->timestamp);
-	printTupel(SLC_DATA_MODEL,tupel);
-	freeTupel(SLC_DATA_MODEL,tupel);
-}
-
-static void setupQueries(void) {
-	initQuery(&queryDisplay);
-	queryDisplay.next = &queryApp;
-	queryDisplay.onQueryCompleted = printResult;
-	queryDisplay.root = GET_BASE(displayStream);
-	INIT_EVT_STREAM(displayStream,"ui.display",0,0,GET_BASE(posFilter))
-	INIT_FILTER(posFilter,NULL,2)
-	ADD_PREDICATE(posFilter,0,xPosPred)
-	SET_PREDICATE(xPosPred,GEQ, STREAM, "ui.eventType.xPos", POD, "700")
-	ADD_PREDICATE(posFilter,1,yPosPred)
-	SET_PREDICATE(yPosPred,LEQ, STREAM, "ui.eventType.yPos", POD, "300")
-
-	initQuery(&queryApp);
-	queryApp.next = &queryForeground;
-	queryApp.onQueryCompleted = printResult;
-	queryApp.root = GET_BASE(appStream);
-	INIT_OBJ_STREAM(appStream,"ui.app",0,0,NULL,OBJECT_STATUS)
-
-	initQuery(&queryForeground);
-	queryForeground.onQueryCompleted = printResult;
-	queryForeground.root = GET_BASE(fappStream);
-	INIT_SRC_STREAM(fappStream,"ui.foregroundApp",0,0,NULL,1000)
-}
-#endif
-
 int onLoad(void) {
 	int ret = 0;
 
 	initDatamodel();
-#ifdef REGISTER_QUERIES
-	setupQueries();
-#endif
 
-	if ((ret = registerProvider(&model, NULL)) < 0 ) {
+	ret = registerProvider(&model, NULL);
+	if (ret < 0 ) {
 		ERR_MSG("Register provider ui failed: %d\n",-ret);
 		return -1;
 	}
-#ifdef REGISTER_QUERIES
-	if ((ret = registerQuery(&queryDisplay)) < 0 ) {
-		unregisterProvider(&model, NULL);
-		ERR_MSG("Query registration failed: %d\n",-ret);
-		return -1;
-	}
-	DEBUG_MSG(1,"Sucessfully registered datamodel for ui and queries.\n");
-#endif
+
 	DEBUG_MSG(1,"Registered ui provider\n");
-	
-	
 	return 0;
 }
 
 int onUnload(void) {
 	int ret = 0;
 
-#ifdef REGISTER_QUERIES
-	if ((ret = unregisterQuery(&queryDisplay)) < 0 ) {
-		ERR_MSG("Unregister queries failed: %d\n",-ret);
-	}
-#endif
-	if ((ret = unregisterProvider(&model, NULL)) < 0 ) {
+	ret = unregisterProvider(&model, NULL);
+	if (ret < 0 ) {
 		ERR_MSG("Unregister datamodel ui failed: %d\n",-ret);
 	}
-
-#ifdef REGISTER_QUERIES
-	freeOperator(GET_BASE(displayStream),0);
-	freeOperator(GET_BASE(appStream),0);
-#endif
 	freeDataModel(&model,0);
 
 	DEBUG_MSG(1,"Unregistered ui provider\n");
-
 	return 0;
 }
