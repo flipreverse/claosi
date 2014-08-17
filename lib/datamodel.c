@@ -265,6 +265,7 @@ DataModelElement_t* copyNode(DataModelElement_t *node) {
 			}
 			memcpy(src,node->typeInfo,sizeof(Source_t));
 			ret->typeInfo = src;
+			INIT_LOCK(src->lock);
 			break;
 			
 		case EVENT:
