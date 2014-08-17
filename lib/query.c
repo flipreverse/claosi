@@ -864,9 +864,6 @@ int addQueries(DataModelElement_t *rootDM, Query_t *queries) {
 						break;
 
 					case SOURCE:
-						if (((Source_t*)dm->typeInfo)->numQueries == 0) {
-							INIT_LOCK(((Source_t*)dm->typeInfo)->lock);
-						}
 						((Source_t*)dm->typeInfo)->numQueries++;
 						startSourceTimer(dm,cur);
 						break;
