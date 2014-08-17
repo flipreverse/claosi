@@ -3,7 +3,7 @@
 
 #define BUFFER_PAGES			32
 #define NUM_PAGES				(2 * BUFFER_PAGES + 1)
-#define RING_BUFFER_SIZE		20
+#define RING_BUFFER_SIZE		40
 
 enum LayerMessageType {
 	MSG_EMPTY				=	0x1,
