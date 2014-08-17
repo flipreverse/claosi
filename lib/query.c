@@ -224,7 +224,7 @@ static void sendQueryContinue(Query_t *query, Tupel_t *tuple, int steps) {
 	do {
 		temp = ringBufferWrite(txBuffer,MSG_QUERY_CONTINUE,(char*)queryCont);
 		if (temp == -1) {
-			SLEEP(1);
+			MSLEEP(100);
 		}
 	} while (temp == -1);
 	//Freeing origin tuple... They are no longer needed.
@@ -713,7 +713,7 @@ static void sendAddQuery(Query_t *query) {
 			 * In addition, the receiving thread at the remote layer will look for new message very
 			 * frequently. So, it is very unlikely to fill the ringbuffer completely.
 			 */
-			SLEEP(1);
+			MSLEEP(100);
 		}
 	} while (temp == -1);
 	query->flags |= TRANSFERED;
@@ -741,7 +741,7 @@ static void sendDelQuery(Query_t *query) {
 	do {
 		temp = ringBufferWrite(txBuffer,MSG_QUERY_DEL,(char*)queryID);
 		if (temp == -1) {
-			SLEEP(1);
+			MSLEEP(100);
 		}
 	} while (temp == -1);
 }

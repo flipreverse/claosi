@@ -45,7 +45,7 @@
 #define RELEASE_READ_LOCK(varName)			read_unlock_irqrestore(&varName,flags)
 #define ACQUIRE_WRITE_LOCK(varName)			write_lock_irqsave(&varName,flags)
 #define RELEASE_WRITE_LOCK(varName)			write_unlock_irqrestore(&varName,flags)
-#define SLEEP(x)							ssleep(1)
+#define MSLEEP(x)							mdelay(x)
 #define LAYER_CODE							0x1
 #define ENDPOINT_CONNECTED()				(atomic_read(&communicationFileMmapRef) >= 1)
 extern atomic_t communicationFileMmapRef;
@@ -138,7 +138,7 @@ static DEFINE_SPINLOCK(varNamePrefix ## ListLock);
 #define USEC_PER_MSEC						1000L
 #define USEC_PER_SEC						1000000L
 #define TIMER_SIGNAL						SIGRTMIN
-#define SLEEP(x)							sleep(1)
+#define MSLEEP(x)							usleep((x) * 1000)
 #define LAYER_CODE							0x2
 #define ENDPOINT_CONNECTED()				(1)
 
