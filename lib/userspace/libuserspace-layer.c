@@ -214,8 +214,8 @@ static void* commThreadWork(void *data) {
 					/*
 					 * delQueries() does *not* free the query itself.
 					 * Normally a query is handed over by a module/shared library and directly registered.
-					 * Therefore, the module/shared library has to free. In this case the query was handed over by the remote layer.
-					 * So, it is freed now.
+					 * Therefore, the module/shared library has to free it. In this case, the query was handed over by the remote layer.
+					 * So, it is up to us to free it now.
 					 */
 					freeQuery(query);
 					RELEASE_READ_LOCK(slcLock);
@@ -235,7 +235,7 @@ static void* commThreadWork(void *data) {
 					headTupleCopy = NULL;
 					prevTupleCopy = NULL;
 					ret = 0;
-					// Basically a MSG_QUERY_CONTINUE can have one or more tuples attached
+					// Basically, a MSG_QUERY_CONTINUE can have one or more tuples attached
 					do {
 						rewriteTupleAddress(SLC_DATA_MODEL,curTupleShm,sharedMemoryKernelBase,sharedMemoryUserBase);
 						curTupleCopy = copyTupel(SLC_DATA_MODEL,curTupleShm);
