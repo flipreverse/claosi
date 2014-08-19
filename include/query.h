@@ -116,13 +116,13 @@ enum PredicateType {
 	LEQ,
 	GE,
 	GEQ,
-	IN,
 	PREDICATETYPE_END
 };
 
 enum OperandType {
-	STREAM			=	0x0,
-	POD,
+	OP_STREAM			=	0x0,
+	OP_POD,
+	OP_JOIN,
 	OPERANDTYPE_END
 };
 

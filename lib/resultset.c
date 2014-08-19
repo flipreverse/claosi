@@ -720,3 +720,60 @@ void rewriteTupleAddress(DataModelElement_t *rootDM, Tupel_t *tuple, void *oldBa
 		}
 	}
 }
+/**
+ * Merges all items of {@link tupleB} into {@link tupleA}. Already present items are skipped.
+ * All needless memory will be freed. Hence, {@link tupleB} will contain an invalid (!!) address after completing the merge.
+ * The address may change due to relocation and resizing of the items array of {@link tuplA}.
+ * @param a pointer to the root of the datamodel
+ * @param tupleA a pointer pointer to the tuple where {@link tupleB}s items will be stored
+ * @param tupleB a pointer to the tuple which items should be merged into {@link tupleA}
+ * @return 0 on success. -1 otherwise.
+ */
+int mergeTuple(DataModelElement_t *rootDM, Tupel_t **tupleA, Tupel_t *tupleB) {
+	int i = 0, j = 0, newItems = 0, newIdx = 0, deleted = 0;
+	DataModelElement_t *element = NULL;
+
+	// count the number of mergeable items
+	for (i = 0; i < tupleB->itemLen; i++) {
+		deleted = 0;
+		for (j = 0; j < (*tupleA)->itemLen; j++) {
+			// Already present?
+			if (strcmp(tupleB->items[i]->name,(*tupleA)->items[j]->name) == 0) {
+				DEBUG_MSG(2,"Item (%s) already present\n",tupleB->items[i]->name);
+				element = getDescription(rootDM,tupleB->items[i]->name);
+				if (element == NULL) {
+					// No need to free itmes[i]->value. Interested why? Look at allocItem@resultset.h:361-366
+					FREE(tupleB->items[i]);
+					break;
+				}
+				// Yes! Delete it.
+				DEBUG_MSG(2,"Freeing %s (%p)\n",element->name,tupleB->items[i]->value);
+				freeItem(rootDM,tupleB->items[i]->value,element);
+				FREE(tupleB->items[i]);
+				tupleB->items[i] = NULL;
+				deleted = 1;
+				break;
+			}
+		}
+		if (deleted == 0) {
+			newItems++;
+		}
+	}
+	DEBUG_MSG(2,"Adding %d new items.\n",newItems);
+	newIdx = (*tupleA)->itemLen;
+	if (addItem(tupleA,newItems) == -1) {
+		return -1;
+	}
+	for (i = 0; i < tupleB->itemLen; i++) {
+		if (tupleB->items[i] == NULL) {
+			DEBUG_MSG(2,"Skipping tupleB->items[%d]\n",i);
+			continue;
+		}
+		// Just reassign the pointer to an item. No further allocation needed.
+		(*tupleA)->items[newIdx] = tupleB->items[i];
+		newIdx++;
+	}
+	FREE(tupleB);
+
+	return 0;
+}

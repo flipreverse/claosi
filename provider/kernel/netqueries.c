@@ -80,7 +80,7 @@ static void setupQueries(void) {
 	SET_SELECTOR_STRING_STREAM(rxStream,0,"eth1")
 	INIT_FILTER(filter,NULL,1)
 	ADD_PREDICATE(filter,0,filterRXPredicate)
-	SET_PREDICATE(filterRXPredicate,EQUAL, STREAM, "net.packetType.macProtocol", POD, "42")
+	SET_PREDICATE(filterRXPredicate,EQUAL, OP_STREAM, "net.packetType.macProtocol", OP_POD, "42")
 
 	initQuery(&queryRXBytes);
 	queryRXBytes.onQueryCompleted = printResultRxBytes;

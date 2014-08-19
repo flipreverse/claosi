@@ -7,14 +7,16 @@
 extern unsigned int *globalQueryID;
 
 /**
- * Applies a certain {@link predicate} to a {@link tupel}.
+ * Applies a certain {@link predicate} to a {@link tupleStream} and a second tuple {@link tupleJoin}.
+ * In order to execute a join it might be necessary to retrieve the left and right value of an operand from different tuples.
  * @param rootDM a pointer to the slc datamodel
  * @param predicate the predicate which should be applied
- * @param tupel a pointer to the tupel
+ * @param tupleStream a pointer to the tupel
+ * @param 
  * @return 1 on success. 0 otherwise.
  */
-static int applyPredicate(DataModelElement_t *rootDM, Predicate_t *predicate, Tupel_t *tupel) {
-	int type = STRING, leftI = 0, rightI = 0;
+static int applyPredicate(DataModelElement_t *rootDM, Predicate_t *predicate, Tupel_t *tupleStream, Tupel_t *tupleJoin) {
+	int type = STRING, typeLeft = -1, typeRight = -1, leftI = 0, rightI = 0;
 	char leftC = 0, rightC = 0;
 	#ifndef __KERNEL__
 	double leftD = 0, rightD = 0;
@@ -22,30 +24,65 @@ static int applyPredicate(DataModelElement_t *rootDM, Predicate_t *predicate, Tu
 	void *valueLeft = NULL, *valueRight = NULL;
 	DataModelElement_t *dm = NULL;
 
-	// Resolve the memory location where the value is stored we want to compare
-	#define DEFAULT_RETURN_VALUE 0
-	if (predicate->left.type == STREAM) {
-		GET_MEMBER_POINTER_ALGO_ONLY(tupel, rootDM, (char*)&predicate->left.value, dm, valueLeft);
-		GET_TYPE_FROM_DM(dm,type);
-	}
-	if (predicate->right.type == STREAM) {
-		GET_MEMBER_POINTER_ALGO_ONLY(tupel, rootDM, (char*)&predicate->right.value, dm, valueRight);
-		GET_TYPE_FROM_DM(dm,type);
-	}
-	#undef DEFAULT_RETURN_VALUE
-	// For now, comparison of arrays is forbidden
-	if (type & ARRAY) {
+	if (predicate->left.type == OP_POD) {
+		//valueLeft = &predicate->left.value;
+		valueLeft = NULL;
+	} else if (predicate->left.type == OP_STREAM) {
+		// Resolve the memory location where the value is stored we want to compare
+		valueLeft = getMemberPointer(rootDM,tupleStream,(char*)&predicate->left.value,&dm);
+		if (valueLeft == NULL) {
+			return 0;
+		}
+		GET_TYPE_FROM_DM(dm,typeLeft);
+	} else if (predicate->left.type == OP_JOIN) {
+		// Resolve the memory location where the value is stored we want to compare
+		valueLeft = getMemberPointer(rootDM,tupleJoin,(char*)&predicate->left.value,&dm);
+		if (valueLeft == NULL) {
+			return 0;
+		}
+		GET_TYPE_FROM_DM(dm,typeLeft);
+	} else {
 		return 0;
 	}
+
+	if (predicate->right.type == OP_POD) {
+		//valueRight = &predicate->right.value;
+		valueRight = NULL;
+	} else if (predicate->right.type == OP_STREAM) {
+		// Resolve the memory location where the value is stored we want to compare
+		valueRight = getMemberPointer(rootDM,tupleStream,(char*)&predicate->right.value,&dm);
+		if (valueRight == NULL) {
+			return 0;
+		}
+		GET_TYPE_FROM_DM(dm,typeRight);
+	} else if (predicate->right.type == OP_JOIN) {
+		// Resolve the memory location where the value is stored we want to compare
+		valueRight = getMemberPointer(rootDM,tupleJoin,(char*)&predicate->right.value,&dm);
+		if (valueRight == NULL) {
+			return 0;
+		}
+		GET_TYPE_FROM_DM(dm,typeRight);
+	} else {
+		return 0;
+	}
+
+	type = (typeLeft == -1 ? typeRight : typeLeft);
+	// For now, comparison of arrays is forbidden
+	if ((type & ARRAY) && type > 0) {
+		return 0;
+	}
+
 	switch (type) {
-		case STRING:
-			if (predicate->left.type == POD) {
-				valueLeft = &predicate->left.value;
-				valueRight = (char*)*(PTR_TYPE*)valueRight;
-			} else {
-				valueRight = &predicate->right.value;
-				valueLeft = (char*)*(PTR_TYPE*)valueLeft;
+		case -1:
+			// Cannot determine definitely the type. Just do a simple memory compare... :-(
+			if (predicate->type == EQUAL) {
+				return memcmp(&predicate->left.value,&predicate->right.value,MAX_NAME_LEN) == 0;
+			} else if (predicate->type == NEQ) {
+				return memcmp(&predicate->left.value,&predicate->right.value,MAX_NAME_LEN) != 0;
 			}
+			break;
+
+		case STRING:
 			if (predicate->type == EQUAL) {
 				return strcmp((char*)valueLeft,(char*)valueRight) == 0;
 			} else if (predicate->type == NEQ) {
@@ -54,16 +91,19 @@ static int applyPredicate(DataModelElement_t *rootDM, Predicate_t *predicate, Tu
 			break;
 
 		case INT:
-			if (predicate->left.type == POD) {
+			if (valueLeft == NULL) {
 				if (STRTOINT((char*)&predicate->left.value,leftI) < 0) {
 					return 0;
 				}
-				rightI = *(int*)valueRight;
 			} else {
 				leftI = *(int*)valueLeft;
+			}
+			if (valueRight == NULL) {
 				if (STRTOINT((char*)&predicate->right.value,rightI) < 0) {
 					return 0;
 				}
+			} else {
+				rightI = *(int*)valueRight;
 			}
 			switch (predicate->type) {
 				case EQUAL: return leftI == rightI;
@@ -80,12 +120,15 @@ static int applyPredicate(DataModelElement_t *rootDM, Predicate_t *predicate, Tu
 			#ifdef __KERNEL__
 			return 0;
 			#else
-			if (predicate->left.type == POD) {
+			if (valueLeft == NULL) {
 				leftD = atof((char*)&predicate->left.value);
-				rightD = *(double*)valueRight;
 			} else {
 				leftD = *(double*)valueLeft;
+			}
+			if (valueRight == NULL) {
 				rightD = atof((char*)&predicate->right.value);
+			} else {
+				rightD = *(double*)valueRight;
 			}
 			switch (predicate->type) {
 				case EQUAL: return leftD == rightD;
@@ -99,16 +142,19 @@ static int applyPredicate(DataModelElement_t *rootDM, Predicate_t *predicate, Tu
 			break;
 
 		case BYTE:
-			if (predicate->left.type == POD) {
+			if (valueLeft == NULL) {
 				if (STRTOCHAR((char*)&predicate->left.value,leftC) < 0) {
 					return -EPARAM;
 				}
-				rightC = *(char*)valueRight;
 			} else {
 				leftC = *(char*)valueLeft;
+			}
+			if (valueRight == NULL) {
 				if (STRTOCHAR((char*)&predicate->right.value,rightC) < 0) {
 					return -EPARAM;
 				}
+			} else {
+				rightC = *(char*)valueRight;
 			}
 			switch (predicate->type) {
 				case EQUAL: return leftC == rightC;
@@ -123,12 +169,117 @@ static int applyPredicate(DataModelElement_t *rootDM, Predicate_t *predicate, Tu
 
 	return 0;
 }
+/**
+ * An object or source nested within one or more objects need selectors for the provider. A provider must know which instances of the parent objects
+ * should be queried for the requested information, e.g. providing a device name for txBytes.
+ * A GenStream_t already contains all needed selectors, but a join does not.
+ * Hence, they need to be extracted from the predicates provided by a join.
+ * @param rootDM a pointer to the root of the datamodel
+ * @param joinDM a pointer to the node whose information should be joined
+ * @param join a pointer to the join operator
+ * @param tupleStream a pointer to the tuple which should be enlarged by the join
+ */
+static Selector_t* buildSelectorsArray(DataModelElement_t *rootDM, DataModelElement_t *joinDM, Join_t *join, Tupel_t *tupleStream, int *len) {
+	DataModelElement_t *curDM = NULL, *dm = NULL;
+	Selector_t *array = NULL;
+	void *value = NULL;
+	int counter = 0, i = 0, j = 0;
+
+	curDM = joinDM->parent;
+	// Count the number of objects on the path upwards until the root node.
+	while (curDM != NULL) {
+		if (curDM->dataModelType == OBJECT) {
+			counter++;
+		}
+		curDM = curDM->parent;
+	}
+	if (counter == 0) {
+		return NULL;
+	}
+	array = ALLOC(sizeof(Selector_t) * counter);
+	if (array == NULL) {
+		return NULL;
+	}
+	*len = counter;
+	DEBUG_MSG(2,"Allocated %d selectors\n",counter);
+	curDM = joinDM->parent;
+	// Now, collect each selector and parse its value
+	for (i = counter - 1; i >= 0; i--) {
+		for (j = 0; j < join->predicateLen; j++) {
+			counter = 0;
+			if (join->predicates[j]->left.type == OP_JOIN && join->predicates[j]->right.type == OP_POD) {
+				// the value is provided by the right operand of the i-th predicate
+				dm = getDescription(rootDM,(char*)&join->predicates[j]->left.value);
+				value = &join->predicates[j]->right.value;
+			} else if (join->predicates[j]->right.type == OP_JOIN && join->predicates[j]->left.type == OP_POD) {
+				// the value is provided by the left operand of the i-th predicate
+				dm = getDescription(rootDM,(char*)&join->predicates[j]->right.value);
+				value = &join->predicates[j]->left.value;
+			} else if (join->predicates[j]->left.type == OP_STREAM && join->predicates[j]->right.type == OP_JOIN) {
+				// the value is provided by the tuple
+				value = getMemberPointer(rootDM,tupleStream,(char*)&join->predicates[j]->left.value,&dm);
+				// Recycle the counter variable...
+				counter = 1;
+			} else if (join->predicates[j]->right.type == OP_STREAM && join->predicates[j]->left.type == OP_JOIN) {
+				// the value is provided by the tuple
+				value = getMemberPointer(rootDM,tupleStream,(char*)&join->predicates[j]->right.value,&dm);
+				counter = 1;
+			} else {
+				continue;
+			}
+			/*
+			 * counter == 1 indicates that the value is already part of the stream 
+			 * and it is not necessary to parse the value from the i-th predicate
+			 */
+			if (dm != NULL) {
+				if (dm == curDM) {
+					switch (((Object_t*)dm->typeInfo)->identifierType) {
+						case INT:
+							if (counter == 1) {
+								memcpy((char*)&array[i].value,value,SIZE_INT);
+							} else {
+								STRTOINT((char*)value,(*(int*)&array[i].value));
+							}
+							DEBUG_MSG(2,"copied int to index %d: %d\n",i,*(int*)array[i].value);
+							break;
+
+						case BYTE:
+							if (counter == 1) {
+								memcpy((char*)&array[i].value,value,SIZE_BYTE);
+							} else {
+								STRTOCHAR((char*)value,array[i].value[0]);
+							}
+							DEBUG_MSG(2,"copied byte to index %d: %c\n",i,array[i].value[0]);
+							break;
+
+						case FLOAT:
+							#ifndef __KERNEL__
+							if (counter == 1) {
+								memcpy((char*)&array[i].value,value,SIZE_FLOAT);
+							} else {
+								*(float*)&array[i].value = atof((char*)&value);
+							}
+							DEBUG_MSG(2,"copied float to index %d: %e\n",i,*(float*)array[i].value);
+							#endif
+							break;
+
+						case STRING:
+							strncpy((char*)&array[i].value,(char*)value,MAX_NAME_LEN);
+							DEBUG_MSG(2,"copied string to index %d: %s\n",i,array[i].value);
+							break;
+					}
+				}
+			}
+		}
+	}
+	return array;
+}
 
 static int applyFilter(DataModelElement_t *rootDM, Filter_t *filterOperator, Tupel_t *tupel) {
 	int i = 0;
 	
 	for (i = 0; i < filterOperator->predicateLen; i++) {
-		if (applyPredicate(rootDM,filterOperator->predicates[i],tupel) == 0) {
+		if (applyPredicate(rootDM,filterOperator->predicates[i],tupel,NULL) == 0) {
 			return 0;
 		}
 	}
@@ -235,6 +386,91 @@ out:curTuple = tuple;
 		curTuple = tempTuple;
 	}
 }
+
+static int doJoin(DataModelElement_t *rootDM,Join_t *join, Tupel_t **headTupleStream) {
+	DataModelElement_t *dm = NULL;
+	Selector_t *selecs = NULL;
+	Tupel_t *curTupleJoin = NULL, *nextTupleJoin = NULL, *curTupleStream = NULL, *prevTupleStream = NULL;
+	int i = 0, len = 0, applies = 0, applied = 0;
+	#ifdef __KERNEL__
+	unsigned long flags;
+	#endif
+
+	dm = getDescription(rootDM,join->element.name);
+	if (dm == NULL) {
+		return 0;
+	}
+	// Node is at the remote layer. Stop execution.
+	if (dm->layerCode != LAYER_CODE) {
+		return 2;
+	}
+	selecs = buildSelectorsArray(rootDM,dm,join,*headTupleStream,&len);
+	if (selecs == NULL) {
+		return 0;
+	}
+	// Retrieve the new information...
+	if (dm->dataModelType == OBJECT) {
+		curTupleJoin = ((Object_t*)dm->typeInfo)->status(selecs,len);
+	} else if (dm->dataModelType == SOURCE) {
+		ACQUIRE_WRITE_LOCK(((Source_t*)dm->typeInfo)->lock);
+		curTupleJoin = ((Source_t*)dm->typeInfo)->callback(selecs,len);
+		RELEASE_WRITE_LOCK(((Source_t*)dm->typeInfo)->lock);
+	} else {
+		ERR_MSG("DM is neither a source nor an object!\n");
+		FREE(selecs);
+		return 0;
+	}
+	if (curTupleJoin == NULL) {
+		FREE(selecs);
+		return 0;
+	}
+	// Now do the actual join...
+	curTupleStream = *headTupleStream;
+	while (curTupleJoin != NULL) {
+		applies = 1;
+		for (i = 0; i < join->predicateLen; i++) {
+			if (applyPredicate(rootDM,join->predicates[i],curTupleStream,curTupleJoin) == 0) {
+				nextTupleJoin = curTupleJoin->next;
+				DEBUG_MSG(2,"Tuple does not apply. Freeing it!\n");
+				freeTupel(rootDM,curTupleJoin);
+				applies = 0;
+				break;
+			}
+		}
+		if (applies == 1) {
+			DEBUG_MSG(2,"predicates apply. merging tuple.\n");
+			if (curTupleJoin->next != NULL) {
+				// Copy the stream tuple, because it might match another tuple
+				DEBUG_MSG(2,"Got further tuples to join. Copying current tuple.\n");
+				curTupleStream->next = copyTupel(rootDM,curTupleStream);
+				if (curTupleStream->next == NULL) {
+					// Canot copy. Abort! Free everything.
+					while (curTupleJoin != NULL) {
+						freeTupel(rootDM,curTupleJoin);
+						curTupleJoin = curTupleJoin->next;
+					}
+					FREE(selecs);
+					return 0;
+				}
+			}
+			nextTupleJoin = curTupleJoin->next;
+			// Merge the tuples
+			mergeTuple(rootDM,&curTupleStream,curTupleJoin);
+			if (prevTupleStream != NULL) {
+				prevTupleStream->next = curTupleStream;
+			} else {
+				*headTupleStream = curTupleStream;
+			}
+			prevTupleStream = curTupleStream;
+			curTupleStream = curTupleStream->next;
+			applied++;
+		}
+		curTupleJoin = nextTupleJoin;
+	}
+	FREE(selecs);
+	return applied > 0;
+}
+
 /**
  * Executes {@link query}. If one of the operators do not aplly to the {@link tupel}, the {@link tuple} will be freed.
  * Therefore the caller has to provide a pointer to the pointer of tupel. In the letter case the pointer will be set to NULL.
@@ -243,9 +479,10 @@ out:curTuple = tuple;
  * @param query the query to be executed
  * @param tupel 
  */
-void executeQuery(DataModelElement_t *rootDM, Query_t *query, Tupel_t *tupel, int steps) {
+void executeQuery(DataModelElement_t *rootDM, Query_t *query, Tupel_t *tupleStream, int steps) {
 	Operator_t *cur = NULL;
-	int counter = 0, i = 0;
+	int counter = 0, i = 0, ret = 0;
+	Tupel_t *tempTuple = NULL;
 
 	if (query == NULL) {
 		DEBUG_MSG(1,"%s: Query is NULL",__func__);
@@ -266,15 +503,15 @@ void executeQuery(DataModelElement_t *rootDM, Query_t *query, Tupel_t *tupel, in
 					break;
 
 				case FILTER:
-					if (applyFilter(rootDM,(Filter_t*)cur,tupel) == 0) {
-						freeTupel(rootDM,tupel);
+					if (applyFilter(rootDM,(Filter_t*)cur,tupleStream) == 0) {
+						freeTupel(rootDM,tupleStream);
 						return;
 					}
 					break;
 
 				case SELECT:
-					if (applySelect(rootDM,(Select_t*)cur,tupel) == 0) {
-						freeTupel(rootDM,tupel);
+					if (applySelect(rootDM,(Select_t*)cur,tupleStream) == 0) {
+						freeTupel(rootDM,tupleStream);
 						return;
 					}
 					break;
@@ -284,6 +521,18 @@ void executeQuery(DataModelElement_t *rootDM, Query_t *query, Tupel_t *tupel, in
 					break;
 
 				case JOIN:
+					ret = doJoin(rootDM,(Join_t*)cur,&tupleStream);
+					if (ret == 0) {
+						while (tupleStream != NULL) {
+							tempTuple = tupleStream->next;
+							freeTupel(rootDM,tupleStream);
+							tupleStream = tempTuple;
+						}
+						return;
+					} else if (ret == 2) {
+						sendQueryContinue(query,tupleStream,steps);
+						return;
+					}
 					break;
 
 				case MAX:
@@ -298,14 +547,14 @@ void executeQuery(DataModelElement_t *rootDM, Query_t *query, Tupel_t *tupel, in
 		// The query was completely executed at the remote layer.
 		DEBUG_MSG(2,"No further steps to process.\n");
 	}
-	// It is out query. Hence, query->onCompletedFunction should point to a valid memory location
+	// It is our query. Hence, query->onCompletedFunction should point to a valid memory location
 	if (query->layerCode == LAYER_CODE) {
 		if (query->onQueryCompleted != NULL) {
-			query->onQueryCompleted(query->queryID,tupel);
+			query->onQueryCompleted(query->queryID,tupleStream);
 		}
 	} else {
 		// The original query is located at the remote layer. Hand it over.
-		sendQueryContinue(query,tupel,-1);
+		sendQueryContinue(query,tupleStream,-1);
 	}
 }
 /**
@@ -397,15 +646,15 @@ EXPORT_SYMBOL(freeQuery);
  * TODO: maybe someone wanna do a more sophisticated syntax check. For now, this will do.
  * Further checks:
  * - a IN b: a and b must refer to objects
- * - one operand is a POD and the other one refers to an object. In this case all predicate types are allowed except IN.
+ * - one operand is a OP_POD and the other one refers to an object. In this case all predicate types are allowed except IN.
  * - ...
  */
 #if 0
 #define CHECK_PREDICATES(varOperator,varDM,tempVarDM)	for (j = 0; j < varOperator->predicateLen; j++) { \
 	switch (varOperator->predicates[j]->left.type) { \
-		case POD: \
+		case OP_POD: \
 			break; \
-		case STREAM: \
+		case OP_STREAM: \
 			if (getDescription(varDM,varOperator->predicates[j]->left.value) == NULL) { \
 				return -ENOOPERAND; \
 			} else { \
@@ -426,9 +675,9 @@ EXPORT_SYMBOL(freeQuery);
 			break; \
 	} \
 	switch (varOperator->predicates[j]->right.type) {\
-		case POD: \
+		case OP_POD: \
 			break; \
-		case STREAM: \
+		case OP_STREAM: \
 			if ((tempVarDM = getDescription(varDM,varOperator->predicates[j]->right.value)) == NULL) { \
 				return -ENOOPERAND; \
 			} else { \

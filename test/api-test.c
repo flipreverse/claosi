@@ -19,19 +19,23 @@ static void initDatamodel(void);
 static void setupQueries(void);
 static void issueEvent(void);
 
-static EventStream_t txStream;
-static Predicate_t filterTXPredicate;
-static Filter_t filter;
-static Select_t selectTest;
+static ObjectStream_t processObjStream;
+static Join_t joinProcessStime;
+static Predicate_t joinProcessStimePredicate, joinProcessOP_PODPredicate;
 static Query_t query;
-static Element_t elemPacket;
 static Tupel_t *tupel = NULL;
 static unsigned int foo = 1;
 
-void printResult(unsigned int id, Tupel_t *tupel) {
-	printf("Received tupel:\t");
-	printTupel(&model1,tupel);
-	freeTupel(&model1,tupel);
+void printResult(unsigned int id, Tupel_t *tuple) {
+	Tupel_t *tempTuple = NULL;
+
+	while (tuple != NULL) {
+		printf("Received tupel:\t");
+		printTupel(&model1,tuple);
+		tempTuple = tuple->next;
+		freeTupel(&model1,tuple);
+		tuple = tempTuple;
+	}
 }
 
 int main() {
@@ -61,7 +65,7 @@ int main() {
 		return EXIT_FAILURE;
 	}
 
-	freeOperator(GET_BASE(txStream),0);
+	freeOperator(GET_BASE(processObjStream),0);
 	freeDataModel(&model1,0);
 	destroySLC();
 	endClock = clock();
@@ -80,7 +84,21 @@ static void unregEventCallback(Query_t *query) {
 }
 
 static Tupel_t* getSrc(Selector_t *selectors, int len) {
-	return NULL;
+	Tupel_t *tuple = NULL;
+
+	tuple = initTupel(20140531,2);
+	allocItem(SLC_DATA_MODEL,tuple,0,"process.process");
+	setItemInt(SLC_DATA_MODEL,tuple,"process.process",4711);
+	allocItem(SLC_DATA_MODEL,tuple,1,"process.process.stime");
+	setItemInt(SLC_DATA_MODEL,tuple,"process.process.stime",42);
+	
+	tuple->next = initTupel(20140712,2);
+	allocItem(SLC_DATA_MODEL,tuple->next,0,"process.process");
+	setItemInt(SLC_DATA_MODEL,tuple->next,"process.process",1);
+	allocItem(SLC_DATA_MODEL,tuple->next,1,"process.process.stime");
+	setItemInt(SLC_DATA_MODEL,tuple->next,"process.process.stime",21);
+
+	return tuple;
 };
 
 static void regObjectCallback(Query_t *query) {
@@ -96,34 +114,26 @@ static Tupel_t* generateStatusObject(Selector_t *selectors, int len) {
 }
 
 static void issueEvent(void) {
-	tupel = initTupel(20140530,2);
+	tupel = initTupel(20140530,1);
 
-	allocItem(SLC_DATA_MODEL,tupel,0,"net.device.txBytes");
-	setItemInt(SLC_DATA_MODEL,tupel,"net.device.txBytes",4711);
+	allocItem(SLC_DATA_MODEL,tupel,0,"process.process");
+	setItemInt(SLC_DATA_MODEL,tupel,"process.process",1);
 
-	allocItem(SLC_DATA_MODEL,tupel,1,"net.packetType");
-	setItemArray(SLC_DATA_MODEL,tupel,"net.packetType.macHdr",4);
-	setArraySlotByte(SLC_DATA_MODEL,tupel,"net.packetType.macHdr",0,1);
-	setArraySlotByte(SLC_DATA_MODEL,tupel,"net.packetType.macHdr",1,2);
-	setArraySlotByte(SLC_DATA_MODEL,tupel,"net.packetType.macHdr",2,3);
-	setArraySlotByte(SLC_DATA_MODEL,tupel,"net.packetType.macHdr",3,4);
-	setItemByte(SLC_DATA_MODEL,tupel,"net.packetType.macProtocol",65);
-	
-	eventOccuredBroadcast("net.device.onTx",tupel);
+	objectChangedBroadcast("process.process",tupel,OBJECT_CREATE);
 }
 
 static void setupQueries(void) {
 	initQuery(&query);
 	query.onQueryCompleted = printResult;
-	query.root = GET_BASE(txStream);
+	query.root = GET_BASE(processObjStream);
 
-	INIT_EVT_STREAM(txStream,"net.device.onTx",1,0,GET_BASE(filter))
-	SET_SELECTOR_STRING_STREAM(txStream,0,"eth0")
-	INIT_FILTER(filter,GET_BASE(selectTest),1)
-	ADD_PREDICATE(filter,0,filterTXPredicate)
-	SET_PREDICATE(filterTXPredicate,EQUAL, STREAM, "net.packetType.macProtocol", POD, "65")
-	INIT_SELECT(selectTest,NULL,1)
-	ADD_ELEMENT(selectTest,0,elemPacket,"net.packetType")
+	INIT_OBJ_STREAM(processObjStream,"process.process",0,0,GET_BASE(joinProcessStime),OBJECT_CREATE)
+	INIT_JOIN(joinProcessStime,"process.process.stime", 0,NULL,2)
+	ADD_PREDICATE(joinProcessStime,0,joinProcessOP_PODPredicate)
+	SET_PREDICATE(joinProcessOP_PODPredicate,EQUAL, OP_POD, "1", OP_POD, "1")
+	ADD_PREDICATE(joinProcessStime,1,joinProcessStimePredicate)
+	SET_PREDICATE(joinProcessStimePredicate,EQUAL, OP_JOIN, "process.process", OP_STREAM, "process.process")
+	
 }
 
 static void initDatamodel(void) {
@@ -171,6 +181,7 @@ static void initDatamodel(void) {
 
 	INIT_SOURCE_POD(srcUTime,"utime",objProcess,FLOAT,getSrc)
 	INIT_SOURCE_POD(srcSTime,"stime",objProcess,STRING|ARRAY,getSrc)
+	pthread_rwlock_init(&((Source_t*)srcSTime.typeInfo)->lock,NULL);
 	INIT_SOURCE_COMPLEX(srcProcessSockets,"sockets",objProcess,"net.socket",getSrc) //TODO: Should be an array
 	INIT_OBJECT(objProcess,"process",nsProcess,3,INT,regObjectCallback,unregObjectCallback,generateStatusObject)
 	ADD_CHILD(objProcess,0,srcUTime)

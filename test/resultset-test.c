@@ -16,7 +16,7 @@ DECLARE_ELEMENTS(typeMacHdr, typeMacProt, typeNetHdr, typeNetProt, typeTranspHdr
 static void initDatamodel(void);
 
 int main() {
-	Tupel_t *tupel = NULL, *tupelCompact = NULL, *tupelCompact2 = NULL, *tupleCopy = NULL;
+	Tupel_t *tupel = NULL, *tupelCompact = NULL, *tupelCompact2 = NULL, *tupleCopy = NULL, *tupleMerge = NULL;
 	char *string = NULL, values[] = {66,4,3,2,1};
 	clock_t startClock, endClock;
 	int size = 0, ret = 0;
@@ -67,10 +67,12 @@ int main() {
 	strcpy(string,"Ü");
 	setArraySlotString(&model1,tupel,"process.process.stime",2,string);
 	printTupel(&model1,tupel);
+	printf("-------------------------\n");
 
 	printf("Deleting an item...\n");
 	deleteItem(&model1,tupel,0);
 	printTupel(&model1,tupel);
+	printf("-------------------------\n");
 
 	printf("Size of tupel: %d\n",getTupelSize(&model1,tupel));
 
@@ -82,12 +84,15 @@ int main() {
 			ret = copyAndCollectTupel(&model1,tupel,tupelCompact,size);
 			freeTupel(&model1,tupel);
 			printf("... done. Used %d bytes. Freed the origin tuple.\n", ret);
+			printf("-------------------------\n");
 			printf("Trying to change rxBytes to LOOOOL\n");
 			setItemString(&model1,tupelCompact,"net.device.rxBytes","LOOOOL");
 			printTupel(&model1,tupelCompact);
+			printf("-------------------------\n");
 			printf("Deleting an item...\n");
 			deleteItem(&model1,tupelCompact,0);
 			printTupel(&model1,tupelCompact);
+			printf("-------------------------\n");
 			printf("Copying tuple (a.k.a reverting compact)\n");
 			tupleCopy = copyTupel(&model1,tupelCompact);
 			tupelCompact2 = malloc(size);
@@ -102,7 +107,23 @@ int main() {
 			printTupel(&model1,tupleCopy);
 			printf("Printing copied and rewritten tuple:");
 			printTupel(&model1,tupelCompact2);
+			printf("-------------------------\n");
 			
+			tupleMerge = initTupel(4711,2);
+			string = (char*)malloc(6);
+			strcpy(string,"PFERD");
+			allocItem(&model1,tupleMerge,0,"net.device.rxBytes");
+			setItemString(&model1,tupleMerge,"net.device.rxBytes",string);
+			allocItem(&model1,tupleMerge,1,"ui.eventType");
+			setItemInt(&model1,tupleMerge,"ui.eventType.xPos",314);
+			setItemInt(&model1,tupleMerge,"ui.eventType.yPos",42);
+			printTupel(&model1,tupleMerge);
+			printf("Merging tuple: ");
+			printTupel(&model1,tupleMerge);
+			mergeTuple(&model1,&tupleCopy,tupleMerge);
+			printf("Merged tuple: ");
+			printTupel(&model1,tupleCopy);
+
 			freeTupel(&model1,tupleCopy);
 			free(tupelCompact2);
 		}
@@ -112,6 +133,7 @@ int main() {
 
 	freeDataModel(&model1,0);
 	endClock = clock();
+	printf("-------------------------\n");
 	printf("Start: %ld, end: %ld, diff: %ld/%e\n",startClock, endClock, (endClock - startClock),((double)endClock - (double)startClock) / (double)CLOCKS_PER_SEC);
 
 	return EXIT_SUCCESS;

@@ -19,7 +19,7 @@ SourceStream_t txSrc;
 ObjectStream_t processObj;
 EventStream_t txStream, rxStream;
 Join_t joinProcess, joinApp;
-Predicate_t joinProcessPredicate, joinAppPredicate, filterTXPredicate,filterRXPredicate;
+Predicate_t joinProcessPredicate, joinAppPredicate, filterTXPredicate,filterRXPredicate, podPredicate;
 Filter_t filter;
 Select_t selectTest;
 Tupel_t *tupel = NULL;
@@ -46,11 +46,13 @@ int main() {
 	printf("Checking txStream query: \n");
 	INIT_EVT_STREAM(txStream,"net.device.onTx",1,0,GET_BASE(filter))
 	SET_SELECTOR_STRING_STREAM(txStream,0,"eth0")
-	INIT_FILTER(filter,GET_BASE(selectTest),2)
+	INIT_FILTER(filter,GET_BASE(selectTest),3)
 	ADD_PREDICATE(filter,0,filterTXPredicate)
 	ADD_PREDICATE(filter,1,filterRXPredicate)
-	SET_PREDICATE(filterTXPredicate,EQUAL, STREAM, "net.packetType.macProtocol", POD, "65")
-	SET_PREDICATE(filterRXPredicate,GEQ, STREAM, "process.process.utime", POD, "3.14")
+	ADD_PREDICATE(filter,2,podPredicate)
+	SET_PREDICATE(filterTXPredicate,EQUAL, OP_STREAM, "net.packetType.macProtocol", OP_POD, "65")
+	SET_PREDICATE(filterRXPredicate,GEQ, OP_STREAM, "process.process.utime", OP_POD, "3.14")
+	SET_PREDICATE(podPredicate,GEQ, OP_POD, "3.14", OP_POD, "3.14")
 	INIT_SELECT(selectTest,NULL,2)
 	ADD_ELEMENT(selectTest,0,elemUTime,"process.process.utime")
 	ADD_ELEMENT(selectTest,1,elemPacket,"net.packetType")
@@ -93,10 +95,10 @@ int main() {
 	INIT_SRC_STREAM(txSrc,"process.process.utime",0,0,GET_BASE(joinProcess),100)
 	INIT_JOIN(joinProcess,"process.process", 0,GET_BASE(joinApp),1)
 	ADD_PREDICATE(joinProcess,0,joinProcessPredicate)
-	SET_PREDICATE(joinProcessPredicate,IN, STREAM, "net.packetType.socket", STREAM, "process.process.sockets")
+	SET_PREDICATE(joinProcessPredicate,EQUAL, OP_STREAM, "net.packetType.socket", OP_STREAM, "process.process.sockets")
 	INIT_JOIN(joinApp,"ui.app",0, NULL,1)
 	ADD_PREDICATE(joinApp,0,joinAppPredicate)
-	SET_PREDICATE(joinAppPredicate,IN, STREAM, "process.process", STREAM, "ui.app.processes")
+	SET_PREDICATE(joinAppPredicate,EQUAL, OP_STREAM, "process.process", OP_STREAM, "ui.app.processes")
 	if ((ret = checkQuerySyntax(&model1,GET_BASE(txSrc),&errOperator)) == 0) {
 		printQuery(GET_BASE(txSrc));
 	} else {

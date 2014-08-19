@@ -7,8 +7,6 @@
 
 static Query_t queryDisplay;
 static EventStream_t displayStream;
-static Predicate_t xPosPred, yPosPred;
-static Filter_t posFilter;
 
 static void printResult(unsigned int id, Tupel_t *tupel) {
 	struct timeval time;
@@ -28,12 +26,7 @@ static void setupQueries(void) {
 	initQuery(&queryDisplay);
 	queryDisplay.onQueryCompleted = printResult;
 	queryDisplay.root = GET_BASE(displayStream);
-	INIT_EVT_STREAM(displayStream,"ui.display",0,0,NULL) /*GET_BASE(posFilter))
-	INIT_FILTER(posFilter,NULL,2)
-	ADD_PREDICATE(posFilter,0,xPosPred)
-	SET_PREDICATE(xPosPred,GEQ, STREAM, "ui.eventType.xPos", POD, "700")
-	ADD_PREDICATE(posFilter,1,yPosPred)
-	SET_PREDICATE(yPosPred,LEQ, STREAM, "ui.eventType.yPos", POD, "300")*/
+	INIT_EVT_STREAM(displayStream,"ui.display",0,0,NULL)
 }
 
 int __init remotequery_init(void) {

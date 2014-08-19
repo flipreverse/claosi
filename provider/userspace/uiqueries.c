@@ -28,9 +28,9 @@ static void setupQueries(void) {
 	INIT_EVT_STREAM(displayStream,"ui.display",0,0,GET_BASE(posFilter))
 	INIT_FILTER(posFilter,NULL,2)
 	ADD_PREDICATE(posFilter,0,xPosPred)
-	SET_PREDICATE(xPosPred,GEQ, STREAM, "ui.eventType.xPos", POD, "700")
+	SET_PREDICATE(xPosPred,GEQ, OP_STREAM, "ui.eventType.xPos", OP_POD, "700")
 	ADD_PREDICATE(posFilter,1,yPosPred)
-	SET_PREDICATE(yPosPred,LEQ, STREAM, "ui.eventType.yPos", POD, "300")
+	SET_PREDICATE(yPosPred,LEQ, OP_STREAM, "ui.eventType.yPos", OP_POD, "300")
 
 	initQuery(&queryApp);
 	queryApp.next = &queryForeground;

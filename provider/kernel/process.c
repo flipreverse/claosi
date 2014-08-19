@@ -180,17 +180,19 @@ static Tupel_t* getComm(Selector_t *selectors, int len) {
 		return NULL;
 	}
 	strcpy(comm,task->comm);
-	// Give it back to the kernel
+	// Give them back to the kernel
+	put_pid(pid);
 	put_task_struct(task);
 
 	do_gettimeofday(&time);
 	timeUS = (unsigned long long)time.tv_sec * (unsigned long long)USEC_PER_SEC + (unsigned long long)time.tv_usec;
-	tuple = initTupel(timeUS,1);
+	tuple = initTupel(timeUS,2);
 	if (tuple == NULL) {
 		return NULL;
 	}
-
-	allocItem(SLC_DATA_MODEL,tuple,0,"process.process.comm");
+	allocItem(SLC_DATA_MODEL,tuple,0,"process.process");
+	setItemInt(SLC_DATA_MODEL,tuple,"process.process",*(int*)(&selectors[0].value));
+	timeUS=allocItem(SLC_DATA_MODEL,tuple,1,"process.process.comm");
 	setItemString(SLC_DATA_MODEL,tuple,"process.process.comm",comm);
 
 	return tuple;
@@ -219,17 +221,20 @@ static Tupel_t* getSTime(Selector_t *selectors, int len) {
 	}
 	// .. and read the stime
 	sTimeUS = jiffies_to_usecs(task->stime);
-	// Give it back to the kernel
+	// Give them back to the kernel
+	put_pid(pid);
 	put_task_struct(task);
 
 	do_gettimeofday(&time);
 	timeUS = (unsigned long long)time.tv_sec * (unsigned long long)USEC_PER_SEC + (unsigned long long)time.tv_usec;
-	tuple = initTupel(timeUS,1);
+	tuple = initTupel(timeUS,2);
 	if (tuple == NULL) {
 		return NULL;
 	}
 
-	allocItem(SLC_DATA_MODEL,tuple,0,"process.process.stime");
+	allocItem(SLC_DATA_MODEL,tuple,0,"process.process");
+	setItemInt(SLC_DATA_MODEL,tuple,"process.process",*(int*)(&selectors[0].value));
+	allocItem(SLC_DATA_MODEL,tuple,1,"process.process.stime");
 	setItemInt(SLC_DATA_MODEL,tuple,"process.process.stime",sTimeUS);
 
 	return tuple;
@@ -258,18 +263,21 @@ static Tupel_t* getUTime(Selector_t *selectors, int len) {
 	}
 	// .. and read the utime
 	uTimeUS = jiffies_to_usecs(task->utime);
-	// Give it back to the kernel
+	// Give them back to the kernel
+	put_pid(pid);
 	put_task_struct(task);
 	//printk("task=%d, comm=%s, utime=%u(%lu), stime=%u(%lu)\n",task->pid,task->comm,jiffies_to_usecs(task->utime),task->utime,jiffies_to_usecs(task->stime),task->stime);
 
 	do_gettimeofday(&time);
 	timeUS = (unsigned long long)time.tv_sec * (unsigned long long)USEC_PER_SEC + (unsigned long long)time.tv_usec;
-	tuple = initTupel(timeUS,1);
+	tuple = initTupel(timeUS,2);
 	if (tuple == NULL) {
 		return NULL;
 	}
 
-	allocItem(SLC_DATA_MODEL,tuple,0,"process.process.utime");
+	allocItem(SLC_DATA_MODEL,tuple,0,"process.process");
+	setItemInt(SLC_DATA_MODEL,tuple,"process.process",*(int*)(&selectors[0].value));
+	allocItem(SLC_DATA_MODEL,tuple,1,"process.process.utime");
 	setItemInt(SLC_DATA_MODEL,tuple,"process.process.utime",uTimeUS);
 
 	return tuple;

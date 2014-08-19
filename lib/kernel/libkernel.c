@@ -84,15 +84,22 @@ EXPORT_SYMBOL(enqueueQuery);
 
 static int generateObjectStatus(void *data) {
 	QueryStatusJob_t *statusJob = (QueryStatusJob_t*)data;
-	Tupel_t *curTuple = NULL;
+	Tupel_t *curTuple = NULL, *tempTuple = NULL;
 	GenStream_t *stream = (GenStream_t*)statusJob->query->root;
 
 	// The object may return a linked-list of Tuple_t
 	curTuple = statusJob->statusFn(stream->selectors,stream->selectorsLen);
 	while (curTuple != NULL) {
+		tempTuple = curTuple->next;
+		/*
+		 * unlink curTuple from the list.
+		 * Otherwise executeQuery() believes there are more tuple to process.
+		 * Each tuple gets enqueued separately.
+		 */
+		curTuple->next = NULL;
 		// Forward any query to the execution thread
 		enqueueQuery(statusJob->query,curTuple,0);
-		curTuple = curTuple->next;
+		curTuple = tempTuple;
 	}
 	
 	FREE(statusJob);

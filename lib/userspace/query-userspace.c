@@ -21,7 +21,6 @@ const char* predicateToString(int predicate) {
 		case LEQ: return "=<";
 		case GE: return ">";
 		case GEQ: return ">=";
-		case IN: return "IN";
 		default: return "X";
 	}
 }
