@@ -1,4 +1,5 @@
 #include <api.h>
+#include <communication.h>
 
 DataModelElement_t *SLC_DATA_MODEL = NULL;
 DECLARE_LOCK(slcLock);
@@ -48,7 +49,7 @@ int registerProvider(DataModelElement_t *dm, Query_t *queries) {
 			RELEASE_WRITE_LOCK(slcLock);
 			return ret;
 		}
-		sendDatamodel(dm,1);
+		sendDatamodel(dm,MSG_DM_ADD);
 		// Now merge it.
 		if ((ret = mergeDataModel(0,SLC_DATA_MODEL,dm)) < 0) {
 			RELEASE_WRITE_LOCK(slcLock);
@@ -118,7 +119,7 @@ int unregisterProvider(DataModelElement_t *dm, Query_t *queries) {
 			RELEASE_WRITE_LOCK(slcLock);
 			return ret;
 		}
-		sendDatamodel(dm,0);
+		sendDatamodel(dm,MSG_DM_DEL);
 		// If deleteSubtree removes even the root node, it is necessary to reinitialize the global datamodel
 		if (SLC_DATA_MODEL == NULL) {
 			initSLCDatamodel();

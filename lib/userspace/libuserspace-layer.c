@@ -152,6 +152,8 @@ static void* commThreadWork(void *data) {
 		} else {
 			DEBUG_MSG(3,"Read msg with type 0x%x and addr %p (rewritten addr = %p)\n",msg->type,msg->addr,REWRITE_ADDR(msg->addr,sharedMemoryUserBase,sharedMemoryKernelBase));
 			switch (msg->type) {
+				case MSG_DM_SNAPSHOT:
+					DEBUG_MSG(2,"Received a complete snapshot of our datamode.\n");
 				case MSG_DM_ADD:
 					dm = (DataModelElement_t*)REWRITE_ADDR(msg->addr,sharedMemoryKernelBase,sharedMemoryUserBase);
 					// Rewrite all pointer within the datamodel
@@ -450,6 +452,7 @@ int initLayer(void) {
 	union semun cmdval;
 	char buffer[20];
 	unsigned long addr = 0;
+	int ret = 0;
 
 	fdCommunicationFile = open("/proc/" PROCFS_DIR_NAME "/" PROCFS_COMMFILE, O_RDWR);
 	if (fdCommunicationFile < 0) {
@@ -509,6 +512,14 @@ int initLayer(void) {
 		pthread_join(queryExecThread,NULL);
 		return -1;
 	}
+	DEBUG_MSG(1,"Requesting a complete snapshot of the datamodel from the kernel\n");
+	do {
+		ret = ringBufferWrite(txBuffer,MSG_DM_SNAPSHOT,NULL);
+		if (ret == -1) {
+			// Oh no. Start busy waiting...
+			MSLEEP(100);
+		}
+	} while (ret == -1);
 
 	return 0;
 }

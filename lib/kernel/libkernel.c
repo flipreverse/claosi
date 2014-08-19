@@ -408,6 +408,14 @@ static int commThreadWork(void *data) {
 					RELEASE_READ_LOCK(slcLock);
 					break;
 
+				case MSG_DM_SNAPSHOT:
+					// the userspace part requests a complete snapshot of our datamodel.
+					DEBUG_MSG(2,"Userspace requested a complete snapshot of our datamode. Give to him... (aha aha)\n");
+					ACQUIRE_WRITE_LOCK(slcLock);
+					sendDatamodel(SLC_DATA_MODEL,MSG_DM_SNAPSHOT);
+					RELEASE_WRITE_LOCK(slcLock);
+					break;
+
 				case MSG_EMPTY:
 					ERR_MSG("Read empty message!\n");
 					break;

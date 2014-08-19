@@ -1021,7 +1021,7 @@ void rewriteDatamodelAddress(DataModelElement_t *node, void *oldBaseAddr, void *
  * @param root
  * @param add
  */
-void sendDatamodel(DataModelElement_t *root, int add) {
+void sendDatamodel(DataModelElement_t *root, int type) {
 	DataModelElement_t *copy = NULL;
 	int ret = 0;
 
@@ -1041,7 +1041,7 @@ void sendDatamodel(DataModelElement_t *root, int add) {
 	}
 	copyAndCollectDatamodel(root,copy);
 	do {
-		ret = ringBufferWrite(txBuffer,(add == 1 ? MSG_DM_ADD : MSG_DM_DEL),(char*)copy);
+		ret = ringBufferWrite(txBuffer,type,(char*)copy);
 		if (ret == -1) {
 			// Oh no. Start busy waiting...
 			MSLEEP(100);
