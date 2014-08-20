@@ -58,12 +58,12 @@
 	varName.op_type = JOIN; \
 	varName.op_child = childVar; \
 	varName.predicateLen = numPredicates; \
-	varName.predicates = (Predicate_t**)ALLOC(sizeof(Predicate_t**) * numPredicates);
+	varName.predicates = (Predicate_t**)ALLOC(sizeof(Predicate_t*) * numPredicates);
 
 #define INIT_FILTER(varName,childVar,numPredicates)	varName.op_type = FILTER; \
 	varName.op_child = childVar; \
 	varName.predicateLen = numPredicates; \
-	varName.predicates = (Predicate_t**)ALLOC(sizeof(Predicate_t**) * numPredicates);
+	varName.predicates = (Predicate_t**)ALLOC(sizeof(Predicate_t*) * numPredicates);
 
 #define INIT_SELECT(varName,childVar,numElements) varName.op_type = SELECT; \
 	varName.op_child = childVar; \
