@@ -19,7 +19,7 @@ static void initDatamodel(void);
 static void setupQueries(void);
 static void issueEvent(void);
 
-static ObjectStream_t processObjStream;
+static EventStream_t processObjStream;
 static Join_t joinProcessStime;
 static Predicate_t joinProcessStimePredicate, joinProcessOP_PODPredicate;
 static Query_t query;
@@ -85,18 +85,23 @@ static void unregEventCallback(Query_t *query) {
 
 static Tupel_t* getSrc(Selector_t *selectors, int len) {
 	Tupel_t *tuple = NULL;
+	char *name = NULL;
 
+	name = malloc(strlen("eth1") + 1);
+	strcpy(name,"eth1");
 	tuple = initTupel(20140531,2);
-	allocItem(SLC_DATA_MODEL,tuple,0,"process.process");
-	setItemInt(SLC_DATA_MODEL,tuple,"process.process",4711);
-	allocItem(SLC_DATA_MODEL,tuple,1,"process.process.stime");
-	setItemInt(SLC_DATA_MODEL,tuple,"process.process.stime",42);
+	allocItem(SLC_DATA_MODEL,tuple,0,"net.device");
+	setItemString(SLC_DATA_MODEL,tuple,"net.device",name);
+	allocItem(SLC_DATA_MODEL,tuple,1,"net.device.stime");
+	setItemInt(SLC_DATA_MODEL,tuple,"net.device.stime",42);
 	
+	name = malloc(strlen("eth0") + 1);
+	strcpy(name,"eth0");
 	tuple->next = initTupel(20140712,2);
-	allocItem(SLC_DATA_MODEL,tuple->next,0,"process.process");
-	setItemInt(SLC_DATA_MODEL,tuple->next,"process.process",1);
-	allocItem(SLC_DATA_MODEL,tuple->next,1,"process.process.stime");
-	setItemInt(SLC_DATA_MODEL,tuple->next,"process.process.stime",21);
+	allocItem(SLC_DATA_MODEL,tuple->next,0,"net.device");
+	setItemString(SLC_DATA_MODEL,tuple->next,"net.device",name);
+	allocItem(SLC_DATA_MODEL,tuple->next,1,"net.device.rxBytes");
+	setItemInt(SLC_DATA_MODEL,tuple->next,"net.device.rxBytes",21);
 
 	return tuple;
 };
@@ -114,12 +119,20 @@ static Tupel_t* generateStatusObject(Selector_t *selectors, int len) {
 }
 
 static void issueEvent(void) {
-	tupel = initTupel(20140530,1);
+	char *name = NULL;
+	tupel = initTupel(20140530,2);
 
-	allocItem(SLC_DATA_MODEL,tupel,0,"process.process");
-	setItemInt(SLC_DATA_MODEL,tupel,"process.process",1);
+	name = malloc(strlen("eth0") + 1);
+	strcpy(name,"eth0");
+	allocItem(SLC_DATA_MODEL,tupel,0,"net.device");
+	setItemString(SLC_DATA_MODEL,tupel,"net.device",name);
+	allocItem(SLC_DATA_MODEL,tupel,1,"net.packetType");
+	setItemArray(SLC_DATA_MODEL,tupel,"net.packetType.macHdr",2);
+	setArraySlotByte(SLC_DATA_MODEL,tupel,"net.packetType.macHdr",0,1);
+	setArraySlotByte(SLC_DATA_MODEL,tupel,"net.packetType.macHdr",1,2);
+	setItemByte(SLC_DATA_MODEL,tupel,"net.packetType.macProtocol",42);
 
-	objectChangedBroadcast("process.process",tupel,OBJECT_CREATE);
+	eventOccuredBroadcast("net.device.onRx",tupel);
 }
 
 static void setupQueries(void) {
@@ -127,12 +140,13 @@ static void setupQueries(void) {
 	query.onQueryCompleted = printResult;
 	query.root = GET_BASE(processObjStream);
 
-	INIT_OBJ_STREAM(processObjStream,"process.process",0,0,GET_BASE(joinProcessStime),OBJECT_CREATE)
-	INIT_JOIN(joinProcessStime,"process.process.stime", NULL,2)
+	INIT_EVT_STREAM(processObjStream,"net.device.onRx",1,0,GET_BASE(joinProcessStime))
+	SET_SELECTOR_STRING(processObjStream,0,"eth1");
+	INIT_JOIN(joinProcessStime,"net.device.rxBytes", NULL,2)
 	ADD_PREDICATE(joinProcessStime,0,joinProcessOP_PODPredicate)
 	SET_PREDICATE(joinProcessOP_PODPredicate,EQUAL, OP_POD, "1", OP_POD, "1")
 	ADD_PREDICATE(joinProcessStime,1,joinProcessStimePredicate)
-	SET_PREDICATE(joinProcessStimePredicate,EQUAL, OP_JOIN, "process.process", OP_STREAM, "process.process")
+	SET_PREDICATE(joinProcessStimePredicate,EQUAL, OP_JOIN, "net.device", OP_STREAM, "net.device")
 	
 }
 
@@ -164,7 +178,7 @@ static void initDatamodel(void) {
 	ADD_CHILD(typePacketType,7,typeSockRef);*/
 
 	INIT_SOURCE_POD(srcTXBytes,"txBytes",objDevice,INT,getSrc)
-	INIT_SOURCE_POD(srcRXBytes,"rxBytes",objDevice,STRING,getSrc)
+	INIT_SOURCE_POD(srcRXBytes,"rxBytes",objDevice,INT,getSrc)
 	INIT_EVENT_COMPLEX(evtOnRX,"onRx",objDevice,"net.packetType",regEventCallback,unregEventCallback)
 	INIT_EVENT_COMPLEX(evtOnTX,"onTx",objDevice,"net.packetType",regEventCallback,unregEventCallback)
 
