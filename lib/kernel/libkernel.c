@@ -116,7 +116,9 @@ void delPendingQuery(Query_t *query) {
 		cur = list_entry(pos, QueryJob_t, list);
 		if (cur->query == query) {
 			DEBUG_MSG(1,"Found query 0x%lx. Removing it from list.\n",(unsigned long)cur->query);
+			freeTupel(SLC_DATA_MODEL,cur->tuple);
 			list_del(&cur->list);
+			FREE(cur);
 		}
 	}
 	spin_unlock(&listLock);

@@ -324,7 +324,9 @@ void delPendingQuery(Query_t *query) {
 		curTmp = STAILQ_NEXT(cur,listEntry);
 		if (cur->query == query) {
 			DEBUG_MSG(1,"Found query 0x%lx. Removing it from list.\n",(unsigned long)cur->query);
+			freeTupel(SLC_DATA_MODEL,cur->tuple);
 			STAILQ_REMOVE(&queriesToExecList,cur,QueryJob,listEntry);
+			FREE(cur);
 		}
 	}
 	pthread_mutex_unlock(&listLock);
