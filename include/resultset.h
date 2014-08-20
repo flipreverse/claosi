@@ -387,7 +387,7 @@ static inline char* getArraySlotString(DataModelElement_t *rootDM,Tupel_t *tupel
 static inline Tupel_t* initTupel(unsigned long long timestamp, int numItems) {
 	int i = 0;
 	Tupel_t *ret = NULL;
-	if ((ret = (Tupel_t*)ALLOC(sizeof(Tupel_t) + numItems * sizeof(Item_t**))) == NULL) {
+	if ((ret = (Tupel_t*)ALLOC(sizeof(Tupel_t) + numItems * sizeof(Item_t*))) == NULL) {
 		return NULL;
 	}
 	ret->flags = 0;
