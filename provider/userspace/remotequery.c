@@ -6,13 +6,13 @@
 #include <pthread.h>
 #include <time.h>
 
-static Query_t queryUtime, queryJoin;
+static Query_t queryUtime, queryJoin, queryRX;
 static SourceStream_t utimeStream;
 static ObjectStream_t processObjStatusJoin;
-static Join_t joinComm, joinStime;
-static Predicate_t commPredicate, stimePredicate, filterPIDPredicate, utimePred;
-static Filter_t filterPID;
-static Filter_t utimeFilter;
+static EventStream_t rxStream;
+static Join_t joinComm, joinStime, joinRXBytes;
+static Predicate_t commPredicate, stimePredicate, filterPIDPredicate, utimePred, rxBytesPredicate;
+static Filter_t filterPID, utimeFilter;
 
 static void printResult(unsigned int id, Tupel_t *tupel) {
 	struct timeval time;
@@ -41,6 +41,16 @@ static void printResultJoin(unsigned int id, Tupel_t *tupel) {
 	freeTupel(SLC_DATA_MODEL,tupel);
 }
 
+static void printResultRx(unsigned int id, Tupel_t *tupel) {
+	struct timeval time;
+	unsigned long long timeMS = 0;
+
+	gettimeofday(&time,NULL);
+	timeMS = (unsigned long long)time.tv_sec * (unsigned long long)USEC_PER_SEC + (unsigned long long)time.tv_usec;
+	printf("Received packet on device %s. Device received %d bytes so far. (itemLen=%d,tuple=%p,duration=%llu us)\n",getItemString(SLC_DATA_MODEL,tupel,"net.device"),getItemInt(SLC_DATA_MODEL,tupel,"net.device.rxBytes"),tupel->itemLen,tupel,timeMS - tupel->timestamp);
+	freeTupel(SLC_DATA_MODEL,tupel);
+}
+
 static void setupQueries(void) {
 	initQuery(&queryUtime);
 	queryUtime.onQueryCompleted = printResult;
@@ -63,6 +73,15 @@ static void setupQueries(void) {
 	INIT_JOIN(joinComm,"process.process.comm", 0,NULL,1)
 	ADD_PREDICATE(joinComm,0,commPredicate)
 	SET_PREDICATE(commPredicate,EQUAL, OP_STREAM, "process.process", OP_JOIN, "process.process")
+
+	initQuery(&queryRX);
+	queryRX.onQueryCompleted = printResultRx;
+	queryRX.root = GET_BASE(rxStream);
+	INIT_EVT_STREAM(rxStream,"net.device.onRx",1,0,GET_BASE(joinRXBytes));
+	SET_SELECTOR_STRING_STREAM(rxStream,0,"eth1");
+	INIT_JOIN(joinRXBytes,"net.device.rxBytes",0,NULL,1)
+	ADD_PREDICATE(joinRXBytes,0,rxBytesPredicate)
+	SET_PREDICATE(rxBytesPredicate,EQUAL, OP_STREAM, "net.device", OP_JOIN, "net.device")
 }
 
 int onLoad(void) {
@@ -70,7 +89,7 @@ int onLoad(void) {
 
 	setupQueries();
 
-	if ((ret = registerQuery(&queryJoin)) < 0 ) {
+	if ((ret = registerQuery(&queryRX)) < 0 ) {
 		ERR_MSG("Query registration failed: %d\n",-ret);
 		return -1;
 	}
@@ -81,12 +100,13 @@ int onLoad(void) {
 int onUnload(void) {
 	int ret = 0;
 
-	if ((ret = unregisterQuery(&queryJoin)) < 0 ) {
+	if ((ret = unregisterQuery(&queryRX)) < 0 ) {
 		ERR_MSG("Unregister queries failed: %d\n",-ret);
 	}
 
 	freeOperator(GET_BASE(utimeStream),0);
 	freeOperator(GET_BASE(processObjStatusJoin),0);
+	freeOperator(GET_BASE(rxStream),0);
 
 	return 0;
 }
