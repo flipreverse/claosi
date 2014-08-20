@@ -6,10 +6,10 @@
 static EventStream_t rxStream, txStream, txStream2;
 static SourceStream_t rxBytesSrc, txBytesSrc;
 static ObjectStream_t devStatusStream, devObjStream;
-static Predicate_t filterRXPredicate;
+static Predicate_t filterRXPredicate, rxBytesPredicate;
+static Join_t joinRXBytes;
 static Filter_t filter;
 static Query_t queryRX, queryTX,queryTX2, queryRXBytes, queryTXBytes, queryDevStatus, queryDevObj;
-
 
 static void printResultRx(unsigned int id, Tupel_t *tupel) {
 	struct timeval time;
@@ -17,7 +17,7 @@ static void printResultRx(unsigned int id, Tupel_t *tupel) {
 
 	do_gettimeofday(&time);
 	timeMS = (unsigned long long)time.tv_sec * (unsigned long long)USEC_PER_SEC + (unsigned long long)time.tv_usec;
-	printk("Received tupel with %d items at memory address %p at %llu us, dev=%s, rx\n",tupel->itemLen,tupel,timeMS - tupel->timestamp,getItemString(SLC_DATA_MODEL,tupel,"net.device"));
+	printk("Received packet on device %s. Device received %d bytes so far. (itemLen=%d,tuple=%p,duration=%llu us)\n",getItemString(SLC_DATA_MODEL,tupel,"net.device"),getItemInt(SLC_DATA_MODEL,tupel,"net.device.rxBytes"),tupel->itemLen,tupel,timeMS - tupel->timestamp);
 	freeTupel(SLC_DATA_MODEL,tupel);
 }
 
@@ -75,17 +75,20 @@ static void setupQueries(void) {
 	initQuery(&queryRX);
 	queryRX.onQueryCompleted = printResultRx;
 	queryRX.root = GET_BASE(rxStream);
-	queryRX.next = &queryRXBytes;
-	INIT_EVT_STREAM(rxStream,"net.device.onRx",1,0,GET_BASE(filter))
+	//queryRX.next = &queryRXBytes;
+	INIT_EVT_STREAM(rxStream,"net.device.onRx",1,0,GET_BASE(joinRXBytes))
 	SET_SELECTOR_STRING(rxStream,0,"eth1")
-	INIT_FILTER(filter,NULL,1)
+	INIT_FILTER(filter,GET_BASE(joinRXBytes),1)
 	ADD_PREDICATE(filter,0,filterRXPredicate)
 	SET_PREDICATE(filterRXPredicate,EQUAL, OP_STREAM, "net.packetType.macProtocol", OP_POD, "42")
+	INIT_JOIN(joinRXBytes,"net.device.rxBytes",NULL,1)
+	ADD_PREDICATE(joinRXBytes,0,rxBytesPredicate)
+	SET_PREDICATE(rxBytesPredicate,EQUAL, OP_STREAM, "net.device", OP_JOIN, "net.device")
 
 	initQuery(&queryRXBytes);
 	queryRXBytes.onQueryCompleted = printResultRxBytes;
 	queryRXBytes.root = GET_BASE(rxBytesSrc);
-	queryRXBytes.next = &queryTX;
+	//queryRXBytes.next = &queryTX;
 	INIT_SRC_STREAM(rxBytesSrc,"net.device.rxBytes",1,0,NULL,2000)
 	SET_SELECTOR_STRING(rxBytesSrc,0,"eth1")
 
