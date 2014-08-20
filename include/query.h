@@ -6,7 +6,6 @@
 #include <datamodel.h>
 #include <resultset.h>
 
-#define MAX_SELECTOR_LEN	20
 #define GET_BASE(varName)	(Operator_t*)&varName
 #define ADD_PREDICATE(varOperator,slot,predicateVar)	varOperator.predicates[slot] = &predicateVar;
 #define ADD_ELEMENT(varOperator,slot,elementVar,elementName)	varOperator.elements[slot] = &elementVar; \
@@ -14,7 +13,7 @@
 
 #define GET_SELECTORS(varName)			((GenStream_t*)varName->root)->selectors
 #define GET_SELECTORS_LEN(varName)			((GenStream_t*)varName->root)->selectorsLen
-#define SET_SELECTOR_STRING(varOperator,slot,selectorValue)	strncpy((char*)&varOperator.st_selectors[slot].value,selectorValue,MAX_SELECTOR_LEN);
+#define SET_SELECTOR_STRING(varOperator,slot,selectorValue)	strncpy((char*)&varOperator.st_selectors[slot].value,selectorValue,MAX_NAME_LEN);
 
 #define SET_SELECTOR_INT(varOperator,slot,selectorValue)	*(int*)(&varOperator.st_selectors[slot].value) =selectorValue;
 
@@ -144,7 +143,7 @@ typedef void (*queryCompletedFunction)(unsigned int,Tupel_t*);
  * Its value is the process id of the process he wants to observe.
  */
 typedef struct Selector {
-	char value[MAX_SELECTOR_LEN];
+	DECLARE_BUFFER(value);
 } Selector_t;
 /**
  * Identifies a query across different layers
