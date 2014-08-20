@@ -506,6 +506,7 @@ void executeQuery(DataModelElement_t *rootDM, Query_t *query, Tupel_t *tupleStre
 		DEBUG_MSG(1,"%s: Query is NULL",__func__);
 		return;
 	}
+	headTupleStream = tupleStream;
 	if (steps != -1) {
 		cur = query->root;
 		// Skip the first 'steps' operators
@@ -521,15 +522,15 @@ void executeQuery(DataModelElement_t *rootDM, Query_t *query, Tupel_t *tupleStre
 					break;
 
 				case FILTER:
-					if (applyFilter(rootDM,(Filter_t*)cur,tupleStream) == 0) {
-						freeTupel(rootDM,tupleStream);
+					if (applyFilter(rootDM,(Filter_t*)cur,headTupleStream) == 0) {
+						freeTupel(rootDM,headTupleStream);
 						return;
 					}
 					break;
 
 				case SELECT:
-					if (applySelect(rootDM,(Select_t*)cur,tupleStream) == 0) {
-						freeTupel(rootDM,tupleStream);
+					if (applySelect(rootDM,(Select_t*)cur,headTupleStream) == 0) {
+						freeTupel(rootDM,headTupleStream);
 						return;
 					}
 					break;
@@ -539,7 +540,6 @@ void executeQuery(DataModelElement_t *rootDM, Query_t *query, Tupel_t *tupleStre
 					break;
 
 				case JOIN:
-					headTupleStream = tupleStream;
 					ret = doJoin(rootDM,(Join_t*)cur,&headTupleStream);
 					if (ret == 0) {
 						while (headTupleStream != NULL) {
@@ -569,11 +569,11 @@ void executeQuery(DataModelElement_t *rootDM, Query_t *query, Tupel_t *tupleStre
 	// It is our query. Hence, query->onCompletedFunction should point to a valid memory location
 	if (query->layerCode == LAYER_CODE) {
 		if (query->onQueryCompleted != NULL) {
-			query->onQueryCompleted(query->queryID,tupleStream);
+			query->onQueryCompleted(query->queryID,headTupleStream);
 		}
 	} else {
 		// The original query is located at the remote layer. Hand it over.
-		sendQueryContinue(query,tupleStream,-1);
+		sendQueryContinue(query,headTupleStream,-1);
 	}
 }
 /**
