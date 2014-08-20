@@ -211,10 +211,14 @@ static Selector_t* buildSelectorsArray(DataModelElement_t *rootDM, DataModelElem
 		return NULL;
 	}
 	*len = counter;
-	DEBUG_MSG(2,"Allocated %d selectors\n",counter);
+	DEBUG_MSG(2,"Allocated %d selectors at %p\n",counter,array);
 	curDM = joinDM->parent;
 	// Now, collect each selector and parse its value
-	for (i = counter - 1; i >= 0; i--) {
+	i = counter - 1;
+	while (curDM != NULL && i >= 0) {
+		if (curDM->dataModelType != OBJECT) {
+			continue;
+		}
 		for (j = 0; j < join->predicateLen; j++) {
 			counter = 0;
 			if (join->predicates[j]->left.type == OP_JOIN && join->predicates[j]->right.type == OP_POD) {
@@ -241,44 +245,46 @@ static Selector_t* buildSelectorsArray(DataModelElement_t *rootDM, DataModelElem
 			 * counter == 1 indicates that the value is already part of the stream 
 			 * and it is not necessary to parse the value from the i-th predicate
 			 */
-			if (dm != NULL) {
-				if (dm == curDM) {
-					switch (((Object_t*)dm->typeInfo)->identifierType) {
-						case INT:
-							if (counter == 1) {
-								memcpy((char*)&array[i].value,value,SIZE_INT);
-							} else {
-								STRTOINT((char*)value,(*(int*)&array[i].value));
-							}
-							DEBUG_MSG(2,"copied int to index %d: %d\n",i,*(int*)array[i].value);
-							break;
+			if (dm != NULL && dm == curDM) {
+				switch (((Object_t*)dm->typeInfo)->identifierType) {
+					case INT:
+						if (counter == 1) {
+							memcpy((char*)&array[i].value,value,SIZE_INT);
+						} else {
+							STRTOINT((char*)value,(*(int*)&array[i].value));
+						}
+						DEBUG_MSG(2,"copied int to index %d: %d\n",i,*(int*)array[i].value);
+						break;
 
-						case BYTE:
-							if (counter == 1) {
-								memcpy((char*)&array[i].value,value,SIZE_BYTE);
-							} else {
-								STRTOCHAR((char*)value,array[i].value[0]);
-							}
-							DEBUG_MSG(2,"copied byte to index %d: %c\n",i,array[i].value[0]);
-							break;
+					case BYTE:
+						if (counter == 1) {
+							memcpy((char*)&array[i].value,value,SIZE_BYTE);
+						} else {
+							STRTOCHAR((char*)value,array[i].value[0]);
+						}
+						DEBUG_MSG(2,"copied byte to index %d: %c\n",i,array[i].value[0]);
+						break;
 
-						case FLOAT:
-							#ifndef __KERNEL__
-							if (counter == 1) {
-								memcpy((char*)&array[i].value,value,SIZE_FLOAT);
-							} else {
-								*(float*)&array[i].value = atof((char*)&value);
-							}
-							DEBUG_MSG(2,"copied float to index %d: %e\n",i,*(float*)array[i].value);
-							#endif
-							break;
+					case FLOAT:
+						#ifndef __KERNEL__
+						if (counter == 1) {
+							memcpy((char*)&array[i].value,value,SIZE_FLOAT);
+						} else {
+							*(float*)&array[i].value = atof((char*)&value);
+						}
+						DEBUG_MSG(2,"copied float to index %d: %e\n",i,*(float*)array[i].value);
+						#endif
+						break;
 
-						case STRING:
-							strncpy((char*)&array[i].value,(char*)*(PTR_TYPE*)value,MAX_NAME_LEN);
-							DEBUG_MSG(2,"copied string to index %d: %s\n",i,array[i].value);
-							break;
-					}
+					case STRING:
+						strncpy((char*)&array[i].value,(char*)*(PTR_TYPE*)value,MAX_NAME_LEN);
+						DEBUG_MSG(2,"copied string to index %d@%p: %s\n",i,(char*)*(PTR_TYPE*)value,array[i].value);
+						break;
 				}
+				i--;
+				break;
+			} else {
+				DEBUG_MSG(1,"buildarray dm==NULL\n");
 			}
 		}
 	}
@@ -406,7 +412,7 @@ static int doJoin(DataModelElement_t *rootDM,Join_t *join, Tupel_t **headTupleSt
 	unsigned long flags;
 	#endif
 
-	dm = getDescription(rootDM,join->element.name);
+	dm = getDescription(rootDM,(char*)&join->element.name);
 	if (dm == NULL) {
 		return 0;
 	}
@@ -434,6 +440,7 @@ static int doJoin(DataModelElement_t *rootDM,Join_t *join, Tupel_t **headTupleSt
 		FREE(selecs);
 		return 0;
 	}
+
 	// Now do the actual join...
 	curTupleStream = *headTupleStream;
 	while (curTupleJoin != NULL) {
@@ -456,8 +463,9 @@ static int doJoin(DataModelElement_t *rootDM,Join_t *join, Tupel_t **headTupleSt
 				if (curTupleStream->next == NULL) {
 					// Canot copy. Abort! Free everything.
 					while (curTupleJoin != NULL) {
+						nextTupleJoin = curTupleJoin->next;
 						freeTupel(rootDM,curTupleJoin);
-						curTupleJoin = curTupleJoin->next;
+						curTupleJoin = nextTupleJoin;
 					}
 					FREE(selecs);
 					return 0;
@@ -492,7 +500,7 @@ static int doJoin(DataModelElement_t *rootDM,Join_t *join, Tupel_t **headTupleSt
 void executeQuery(DataModelElement_t *rootDM, Query_t *query, Tupel_t *tupleStream, int steps) {
 	Operator_t *cur = NULL;
 	int counter = 0, i = 0, ret = 0;
-	Tupel_t *tempTuple = NULL;
+	Tupel_t *tempTuple = NULL, *headTupleStream = NULL;
 
 	if (query == NULL) {
 		DEBUG_MSG(1,"%s: Query is NULL",__func__);
@@ -531,12 +539,13 @@ void executeQuery(DataModelElement_t *rootDM, Query_t *query, Tupel_t *tupleStre
 					break;
 
 				case JOIN:
-					ret = doJoin(rootDM,(Join_t*)cur,&tupleStream);
+					headTupleStream = tupleStream;
+					ret = doJoin(rootDM,(Join_t*)cur,&headTupleStream);
 					if (ret == 0) {
-						while (tupleStream != NULL) {
-							tempTuple = tupleStream->next;
-							freeTupel(rootDM,tupleStream);
-							tupleStream = tempTuple;
+						while (headTupleStream != NULL) {
+							tempTuple = headTupleStream->next;
+							freeTupel(rootDM,headTupleStream);
+							headTupleStream = tempTuple;
 						}
 						return;
 					} else if (ret == 2) {
