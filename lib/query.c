@@ -1529,7 +1529,8 @@ void rewriteQueryAddress(Query_t *query, void *oldBaseAddr, void *newBaseAddr) {
 	Group_t *group = NULL;
 	Join_t *join = NULL;
 	Aggregate_t *aggregate = NULL;
-	
+	GenStream_t *stream = NULL;
+
 	if (query->next != NULL) {
 		query->next = REWRITE_ADDR(query->next,oldBaseAddr,newBaseAddr);
 	}
@@ -1545,6 +1546,8 @@ void rewriteQueryAddress(Query_t *query, void *oldBaseAddr, void *newBaseAddr) {
 			case GEN_SOURCE:
 			case GEN_OBJECT:
 			case GEN_EVENT:
+				stream = (GenStream_t*)curOp;
+				stream->selectors= REWRITE_ADDR(stream->selectors,oldBaseAddr,newBaseAddr);
 				break;
 
 			case FILTER:
