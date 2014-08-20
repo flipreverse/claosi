@@ -83,6 +83,16 @@ static int applyPredicate(DataModelElement_t *rootDM, Predicate_t *predicate, Tu
 			break;
 
 		case STRING:
+			if (valueLeft == NULL) {
+				valueLeft = (char*)&predicate->left.value;
+			} else {
+				valueLeft = (void*)*(PTR_TYPE*)valueLeft;
+			}
+			if (valueRight == NULL) {
+				valueRight = (char*)&predicate->right.value;
+			} else {
+				valueRight = (void*)*(PTR_TYPE*)valueRight;
+			}
 			if (predicate->type == EQUAL) {
 				return strcmp((char*)valueLeft,(char*)valueRight) == 0;
 			} else if (predicate->type == NEQ) {
@@ -264,7 +274,7 @@ static Selector_t* buildSelectorsArray(DataModelElement_t *rootDM, DataModelElem
 							break;
 
 						case STRING:
-							strncpy((char*)&array[i].value,(char*)value,MAX_NAME_LEN);
+							strncpy((char*)&array[i].value,(char*)*(PTR_TYPE*)value,MAX_NAME_LEN);
 							DEBUG_MSG(2,"copied string to index %d: %s\n",i,array[i].value);
 							break;
 					}
