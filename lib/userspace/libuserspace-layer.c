@@ -202,7 +202,7 @@ static void* commThreadWork(void *data) {
 
 				case MSG_QUERY_DEL:
 					queryID = (QueryID_t*)REWRITE_ADDR(msg->addr,sharedMemoryKernelBase,sharedMemoryUserBase);
-					ACQUIRE_READ_LOCK(slcLock);
+					ACQUIRE_WRITE_LOCK(slcLock);
 					// Try to resolve queryID to a pointer to a real query
 					query = resolveQuery(SLC_DATA_MODEL,queryID);
 					if (query == NULL) {
@@ -218,7 +218,7 @@ static void* commThreadWork(void *data) {
 					 * So, it is up to us to free it now.
 					 */
 					freeQuery(query);
-					RELEASE_READ_LOCK(slcLock);
+					RELEASE_WRITE_LOCK(slcLock);
 					break;
 
 				case MSG_QUERY_CONTINUE:
