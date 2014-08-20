@@ -14,11 +14,9 @@
 
 #define GET_SELECTORS(varName)			((GenStream_t*)varName->root)->selectors
 #define GET_SELECTORS_LEN(varName)			((GenStream_t*)varName->root)->selectorsLen
-#define SET_SELECTOR_STRING_JOIN(varOperator,slot,selectorValue)	strncpy((char*)&varOperator.selectors[slot].value,selectorValue,MAX_SELECTOR_LEN);
-#define SET_SELECTOR_STRING_STREAM(varOperator,slot,selectorValue)	strncpy((char*)&varOperator.st_selectors[slot].value,selectorValue,MAX_SELECTOR_LEN);
+#define SET_SELECTOR_STRING(varOperator,slot,selectorValue)	strncpy((char*)&varOperator.st_selectors[slot].value,selectorValue,MAX_SELECTOR_LEN);
 
-#define SET_SELECTOR_INT_JOIN(varOperator,slot,selectorValue)	*(int*)(&varOperator.selectors[slot].value) = selectorValue;
-#define SET_SELECTOR_INT_STREAM(varOperator,slot,selectorValue)	*(int*)(&varOperator.st_selectors[slot].value) =selectorValue;
+#define SET_SELECTOR_INT(varOperator,slot,selectorValue)	*(int*)(&varOperator.st_selectors[slot].value) =selectorValue;
 
 #define INIT_SRC_STREAM(varName,srcName,numSelectors,isUrgent,childVar,srcPeriod)	strncpy((char*)&varName.st_name,srcName,MAX_NAME_LEN); \
 	varName.st_type = GEN_SOURCE; \
@@ -56,16 +54,10 @@
 	} \
 	varName.st_urgent = isUrgent;
 
-#define INIT_JOIN(varName,joinElement,numSelectors,childVar,numPredicates)	strncpy((char*)&varName.element.name,joinElement,MAX_NAME_LEN); \
+#define INIT_JOIN(varName,joinElement,childVar,numPredicates)	strncpy((char*)&varName.element.name,joinElement,MAX_NAME_LEN); \
 	varName.op_type = JOIN; \
 	varName.op_child = childVar; \
 	varName.predicateLen = numPredicates; \
-	varName.selectorsLen = numSelectors; \
-	if (varName.selectorsLen > 0) { \
-		varName.selectors = ALLOC(sizeof(Selector_t) * varName.selectorsLen); \
-	} else { \
-		varName.selectors = NULL; \
-	} \
 	varName.predicates = (Predicate_t**)ALLOC(sizeof(Predicate_t**) * numPredicates);
 
 #define INIT_FILTER(varName,childVar,numPredicates)	varName.op_type = FILTER; \
@@ -296,8 +288,6 @@ typedef struct __attribute__((packed)) Join {
 	Element_t element;
 	unsigned short predicateLen;
 	Predicate_t **predicates;
-	Selector_t *selectors;
-	int selectorsLen;
 } Join_t;
 /**
  * Datamodell: Object: +Fkt für 

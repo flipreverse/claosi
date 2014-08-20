@@ -67,10 +67,10 @@ static void setupQueries(void) {
 	INIT_FILTER(filterPID,GET_BASE(joinStime),1)
 	ADD_PREDICATE(filterPID,0,filterPIDPredicate)
 	SET_PREDICATE(filterPIDPredicate,GEQ, OP_STREAM, "process.process", OP_POD, "3000")
-	INIT_JOIN(joinStime,"process.process.stime", 0,GET_BASE(joinComm),1)
+	INIT_JOIN(joinStime,"process.process.stime", GET_BASE(joinComm),1)
 	ADD_PREDICATE(joinStime,0,stimePredicate)
 	SET_PREDICATE(stimePredicate,EQUAL, OP_STREAM, "process.process", OP_JOIN, "process.process")
-	INIT_JOIN(joinComm,"process.process.comm", 0,NULL,1)
+	INIT_JOIN(joinComm,"process.process.comm", NULL,1)
 	ADD_PREDICATE(joinComm,0,commPredicate)
 	SET_PREDICATE(commPredicate,EQUAL, OP_STREAM, "process.process", OP_JOIN, "process.process")
 
@@ -78,8 +78,8 @@ static void setupQueries(void) {
 	queryRX.onQueryCompleted = printResultRx;
 	queryRX.root = GET_BASE(rxStream);
 	INIT_EVT_STREAM(rxStream,"net.device.onRx",1,0,GET_BASE(joinRXBytes));
-	SET_SELECTOR_STRING_STREAM(rxStream,0,"eth1");
-	INIT_JOIN(joinRXBytes,"net.device.rxBytes",0,NULL,1)
+	SET_SELECTOR_STRING(rxStream,0,"eth1");
+	INIT_JOIN(joinRXBytes,"net.device.rxBytes",NULL,1)
 	ADD_PREDICATE(joinRXBytes,0,rxBytesPredicate)
 	SET_PREDICATE(rxBytesPredicate,EQUAL, OP_STREAM, "net.device", OP_JOIN, "net.device")
 }

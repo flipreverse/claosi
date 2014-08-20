@@ -45,7 +45,7 @@ int main() {
 	printf("-------------------------\n");
 	printf("Checking txStream query: \n");
 	INIT_EVT_STREAM(txStream,"net.device.onTx",1,0,GET_BASE(filter))
-	SET_SELECTOR_STRING_STREAM(txStream,0,"eth0")
+	SET_SELECTOR_STRING(txStream,0,"eth0")
 	INIT_FILTER(filter,GET_BASE(selectTest),3)
 	ADD_PREDICATE(filter,0,filterTXPredicate)
 	ADD_PREDICATE(filter,1,filterRXPredicate)
@@ -93,10 +93,10 @@ int main() {
 
 	printf("Checking txSrc query: \n");
 	INIT_SRC_STREAM(txSrc,"process.process.utime",0,0,GET_BASE(joinProcess),100)
-	INIT_JOIN(joinProcess,"process.process", 0,GET_BASE(joinApp),1)
+	INIT_JOIN(joinProcess,"process.process", GET_BASE(joinApp),1)
 	ADD_PREDICATE(joinProcess,0,joinProcessPredicate)
 	SET_PREDICATE(joinProcessPredicate,EQUAL, OP_STREAM, "net.packetType.socket", OP_STREAM, "process.process.sockets")
-	INIT_JOIN(joinApp,"ui.app",0, NULL,1)
+	INIT_JOIN(joinApp,"ui.app",NULL,1)
 	ADD_PREDICATE(joinApp,0,joinAppPredicate)
 	SET_PREDICATE(joinAppPredicate,EQUAL, OP_STREAM, "process.process", OP_STREAM, "ui.app.processes")
 	if ((ret = checkQuerySyntax(&model1,GET_BASE(txSrc),&errOperator)) == 0) {

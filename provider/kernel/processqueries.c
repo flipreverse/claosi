@@ -100,13 +100,13 @@ static void setupQueries(void) {
 	queryUTime.onQueryCompleted = printResultUTime;
 	queryUTime.root = GET_BASE(processUTimeStr);
 	INIT_SRC_STREAM(processUTimeStr,"process.process.utime",1,0,NULL,2000);
-	SET_SELECTOR_INT_STREAM(processUTimeStr,0,3568)
+	SET_SELECTOR_INT(processUTimeStr,0,3568)
 
 	initQuery(&queryComm);
 	queryComm.onQueryCompleted = printResultComm;
 	queryComm.root = GET_BASE(processCommStr);
 	INIT_SRC_STREAM(processCommStr,"process.process.comm",1,0,NULL,2000);
-	SET_SELECTOR_INT_STREAM(processCommStr,0,3568)
+	SET_SELECTOR_INT(processCommStr,0,3568)
 
 	initQuery(&queryJoin);
 	queryJoin.onQueryCompleted = printResultJoin;
@@ -115,10 +115,10 @@ static void setupQueries(void) {
 	INIT_FILTER(filterPID,GET_BASE(joinStime),1)
 	ADD_PREDICATE(filterPID,0,filterPIDPredicate)
 	SET_PREDICATE(filterPIDPredicate,GEQ, OP_STREAM, "process.process", OP_POD, "3000")
-	INIT_JOIN(joinStime,"process.process.stime", 0,GET_BASE(joinComm),1)
+	INIT_JOIN(joinStime,"process.process.stime", GET_BASE(joinComm),1)
 	ADD_PREDICATE(joinStime,0,stimePredicate)
 	SET_PREDICATE(stimePredicate,EQUAL, OP_STREAM, "process.process", OP_JOIN, "process.process")
-	INIT_JOIN(joinComm,"process.process.comm", 0,NULL,1)
+	INIT_JOIN(joinComm,"process.process.comm", NULL,1)
 	ADD_PREDICATE(joinComm,0,commPredicate)
 	SET_PREDICATE(commPredicate,EQUAL, OP_STREAM, "process.process", OP_JOIN, "process.process")
 }

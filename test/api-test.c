@@ -128,7 +128,7 @@ static void setupQueries(void) {
 	query.root = GET_BASE(processObjStream);
 
 	INIT_OBJ_STREAM(processObjStream,"process.process",0,0,GET_BASE(joinProcessStime),OBJECT_CREATE)
-	INIT_JOIN(joinProcessStime,"process.process.stime", 0,NULL,2)
+	INIT_JOIN(joinProcessStime,"process.process.stime", NULL,2)
 	ADD_PREDICATE(joinProcessStime,0,joinProcessOP_PODPredicate)
 	SET_PREDICATE(joinProcessOP_PODPredicate,EQUAL, OP_POD, "1", OP_POD, "1")
 	ADD_PREDICATE(joinProcessStime,1,joinProcessStimePredicate)

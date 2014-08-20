@@ -77,7 +77,7 @@ static void setupQueries(void) {
 	queryRX.root = GET_BASE(rxStream);
 	queryRX.next = &queryRXBytes;
 	INIT_EVT_STREAM(rxStream,"net.device.onRx",1,0,GET_BASE(filter))
-	SET_SELECTOR_STRING_STREAM(rxStream,0,"eth1")
+	SET_SELECTOR_STRING(rxStream,0,"eth1")
 	INIT_FILTER(filter,NULL,1)
 	ADD_PREDICATE(filter,0,filterRXPredicate)
 	SET_PREDICATE(filterRXPredicate,EQUAL, OP_STREAM, "net.packetType.macProtocol", OP_POD, "42")
@@ -87,28 +87,28 @@ static void setupQueries(void) {
 	queryRXBytes.root = GET_BASE(rxBytesSrc);
 	queryRXBytes.next = &queryTX;
 	INIT_SRC_STREAM(rxBytesSrc,"net.device.rxBytes",1,0,NULL,2000)
-	SET_SELECTOR_STRING_STREAM(rxBytesSrc,0,"eth1")
+	SET_SELECTOR_STRING(rxBytesSrc,0,"eth1")
 
 	initQuery(&queryTX);
 	queryTX.onQueryCompleted = printResultTx;
 	queryTX.root = GET_BASE(txStream);
 	queryTX.next = &queryTX2;
 	INIT_EVT_STREAM(txStream,"net.device.onTx",1,0,NULL)
-	SET_SELECTOR_STRING_STREAM(txStream,0,"eth1")
+	SET_SELECTOR_STRING(txStream,0,"eth1")
 
 	initQuery(&queryTX2);
 	queryTX2.onQueryCompleted = printResultTx;
 	queryTX2.root = GET_BASE(txStream2);
 	queryTX2.next = &queryTXBytes;
 	INIT_EVT_STREAM(txStream2,"net.device.onTx",1,0,NULL)
-	SET_SELECTOR_STRING_STREAM(txStream2,0,"eth0")
+	SET_SELECTOR_STRING(txStream2,0,"eth0")
 
 	initQuery(&queryTXBytes);
 	queryTXBytes.onQueryCompleted = printResultTxBytes;
 	queryTXBytes.root = GET_BASE(txBytesSrc);
 	queryTXBytes.next = &queryDevStatus;
 	INIT_SRC_STREAM(txBytesSrc,"net.device.txBytes",1,0,NULL,2000)
-	SET_SELECTOR_STRING_STREAM(txBytesSrc,0,"eth0")
+	SET_SELECTOR_STRING(txBytesSrc,0,"eth0")
 	
 	initQuery(&queryDevStatus);
 	queryDevStatus.onQueryCompleted = printResultDevStatus;
