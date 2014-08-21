@@ -102,7 +102,7 @@ static inline void* getMemberPointer(DataModelElement_t *rootDM, Tupel_t *tuple,
 		return NULL;
 	}
 	if (strlen(childName) > 0) {
-		if (tempDM->dataModelType != TYPE) {
+		if (tempDM->dataModelType != COMPLEX) {
 			return NULL;
 		}
 		if (*childName == '.') {

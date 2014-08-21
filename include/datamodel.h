@@ -22,14 +22,13 @@ enum DataModelType {
 	SOURCE			=	0x2,
 	EVENT			=	0x4,
 	OBJECT			=	0x8,
-	TYPE			=	0x10,
-	REF				=	0x20,
-	STRING			=	0x40,
-	INT				=	0x80,
-	FLOAT			=	0x100,
-	COMPLEX			=	0x200,
-	ARRAY			=	0x400,
-	BYTE			=	0x800
+	REF				=	0x10,
+	STRING			=	0x20,
+	INT				=	0x40,
+	FLOAT			=	0x80,
+	COMPLEX			=	0x100,
+	ARRAY			=	0x200,
+	BYTE			=	0x400
 };
 
 #if defined(__LP64__) && __LP64__ == 1
@@ -215,11 +214,11 @@ void sendDatamodel(DataModelElement_t *root, int type);
 	((Event_t*)varName.typeInfo)->numQueries = 0; \
 	INIT_QUERY_ARRAY(((Event_t*)varName.typeInfo)->queries,MAX_QUERIES_PER_DM)
 
-#define INIT_TYPE(varName,nodeName,parentNode,numChildren)	strncpy((char*)&varName.name,nodeName,MAX_NAME_LEN);\
+#define INIT_COMPLEX_TYPE(varName,nodeName,parentNode,numChildren)	strncpy((char*)&varName.name,nodeName,MAX_NAME_LEN);\
 	varName.childrenLen = numChildren; \
 	SET_CHILDREN_ARRAY(varName,numChildren) \
 	varName.parent = &parentNode; \
-	varName.dataModelType = TYPE; \
+	varName.dataModelType = COMPLEX; \
 	varName.layerCode = LAYER_CODE; \
 	varName.typeInfo = NULL;
 

@@ -52,7 +52,7 @@ int main() {
 	ADD_PREDICATE(filter,2,podPredicate)
 	SET_PREDICATE(filterTXPredicate,EQUAL, OP_STREAM, "net.packetType.macProtocol", OP_POD, "65")
 	SET_PREDICATE(filterRXPredicate,GEQ, OP_STREAM, "process.process.utime", OP_POD, "3.14")
-	SET_PREDICATE(podPredicate,GEQ, OP_POD, "3.14", OP_POD, "3.14")
+	SET_PREDICATE(podPredicate,EQUAL, OP_POD, "3.14", OP_POD, "3.14")
 	INIT_SELECT(selectTest,NULL,2)
 	ADD_ELEMENT(selectTest,0,elemUTime,"process.process.utime")
 	ADD_ELEMENT(selectTest,1,elemPacket,"net.packetType")
@@ -214,7 +214,7 @@ static void initDatamodel(void) {
 	INIT_PLAINTYPE(typeDataLen,"dataLength",typePacketType,BYTE)
 	INIT_REF(typeSockRef,"socket",typePacketType,"process.process.sockets")
 
-	INIT_TYPE(typePacketType,"packetType",nsNet1,2)
+	INIT_COMPLEX_TYPE(typePacketType,"packetType",nsNet1,2)
 	ADD_CHILD(typePacketType,0,typeMacHdr);
 	ADD_CHILD(typePacketType,1,typeMacProt);
 	/*ADD_CHILD(typePacketType,2,typeNetHdr);
@@ -261,7 +261,7 @@ static void initDatamodel(void) {
 	
 	INIT_PLAINTYPE(typeXPos,"xPos",typeEventType,INT)
 	INIT_PLAINTYPE(typeYPos,"yPos",typeEventType,INT)
-	INIT_TYPE(typeEventType,"eventType",nsUI,2)
+	INIT_COMPLEX_TYPE(typeEventType,"eventType",nsUI,2)
 	ADD_CHILD(typeEventType,0,typeXPos)
 	ADD_CHILD(typeEventType,1,typeYPos)
 

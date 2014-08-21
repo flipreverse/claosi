@@ -93,8 +93,8 @@ void printDatamodel(DataModelElement_t *root) {
 				printf("object %s[%s] @ activate = %p, deactivate = %p, status = %p {\n", curNode->name, typeToString(obj->identifierType), obj->activate, obj->deactivate, obj->status);
 				break;
 
-			case TYPE:
-				printf("type %s {\n",curNode->name);
+			case COMPLEX:
+				printf("complex %s {\n",curNode->name);
 				break;
 
 			case REF:
@@ -121,7 +121,7 @@ void printDatamodel(DataModelElement_t *root) {
 					}
 				}
 				if (j == curNode->parent->childrenLen - 1) {
-					if (curNode->parent->dataModelType == MODEL || curNode->parent->dataModelType == NAMESPACE || curNode->parent->dataModelType == OBJECT || curNode->parent->dataModelType == TYPE) {
+					if (curNode->parent->dataModelType == MODEL || curNode->parent->dataModelType == NAMESPACE || curNode->parent->dataModelType == OBJECT || curNode->parent->dataModelType == COMPLEX) {
 						for (i = 0; i < numTabs - 1; i++) {
 							printf("\t");
 						}

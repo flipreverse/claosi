@@ -181,7 +181,7 @@ static void initDatamodel(void) {
 	INIT_PLAINTYPE(typeDataLen,"dataLength",typePacketType,BYTE)
 	INIT_REF(typeSockRef,"socket",typePacketType,"process.process.sockets")
 
-	INIT_TYPE(typePacketType,"packetType",nsNet1,5)
+	INIT_COMPLEX_TYPE(typePacketType,"packetType",nsNet1,5)
 	ADD_CHILD(typePacketType,4,typeMacHdr);
 	ADD_CHILD(typePacketType,0,typeMacProt);
 	ADD_CHILD(typePacketType,1,typeNetProt);
@@ -231,7 +231,7 @@ static void initDatamodel(void) {
 	
 	INIT_PLAINTYPE(typeXPos,"xPos",typeEventType,INT)
 	INIT_PLAINTYPE(typeYPos,"yPos",typeEventType,INT)
-	INIT_TYPE(typeEventType,"eventType",nsUI,2)
+	INIT_COMPLEX_TYPE(typeEventType,"eventType",nsUI,2)
 	ADD_CHILD(typeEventType,0,typeXPos)
 	ADD_CHILD(typeEventType,1,typeYPos)
 

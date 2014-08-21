@@ -40,7 +40,7 @@ void printValue(DataModelElement_t *rootDM, DataModelElement_t *elem, void *valu
 	}
 	for(i = 0; i < len; i++) {
 		cur = value + i * advance;
-		if (type & TYPE) {
+		if (type & COMPLEX) {
 			PRINT_MSG("{");
 			for(i = 0; i < elem->childrenLen; i++) {
 				PRINT_MSG("%s=",elem->children[i]->name);

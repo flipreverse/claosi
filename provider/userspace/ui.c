@@ -154,7 +154,7 @@ static void initDatamodel(void) {
 	
 	INIT_PLAINTYPE(typeXPos,"xPos",typeEventType,INT)
 	INIT_PLAINTYPE(typeYPos,"yPos",typeEventType,INT)
-	INIT_TYPE(typeEventType,"eventType",nsUI,2)
+	INIT_COMPLEX_TYPE(typeEventType,"eventType",nsUI,2)
 	ADD_CHILD(typeEventType,0,typeXPos)
 	ADD_CHILD(typeEventType,1,typeYPos)
 

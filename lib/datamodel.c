@@ -118,14 +118,14 @@ int getTypeSize(DataModelElement_t *typeDesc) {
 			size += SIZE_STRING;
 		} else if (typeDesc->children[i]->dataModelType & FLOAT) {
 			size += SIZE_FLOAT;
-		} else if ((typeDesc->children[i]->dataModelType & COMPLEX) || (typeDesc->children[i]->dataModelType & TYPE)) {
+		} else if (typeDesc->children[i]->dataModelType & COMPLEX) {
 			ret = getTypeSize(typeDesc->children[i]);
 			if (ret == -1) {
 				return -1;
 			}
 			size += ret;
 		} else if (typeDesc->children[i]->dataModelType & REF) {
-			size += SIZE_REF;
+			size += SIZE_REF;//TODO: REF
 		}
 		//TODO: should handle type and array?
 	}
@@ -167,14 +167,14 @@ int getDataModelSize(DataModelElement_t *rootDM, DataModelElement_t *elem, int i
 		size = SIZE_STRING;
 	} else if (type & FLOAT) {
 		size = SIZE_FLOAT;
-	} else if ((type & COMPLEX) || (type & TYPE)) {
+	} else if (type & COMPLEX) {
 		ret = getTypeSize(elem);
 		if (ret == -1) {
 			return -1;
 		}
 		size = ret;
 	} else if (type & REF) {
-		size = SIZE_REF;
+		size = SIZE_REF;//TODO: REF
 	}
 	
 	return size;
@@ -213,7 +213,7 @@ int getOffset(DataModelElement_t *parent, char *child) {
 				}
 				offset += ret;
 			} else if (parent->children[i]->dataModelType & REF) {
-				//TODO
+				//TODO: REF
 			}
 			//TODO: should handle type and array?
 		}
@@ -553,10 +553,10 @@ int mergeDataModel(int justCheckSyntax, DataModelElement_t *oldTree, DataModelEl
 					// Yes, it does. What about the node type?
 					if (curNodeOld->children[i]->dataModelType == curNodeNew->dataModelType) {
 						switch (curNodeOld->children[i]->dataModelType) {
-							case TYPE:
+							case COMPLEX:
 							case SOURCE:
 							case EVENT:
-								// A merge on source, event and type nodes are not allowed.
+								// A merge on source, event and complex nodes are not allowed.
 								return -ESAMENODE;
 							
 							case OBJECT:
@@ -662,7 +662,7 @@ int checkDataModelSyntax(DataModelElement_t *rootCurrent,DataModelElement_t *roo
 
 			case NAMESPACE:
 				numAllowedChildren = GRE_ZERO;
-				allowedTypes = NAMESPACE | SOURCE | EVENT | OBJECT | TYPE;
+				allowedTypes = NAMESPACE | SOURCE | EVENT | OBJECT | COMPLEX;
 				if (curNode->typeInfo != NULL) {
 					return -ETYPEINFO;
 				}
@@ -727,7 +727,7 @@ int checkDataModelSyntax(DataModelElement_t *rootCurrent,DataModelElement_t *roo
 				}
 				break;
 
-			case TYPE:
+			case COMPLEX:
 				numAllowedChildren = GRE_ZERO;
 				allowedTypes = REF | INT | STRING | FLOAT | COMPLEX | ARRAY | BYTE;
 				if (curNode->typeInfo != NULL) {
@@ -747,15 +747,6 @@ int checkDataModelSyntax(DataModelElement_t *rootCurrent,DataModelElement_t *roo
 					}
 				}
 				break;
-
-			case COMPLEX:
-				numAllowedChildren = ZERO;
-				allowedTypes = 0;
-				if (curNode->typeInfo == NULL) {
-					return -ETYPEINFO;
-				}
-				break;
-				
 
 			default: {
 				numAllowedChildren = ZERO;

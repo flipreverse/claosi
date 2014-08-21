@@ -32,7 +32,7 @@ static void freeItem(DataModelElement_t *rootDM, void *value, DataModelElement_t
 			// If the element is a string or an array, curValue points to one memory chunk. Therefore, it can be freed with one single call.
 			DEBUG_MSG(2,"Freeing array/string: %s@%p, offset=%d\n",curNode->name,(void*)*(PTR_TYPE*)curValue,curOffset);
 			FREE((void*)*(PTR_TYPE*)curValue);
-		} else if ((type & TYPE) || (type & COMPLEX)) {
+		} else if (type & COMPLEX) {
 			// Oh no. Element is complex datatype. It is necessary to step down and look for further arrays or strings.
 			curNode = curNode->children[0];
 			prevOffset = 0;
@@ -171,7 +171,7 @@ static int getItemSize(DataModelElement_t *rootDM, void *value, DataModelElement
 			DEBUG_MSG(2,"Calculating size of string %s@%p (%d)\n",curNode->name,(void*)*(PTR_TYPE*)curValue,size);
 			size += strlen((char*)(*(PTR_TYPE*)curValue)) + 1;
 			DEBUG_MSG(2,"Calculated size of string %s@%p (%d)\n",curNode->name,(void*)*(PTR_TYPE*)curValue,size);
-		} else if ((type & TYPE) || (type & COMPLEX)) {
+		} else if (type & COMPLEX) {
 			curNode = curNode->children[0];
 			prevOffset = 0;
 			curOffset = 0;
@@ -311,7 +311,7 @@ static int copyAndCollectAdditionalMem(DataModelElement_t *rootDM, void *oldValu
 			DEBUG_MSG(2,"Copied string (%s='%s'@%p) to %p with size %d\n",curNode->name,(char*)(*(PTR_TYPE*)curValueOld),(char*)(*(PTR_TYPE*)curValueOld),freeMem,size);
 			size += temp;
 			freeMem += temp;
-		} else if ((type & TYPE) || (type & COMPLEX)) {
+		} else if (type & COMPLEX) {
 			curNode = curNode->children[0];
 			prevOffset = 0;
 			curOffset = 0;
@@ -492,7 +492,7 @@ static int copyAdditionalMem(DataModelElement_t *rootDM, void *oldValue, void *n
 			*((PTR_TYPE*)curValueNew) = (PTR_TYPE)ret;
 			memcpy(ret,(char*)(*(PTR_TYPE*)curValueOld),temp);
 			DEBUG_MSG(2,"Copied string (%s='%s'@%p) to %p with size %d\n",curNode->name,(char*)(*(PTR_TYPE*)curValueOld),(char*)(*(PTR_TYPE*)curValueOld),ret,temp);
-		} else if ((type & TYPE) || (type & COMPLEX)) {
+		} else if (type & COMPLEX) {
 			curNode = curNode->children[0];
 			prevOffset = 0;
 			curOffset = 0;
@@ -640,7 +640,7 @@ static int rewriteAdditionalMem(DataModelElement_t *rootDM, void *valuePtr, void
 			ptr = (PTR_TYPE*)(curValue);
 			*ptr = REWRITE_ADDR(*ptr,oldBaseAddr,newBaseAddr);
 			DEBUG_MSG(2,"Rewrote string (%s='%s'@%p)\n",curNode->name,(char*)(*(PTR_TYPE*)curValue),(char*)(*(PTR_TYPE*)curValue));
-		} else if ((type & TYPE) || (type & COMPLEX)) {
+		} else if (type & COMPLEX) {
 			curNode = curNode->children[0];
 			prevOffset = 0;
 			curOffset = 0;
