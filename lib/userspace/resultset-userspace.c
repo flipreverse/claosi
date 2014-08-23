@@ -51,7 +51,7 @@ void printValue(DataModelElement_t *rootDM, DataModelElement_t *elem, void *valu
 			PRINT_MSG("{");
 			for(i = 0; i < elem->childrenLen; i++) {
 				PRINT_MSG("%s=",elem->children[i]->name);
-				printValue(rootDM,elem->children[i],cur + getOffset(rootDM,elem,elem->children[i]->name));
+				printValue(rootDM,elem->children[i],cur + getComplexTypeOffset(rootDM,elem,elem->children[i]->name));
 				if(i < elem->childrenLen - 1) {
 					PRINT_MSG(",");
 				}

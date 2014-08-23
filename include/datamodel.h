@@ -118,14 +118,14 @@ int mergeDataModel(int justCheckSyntax, DataModelElement_t *oldTree, DataModelEl
 void freeDataModel(DataModelElement_t *node, int freeNodes);
 DataModelElement_t* copySubtree(DataModelElement_t *rootOrigin);
 int deleteSubtree(DataModelElement_t **root, DataModelElement_t *tree);
-int getOffset(DataModelElement_t *rootDM,DataModelElement_t *parent, char *child);
+int getComplexTypeOffset(DataModelElement_t *rootDM,DataModelElement_t *parent, char *child);
 void freeNode(DataModelElement_t *node, int freeNodes);
 int getDataModelSize(DataModelElement_t *rootDM, DataModelElement_t *elem, int ignoreArray);
 int calcDatamodelSize(DataModelElement_t *node);
 void copyAndCollectDatamodel(DataModelElement_t *node, void *freeMem);
 void rewriteDatamodelAddress(DataModelElement_t *node, void *oldBaseAddr, void *newBaseAddr);
 void sendDatamodel(DataModelElement_t *root, int type);
-#define getSize(rootDMVar, elemVar) getDataModelSize(rootDMVar,elemVar,1)
+//#define getSize(rootDMVar, elemVar) getDataModelSize(rootDMVar,elemVar,1)
 
 #define SET_CHILDREN_ARRAY(varName,numChildren) if (numChildren > 0) { \
 		varName.children = ALLOC_STATIC_CHILDREN_ARRAY(numChildren); \

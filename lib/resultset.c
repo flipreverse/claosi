@@ -53,7 +53,8 @@ static void freeItem(DataModelElement_t *rootDM, void *value, DataModelElement_t
 					// If there is none, go one level up and look for this nodes sibling.
 					curNode = parentNode;
 					curValue -= curOffset;
-					if ((curOffset = getOffset(rootDM,curNode->parent,curNode->name)) == -1) {
+					curOffset = getComplexTypeOffset(rootDM,curNode->parent,curNode->name);
+					if (curOffset == -1) {
 						return;
 					}
 					prevOffset = curOffset;
@@ -61,7 +62,8 @@ static void freeItem(DataModelElement_t *rootDM, void *value, DataModelElement_t
 					// At least one sibling left. Go for it.
 					j++;
 					// Get the offset in bytes within the current struct
-					if ((curOffset = getOffset(rootDM,parentNode,parentNode->children[j]->name)) == -1) {
+					curOffset = getComplexTypeOffset(rootDM,parentNode,parentNode->children[j]->name);
+					if (curOffset == -1) {
 						return;
 					}
 					curNode = parentNode->children[j];
@@ -194,7 +196,8 @@ static int getItemSize(DataModelElement_t *rootDM, void *value, DataModelElement
 					curNode = parentNode;
 					// curValue 
 					curValue -= curOffset;
-					if ((curOffset = getOffset(rootDM,curNode->parent,curNode->name)) == -1) {
+					curOffset = getComplexTypeOffset(rootDM,curNode->parent,curNode->name);
+					if (curOffset == -1) {
 						return -1;
 					}
 					prevOffset = curOffset;
@@ -203,7 +206,8 @@ static int getItemSize(DataModelElement_t *rootDM, void *value, DataModelElement
 					// At least one sibling left. Go for it.
 					j++;
 					// Get the offset in bytes within the current struct
-					if ((curOffset = getOffset(rootDM,parentNode,parentNode->children[j]->name)) == -1) {
+					curOffset = getComplexTypeOffset(rootDM,parentNode,parentNode->children[j]->name);
+					if (curOffset == -1) {
 						return -1;
 					}
 					/*
@@ -335,7 +339,8 @@ static int copyAndCollectAdditionalMem(DataModelElement_t *rootDM, void *oldValu
 					// curValue 
 					curValueNew -= curOffset;
 					curValueOld -= curOffset;
-					if ((curOffset = getOffset(rootDM,curNode->parent,curNode->name)) == -1) {
+					curOffset = getComplexTypeOffset(rootDM,curNode->parent,curNode->name);
+					if (curOffset == -1) {
 						return -1;
 					}
 					prevOffset = curOffset;
@@ -344,7 +349,8 @@ static int copyAndCollectAdditionalMem(DataModelElement_t *rootDM, void *oldValu
 					// At least one sibling left. Go for it.
 					j++;
 					// Get the offset in bytes within the current struct
-					if ((curOffset = getOffset(rootDM,parentNode,parentNode->children[j]->name)) == -1) {
+					curOffset = getComplexTypeOffset(rootDM,parentNode,parentNode->children[j]->name);
+					if (curOffset == -1) {
 						return -1;
 					}
 					/*
@@ -516,7 +522,8 @@ static int copyAdditionalMem(DataModelElement_t *rootDM, void *oldValue, void *n
 					// curValue 
 					curValueNew -= curOffset;
 					curValueOld -= curOffset;
-					if ((curOffset = getOffset(rootDM,curNode->parent,curNode->name)) == -1) {
+					curOffset = getComplexTypeOffset(rootDM,curNode->parent,curNode->name);
+					if (curOffset == -1) {
 						return -1;
 					}
 					prevOffset = curOffset;
@@ -525,7 +532,8 @@ static int copyAdditionalMem(DataModelElement_t *rootDM, void *oldValue, void *n
 					// At least one sibling left. Go for it.
 					j++;
 					// Get the offset in bytes within the current struct
-					if ((curOffset = getOffset(rootDM,parentNode,parentNode->children[j]->name)) == -1) {
+					curOffset = getComplexTypeOffset(rootDM,parentNode,parentNode->children[j]->name);
+					if (curOffset == -1) {
 						return -1;
 					}
 					/*
@@ -662,7 +670,8 @@ static int rewriteAdditionalMem(DataModelElement_t *rootDM, void *valuePtr, void
 					curNode = parentNode;
 					// curValue 
 					curValue -= curOffset;
-					if ((curOffset = getOffset(rootDM,curNode->parent,curNode->name)) == -1) {
+					curOffset = getComplexTypeOffset(rootDM,curNode->parent,curNode->name);
+					if (curOffset == -1) {
 						return -1;
 					}
 					prevOffset = curOffset;
@@ -671,7 +680,8 @@ static int rewriteAdditionalMem(DataModelElement_t *rootDM, void *valuePtr, void
 					// At least one sibling left. Go for it.
 					j++;
 					// Get the offset in bytes within the current struct
-					if ((curOffset = getOffset(rootDM,parentNode,parentNode->children[j]->name)) == -1) {
+					curOffset = getComplexTypeOffset(rootDM,parentNode,parentNode->children[j]->name);
+					if (curOffset == -1) {
 						return -1;
 					}
 					/*

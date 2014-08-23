@@ -116,7 +116,7 @@ static inline void* getMemberPointer(DataModelElement_t *rootDM, Tupel_t *tuple,
 		strcpy(tokInput,childName);
 		token = strsep(&tokInput,".");
 		while (token) {
-			ret = getOffset(rootDM,tempDM,token);
+			ret = getComplexTypeOffset(rootDM,tempDM,token);
 			if (ret == -1) {
 				FREE(tokInput_);
 				return NULL;
@@ -206,7 +206,7 @@ static inline void setItemArray(DataModelElement_t *rootDM, Tupel_t *tupel, char
 	if (valuePtr == NULL) {
 		return;
 	}
-	size = getSize(rootDM,dm);
+	size = getDataModelSize(rootDM,dm,1);
 	if (TEST_BIT(tupel->flags,TUPLE_COMPACT)) {
 		DEBUG_MSG(1,"Refusing access (%s) to an item, because tupel is compact.\n",__FUNCTION__);
 		return;
@@ -418,13 +418,16 @@ static inline int allocItem(DataModelElement_t *rootDM, Tupel_t *tupel, int slot
 		DEBUG_MSG(1,"Refusing access (%s) to an item, because to tupel is compact.\n",__FUNCTION__);
 		return -1;
 	}
-	if ((dm = getDescription(rootDM,itemTypeName)) == NULL) {
+	dm = getDescription(rootDM,itemTypeName);
+	if (dm == NULL) {
 		return -1;
 	}
-	if ((ret = getSize(rootDM,dm)) == -1) {
+	ret = getDataModelSize(rootDM,dm,1);
+	if (ret == -1) {
 		return -1;
 	}
-	if ((mem = ALLOC(sizeof(Item_t) + ret)) == NULL) {
+	mem = ALLOC(sizeof(Item_t) + ret);
+	if (mem == NULL) {
 		return -1;
 	}
 	tupel->items[slot] = (Item_t*)mem;

@@ -104,7 +104,7 @@ EXPORT_SYMBOL(freeDataModel);
  * @param typeDesc
  * @return The size of this type in bytes or -1, if the size of a subtype cannot be calculated.
  */
-static int getTypeSize(DataModelElement_t *rootDM, DataModelElement_t *typeDesc) {
+static int getComplexTypeSize(DataModelElement_t *rootDM, DataModelElement_t *typeDesc) {
 	int size = 0, i = 0, ret = 0;
 
 	for (i = 0; i < typeDesc->childrenLen; i++) {
@@ -119,7 +119,7 @@ static int getTypeSize(DataModelElement_t *rootDM, DataModelElement_t *typeDesc)
 		} else if (typeDesc->children[i]->dataModelType & FLOAT) {
 			size += SIZE_FLOAT;
 		} else if (typeDesc->children[i]->dataModelType & COMPLEX) {
-			ret = getTypeSize(rootDM,typeDesc->children[i]);
+			ret = getComplexTypeSize(rootDM,typeDesc->children[i]);
 			if (ret == -1) {
 				return -1;
 			}
@@ -137,7 +137,12 @@ static int getTypeSize(DataModelElement_t *rootDM, DataModelElement_t *typeDesc)
 }
 
 /**
- * 
+ * A caller may prodive a node ({@link elem}) which points to a SOURCE, OBJECT, REF or EVENT.
+ * Hence, it resolves {@link elem} to a datamodel node being a POD or a COMPLEX type.
+ * Afterwards, it returns the size in bytes of this datatype.
+ * @param rootDM a pointer to the root node of the datamodel
+ * @param elem a pointer to a datamodel node
+ * @param ignoreArray if set to 0 and the datamodel node is an array, it returns the size of the bare type (not the array)
  */
 int getDataModelSize(DataModelElement_t *rootDM, DataModelElement_t *elem, int ignoreArray) {
 	int size = -1, ret = 0, type = 0;
@@ -180,7 +185,7 @@ int getDataModelSize(DataModelElement_t *rootDM, DataModelElement_t *elem, int i
 	} else if (type & FLOAT) {
 		size = SIZE_FLOAT;
 	} else if (type & COMPLEX) {
-		ret = getTypeSize(rootDM,elem);
+		ret = getComplexTypeSize(rootDM,elem);
 		if (ret == -1) {
 			return -1;
 		}
@@ -199,7 +204,7 @@ EXPORT_SYMBOL(getDataModelSize);
  * @param child the name of the member
  * @return the offset in bytes of {@link child} within the type {@link parent}
  */
-int getOffset(DataModelElement_t *rootDM, DataModelElement_t *parent, char *child) {
+int getComplexTypeOffset(DataModelElement_t *rootDM, DataModelElement_t *parent, char *child) {
 	int offset = 0, i = 0, ret = 0;
 
 	for (i = 0; i < parent->childrenLen; i++) {
@@ -217,7 +222,7 @@ int getOffset(DataModelElement_t *rootDM, DataModelElement_t *parent, char *chil
 			} else if (parent->children[i]->dataModelType & FLOAT) {
 				offset += SIZE_FLOAT;
 			} else if (parent->children[i]->dataModelType & COMPLEX) {
-				ret = getTypeSize(rootDM,parent->children[i]);
+				ret = getComplexTypeSize(rootDM,parent->children[i]);
 				if (ret == -1) {
 					return -1;
 				}
@@ -234,7 +239,7 @@ int getOffset(DataModelElement_t *rootDM, DataModelElement_t *parent, char *chil
 	return -1;
 }
 #ifdef __KERNEL__
-EXPORT_SYMBOL(getOffset);
+EXPORT_SYMBOL(getComplexTypeOffset);
 #endif
 
 /**
