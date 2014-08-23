@@ -2,25 +2,32 @@
 
 
 void printValue(DataModelElement_t *rootDM, DataModelElement_t *elem, void *value) {
-	int isArray = 0, i = 0, len = 1, advance = 0, type = 0;
+	int isArray = 0, i = 0, len = 1, advance = 0, type = 0, run = 0;
 	void *cur = NULL;
 
-	if (elem->dataModelType == SOURCE) {
-		type = ((Source_t*)elem->typeInfo)->returnType;
-		if (type & COMPLEX) {
-			elem = getDescription(rootDM,((Source_t*)elem->typeInfo)->returnName);
+	do {
+		run = 0;
+		if (elem->dataModelType == REF) {
+			elem = getDescription(rootDM,(char*)elem->typeInfo);
+			run = 1;
+		} else if (elem->dataModelType == SOURCE) {
+			type = ((Source_t*)elem->typeInfo)->returnType;
+			if (type & COMPLEX) {
+				elem = getDescription(rootDM,((Source_t*)elem->typeInfo)->returnName);
+				run = 1;
+			}
+		} else if (elem->dataModelType == EVENT) {
+			type = ((Event_t*)elem->typeInfo)->returnType;
+			if (type & COMPLEX) {
+				elem = getDescription(rootDM,((Event_t*)elem->typeInfo)->returnName);
+				run = 1;
+			}
+		} else if (elem->dataModelType == OBJECT) {
+			type = ((Object_t*)elem->typeInfo)->identifierType;
+		} else {
+			type = elem->dataModelType;
 		}
-	} else if (elem->dataModelType == EVENT) {
-		type = ((Event_t*)elem->typeInfo)->returnType;
-		if (type & COMPLEX) {
-			elem = getDescription(rootDM,((Event_t*)elem->typeInfo)->returnName);
-		}
-	} else if (elem->dataModelType == OBJECT) {
-		type = ((Object_t*)elem->typeInfo)->identifierType;
-	} else {
-		type = elem->dataModelType;
-	}
-
+	} while (run == 1);
 
 	isArray = type & ARRAY;
 	if (isArray) {
@@ -44,7 +51,7 @@ void printValue(DataModelElement_t *rootDM, DataModelElement_t *elem, void *valu
 			PRINT_MSG("{");
 			for(i = 0; i < elem->childrenLen; i++) {
 				PRINT_MSG("%s=",elem->children[i]->name);
-				printValue(rootDM,elem->children[i],cur + getOffset(elem,elem->children[i]->name));
+				printValue(rootDM,elem->children[i],cur + getOffset(rootDM,elem,elem->children[i]->name));
 				if(i < elem->childrenLen - 1) {
 					PRINT_MSG(",");
 				}

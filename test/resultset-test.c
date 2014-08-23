@@ -27,8 +27,8 @@ int main() {
 
 	allocItem(&model1,tupel,0,"net.device.txBytes");
 	setItemInt(&model1,tupel,"net.device.txBytes",4711);
-
 	allocItem(&model1,tupel,1,"net.packetType");
+	setItemInt(&model1,tupel,"net.packetType.socket",1337);
 	setItemArray(&model1,tupel,"net.packetType.macHdr",5);
 	setArraySlotByte(&model1,tupel,"net.packetType.macHdr",0,1);
 	setArraySlotByte(&model1,tupel,"net.packetType.macHdr",1,2);
@@ -38,7 +38,13 @@ int main() {
 	copyArrayByte(&model1,tupel,"net.packetType.macHdr",4,values,5);
 	setItemByte(&model1,tupel,"net.packetType.macProtocol",65);
 	setItemByte(&model1,tupel,"net.packetType.networkProtocol",42);
+	setItemArray(&model1,tupel,"net.packetType.networkHdr",2);
+	setArraySlotByte(&model1,tupel,"net.packetType.networkHdr",0,1);
+	setArraySlotByte(&model1,tupel,"net.packetType.networkHdr",1,2);
 	setItemByte(&model1,tupel,"net.packetType.transportProtocol",21);
+	setItemArray(&model1,tupel,"net.packetType.transportHdr",2);
+	setArraySlotByte(&model1,tupel,"net.packetType.transportHdr",0,1);
+	setArraySlotByte(&model1,tupel,"net.packetType.transportHdr",1,2);
 	setItemByte(&model1,tupel,"net.packetType.dataLength",2);
 
 	string = (char*)malloc(6);
@@ -181,18 +187,15 @@ static void initDatamodel(void) {
 	INIT_PLAINTYPE(typeDataLen,"dataLength",typePacketType,BYTE)
 	INIT_REF(typeSockRef,"socket",typePacketType,"process.process.sockets")
 
-	INIT_COMPLEX_TYPE(typePacketType,"packetType",nsNet1,5)
-	ADD_CHILD(typePacketType,4,typeMacHdr);
+	INIT_COMPLEX_TYPE(typePacketType,"packetType",nsNet1,8)
+	ADD_CHILD(typePacketType,3,typeMacHdr);
 	ADD_CHILD(typePacketType,0,typeMacProt);
 	ADD_CHILD(typePacketType,1,typeNetProt);
-	ADD_CHILD(typePacketType,2,typeTransProt);
-	ADD_CHILD(typePacketType,3,typeDataLen);
-	/*ADD_CHILD(typePacketType,2,typeNetHdr);
-	ADD_CHILD(typePacketType,3,typeNetProt);
+	ADD_CHILD(typePacketType,2,typeNetHdr);
 	ADD_CHILD(typePacketType,4,typeTranspHdr);
-	ADD_CHILD(typePacketType,5,typeTransProt);
+	ADD_CHILD(typePacketType,7,typeTransProt);
 	ADD_CHILD(typePacketType,6,typeDataLen);
-	ADD_CHILD(typePacketType,7,typeSockRef);*/
+	ADD_CHILD(typePacketType,5,typeSockRef);
 
 	INIT_SOURCE_POD(srcTXBytes,"txBytes",objDevice,INT,getSrc)
 	INIT_SOURCE_POD(srcRXBytes,"rxBytes",objDevice,STRING,getSrc)

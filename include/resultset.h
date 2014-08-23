@@ -116,7 +116,7 @@ static inline void* getMemberPointer(DataModelElement_t *rootDM, Tupel_t *tuple,
 		strcpy(tokInput,childName);
 		token = strsep(&tokInput,".");
 		while (token) {
-			ret = getOffset(tempDM,token);
+			ret = getOffset(rootDM,tempDM,token);
 			if (ret == -1) {
 				FREE(tokInput_);
 				return NULL;

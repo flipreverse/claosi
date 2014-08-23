@@ -118,7 +118,7 @@ int mergeDataModel(int justCheckSyntax, DataModelElement_t *oldTree, DataModelEl
 void freeDataModel(DataModelElement_t *node, int freeNodes);
 DataModelElement_t* copySubtree(DataModelElement_t *rootOrigin);
 int deleteSubtree(DataModelElement_t **root, DataModelElement_t *tree);
-int getOffset(DataModelElement_t *parent, char *child);
+int getOffset(DataModelElement_t *rootDM,DataModelElement_t *parent, char *child);
 void freeNode(DataModelElement_t *node, int freeNodes);
 int getDataModelSize(DataModelElement_t *rootDM, DataModelElement_t *elem, int ignoreArray);
 int calcDatamodelSize(DataModelElement_t *node);

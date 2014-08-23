@@ -164,8 +164,8 @@ int main() {
 	}
 	printf("-------------------------\n");
 	errNode = getDescription(copy,"net.packetType");
-	printf("offset of transportHdr: %d\n",getOffset(errNode,"transportHdr"));
-	printf("offset of macHdr: %d\n",getOffset(errNode,"macHdr"));
+	printf("offset of transportHdr: %d\n",getOffset(&model1,errNode,"transportHdr"));
+	printf("offset of macHdr: %d\n",getOffset(&model1,errNode,"macHdr"));
 	printf("-------------------------\n");
 	printf(".... found at %p\n",getDescription(copy,"foo"));
 	printf(".... found at %p\n",getDescription(copy,"net"));

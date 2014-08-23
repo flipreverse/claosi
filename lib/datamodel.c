@@ -104,9 +104,9 @@ EXPORT_SYMBOL(freeDataModel);
  * @param typeDesc
  * @return The size of this type in bytes or -1, if the size of a subtype cannot be calculated.
  */
-int getTypeSize(DataModelElement_t *typeDesc) {
+static int getTypeSize(DataModelElement_t *rootDM, DataModelElement_t *typeDesc) {
 	int size = 0, i = 0, ret = 0;
-	
+
 	for (i = 0; i < typeDesc->childrenLen; i++) {
 		if (typeDesc->children[i]->dataModelType & ARRAY) {
 			size += SIZE_ARRAY;
@@ -119,13 +119,17 @@ int getTypeSize(DataModelElement_t *typeDesc) {
 		} else if (typeDesc->children[i]->dataModelType & FLOAT) {
 			size += SIZE_FLOAT;
 		} else if (typeDesc->children[i]->dataModelType & COMPLEX) {
-			ret = getTypeSize(typeDesc->children[i]);
+			ret = getTypeSize(rootDM,typeDesc->children[i]);
 			if (ret == -1) {
 				return -1;
 			}
 			size += ret;
 		} else if (typeDesc->children[i]->dataModelType & REF) {
-			size += SIZE_REF;//TODO: REF
+			ret = getDataModelSize(rootDM,typeDesc->children[i],0);
+			if (ret == -1) {
+				return -1;
+			}
+			size += ret;
 		}
 		//TODO: should handle type and array?
 	}
@@ -141,21 +145,29 @@ int getDataModelSize(DataModelElement_t *rootDM, DataModelElement_t *elem, int i
 	if (elem == NULL) {
 		return -1;
 	}
-	if (elem->dataModelType == SOURCE) {
-		type = ((Source_t*)elem->typeInfo)->returnType;
-		if (type & COMPLEX) {
-			elem = getDescription(rootDM,((Source_t*)elem->typeInfo)->returnName);
+	do {
+		ret = 0;
+		if (elem->dataModelType == REF) {
+			elem = getDescription(rootDM,(char*)elem->typeInfo);
+			ret = 1;
+		} else if (elem->dataModelType == SOURCE) {
+			type = ((Source_t*)elem->typeInfo)->returnType;
+			if (type & COMPLEX) {
+				elem = getDescription(rootDM,((Source_t*)elem->typeInfo)->returnName);
+				ret = 1;
+			}
+		} else if (elem->dataModelType == EVENT) {
+			type = ((Event_t*)elem->typeInfo)->returnType;
+			if (type & COMPLEX) {
+				elem = getDescription(rootDM,((Event_t*)elem->typeInfo)->returnName);
+				ret = 1;
+			}
+		} else if (elem->dataModelType == OBJECT) {
+			type = ((Object_t*)elem->typeInfo)->identifierType;
+		} else {
+			type = elem->dataModelType;
 		}
-	} else if (elem->dataModelType == EVENT) {
-		type = ((Event_t*)elem->typeInfo)->returnType;
-		if (type & COMPLEX) {
-			elem = getDescription(rootDM,((Event_t*)elem->typeInfo)->returnName);
-		}
-	} else if (elem->dataModelType == OBJECT) {
-		type = ((Object_t*)elem->typeInfo)->identifierType;
-	} else {
-		type = elem->dataModelType;
-	}
+	} while (ret == 1);
 
 	if ((type & ARRAY) && ignoreArray == 0) {
 		size = SIZE_ARRAY;
@@ -168,15 +180,13 @@ int getDataModelSize(DataModelElement_t *rootDM, DataModelElement_t *elem, int i
 	} else if (type & FLOAT) {
 		size = SIZE_FLOAT;
 	} else if (type & COMPLEX) {
-		ret = getTypeSize(elem);
+		ret = getTypeSize(rootDM,elem);
 		if (ret == -1) {
 			return -1;
 		}
 		size = ret;
-	} else if (type & REF) {
-		size = SIZE_REF;//TODO: REF
 	}
-	
+
 	return size;
 }
 #ifdef __KERNEL__
@@ -189,9 +199,9 @@ EXPORT_SYMBOL(getDataModelSize);
  * @param child the name of the member
  * @return the offset in bytes of {@link child} within the type {@link parent}
  */
-int getOffset(DataModelElement_t *parent, char *child) {
+int getOffset(DataModelElement_t *rootDM, DataModelElement_t *parent, char *child) {
 	int offset = 0, i = 0, ret = 0;
-	
+
 	for (i = 0; i < parent->childrenLen; i++) {
 		if (strcmp(parent->children[i]->name,child) == 0) {
 			return offset;
@@ -207,15 +217,18 @@ int getOffset(DataModelElement_t *parent, char *child) {
 			} else if (parent->children[i]->dataModelType & FLOAT) {
 				offset += SIZE_FLOAT;
 			} else if (parent->children[i]->dataModelType & COMPLEX) {
-				ret = getTypeSize(parent->children[i]);
+				ret = getTypeSize(rootDM,parent->children[i]);
 				if (ret == -1) {
 					return -1;
 				}
 				offset += ret;
 			} else if (parent->children[i]->dataModelType & REF) {
-				//TODO: REF
+				ret = getDataModelSize(rootDM,parent->children[i],0);
+				if (ret == -1) {
+					return -1;
+				}
+				offset += ret;
 			}
-			//TODO: should handle type and array?
 		}
 	}
 	return -1;
@@ -638,7 +651,7 @@ int mergeDataModel(int justCheckSyntax, DataModelElement_t *oldTree, DataModelEl
  * @return 0 on success. A value below 0 indicates an error. The absolute value indicates the type of error
  */
 int checkDataModelSyntax(DataModelElement_t *rootCurrent,DataModelElement_t *rootToCheck, DataModelElement_t **errElem) {
-	DataModelElement_t *curNode = NULL;
+	DataModelElement_t *curNode = NULL, *dm = NULL;
 	Event_t *evt = NULL;
 	Object_t *obj = NULL;
 	Source_t *src = NULL;
@@ -741,8 +754,10 @@ int checkDataModelSyntax(DataModelElement_t *rootCurrent,DataModelElement_t *roo
 				if (curNode->typeInfo == NULL) {
 					return -ETYPEINFO;
 				}
-				if (getDescription(rootToCheck,(char*)curNode->typeInfo) == NULL) {
-					if (rootCurrent == NULL || getDescription(rootCurrent,(char*)curNode->typeInfo) == NULL) {
+				dm = getDescription(rootToCheck,(char*)curNode->typeInfo);
+				if (dm == NULL) {
+					dm = getDescription(rootCurrent,(char*)curNode->typeInfo);
+					if (rootCurrent == NULL && dm == NULL) {
 						return -ENOELEMENT;
 					}
 				}
