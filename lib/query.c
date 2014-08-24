@@ -322,26 +322,28 @@ static void applyFilter(DataModelElement_t *rootDM, Filter_t *filterOperator, Tu
  * @param tupel a pointer to the tupel
  * @return 0
  */
-static int applySelect(DataModelElement_t *rootDM, Select_t *selectOperator, Tupel_t *tupel) {
+static void applySelect(DataModelElement_t *rootDM, Select_t *selectOperator, Tupel_t *headTuple) {
+	Tupel_t *curTuple = headTuple;
 	int i = 0, j = 0, found = 0;
-	
-	for (i = 0; i < tupel->itemLen; i++) {
-		// Ommit nonexistent items
-		if (tupel->items[i] == NULL) {
-			continue;
-		}
-		found = 0;
-		for (j = 0; j < selectOperator->elementsLen; j++) {
-			if (strcmp((char*)&selectOperator->elements[j]->name,(char*)&tupel->items[i]->name) == 0) {
-				found = 1;
+
+	while (curTuple != NULL) {
+		for (i = 0; i < curTuple->itemLen; i++) {
+			// Ommit nonexistent items
+			if (curTuple->items[i] == NULL) {
+				continue;
+			}
+			found = 0;
+			for (j = 0; j < selectOperator->elementsLen; j++) {
+				if (strcmp((char*)&selectOperator->elements[j]->name,(char*)&curTuple->items[i]->name) == 0) {
+					found = 1;
+				}
+			}
+			if (found == 0) {
+				deleteItem(rootDM,curTuple,i);
 			}
 		}
-		if (found == 0) {
-			deleteItem(rootDM,tupel,i);
-		}
+		curTuple = curTuple->next;
 	}
-	
-	return 1;
 }
 /**
  * Allocates enough tx memory to store the tuple list starting at {@link tuple} and an instance of QueryContinue_t.
@@ -543,10 +545,7 @@ void executeQuery(DataModelElement_t *rootDM, Query_t *query, Tupel_t *tupleStre
 					break;
 
 				case SELECT:
-					if (applySelect(rootDM,(Select_t*)cur,headTupleStream) == 0) {
-						freeTupel(rootDM,headTupleStream);
-						return;
-					}
+					applySelect(rootDM,(Select_t*)cur,headTupleStream);
 					break;
 
 				case SORT:
