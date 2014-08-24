@@ -369,13 +369,7 @@ static void sendQueryContinue(Query_t *query, Tupel_t *tuple, int steps) {
 		temp = getTupelSize(SLC_DATA_MODEL,curTuple);
 		if (temp == -1) {
 			ERR_MSG("Cannot determine size of tuple. Freeing all tuple and abort.\n");
-			curTuple = tuple;
-			while (curTuple != NULL) {
-				tempTuple = curTuple->next;
-				freeTupel(SLC_DATA_MODEL,curTuple);
-				curTuple = tempTuple;
-			}
-			return;
+			goto out;
 		}
 		size += temp;
 		curTuple = curTuple->next;
@@ -384,7 +378,7 @@ static void sendQueryContinue(Query_t *query, Tupel_t *tuple, int steps) {
 	freeMem = slcmalloc(size);
 	if (freeMem == NULL) {
 		ERR_MSG("Cannot allocate txMemory for QueryContinue_t\n");
-		return;
+		goto out;
 	}
 
 	queryCont = (QueryContinue_t*)freeMem;
