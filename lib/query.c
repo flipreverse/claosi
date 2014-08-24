@@ -291,15 +291,29 @@ static Selector_t* buildSelectorsArray(DataModelElement_t *rootDM, DataModelElem
 	return array;
 }
 
-static int applyFilter(DataModelElement_t *rootDM, Filter_t *filterOperator, Tupel_t *tupel) {
+static void applyFilter(DataModelElement_t *rootDM, Filter_t *filterOperator, Tupel_t **headTuple) {
+	Tupel_t *prevTuple = NULL, *curTuple = *headTuple, *nextTuple = NULL;
 	int i = 0;
-	
-	for (i = 0; i < filterOperator->predicateLen; i++) {
-		if (applyPredicate(rootDM,filterOperator->predicates[i],tupel,NULL) == 0) {
-			return 0;
+
+	while (curTuple != NULL) {
+		for (i = 0; i < filterOperator->predicateLen; i++) {
+			if (applyPredicate(rootDM,filterOperator->predicates[i],curTuple,NULL) == 0) {
+				break;
+			}
 		}
+		nextTuple = curTuple->next;
+		if (i < filterOperator->predicateLen) {
+			if (prevTuple == NULL) {
+				*headTuple = nextTuple;
+			} else {
+				prevTuple->next = nextTuple;
+			}
+			freeTupel(rootDM,curTuple);
+		} else {
+			prevTuple = curTuple;
+		}
+		curTuple = nextTuple;
 	}
-	return 1;
 }
 /**
  * Deletes all items from {@link tupel} which are *not* listed in {@link selectOperator}.
@@ -500,7 +514,7 @@ static int doJoin(DataModelElement_t *rootDM,Join_t *join, Tupel_t **headTupleSt
 void executeQuery(DataModelElement_t *rootDM, Query_t *query, Tupel_t *tupleStream, int steps) {
 	Operator_t *cur = NULL;
 	int counter = 0, i = 0, ret = 0;
-	Tupel_t *tempTuple = NULL, *headTupleStream = NULL;
+	Tupel_t *headTupleStream = NULL;
 
 	if (query == NULL) {
 		DEBUG_MSG(1,"%s: Query is NULL",__func__);
@@ -522,8 +536,8 @@ void executeQuery(DataModelElement_t *rootDM, Query_t *query, Tupel_t *tupleStre
 					break;
 
 				case FILTER:
-					if (applyFilter(rootDM,(Filter_t*)cur,headTupleStream) == 0) {
-						freeTupel(rootDM,headTupleStream);
+					applyFilter(rootDM,(Filter_t*)cur,&headTupleStream);
+					if (headTupleStream == NULL) {
 						return;
 					}
 					break;
