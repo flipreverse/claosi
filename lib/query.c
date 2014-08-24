@@ -362,7 +362,6 @@ static void sendQueryContinue(Query_t *query, Tupel_t *tuple, int steps) {
 		DEBUG_MSG(3,"No endpoint connected. Aborting send.\n");
 		goto out;
 	}
-	//TODO: communication is not available
 	curTuple = tuple;
 	// Calculate the amount of memory to allocate
 	do {
@@ -412,12 +411,21 @@ out:curTuple = tuple;
 		curTuple = tempTuple;
 	}
 }
-
+/**
+ * Uses the callback of the datamodel node which should be joined to retrieve the new tuples.
+ * The datamodel node is resolved by using the element.name field of {@link  join}.
+ * If the node is present and located on this layer, it calls the status() or callback() function.
+ * Afterwards, it tries to match each tuple on the right hand side to the first tuple on the left hand side.
+ * If any matches, they are merged. Otherwise it proceeds with the next tuple in the stream.
+ * @param rootDM a pointer to the root of the datamodel
+ * @param join a pointer to the join operator
+ * @param headTupleStream a pointer pointer to the first tuple in the stream
+ */
 static int doJoin(DataModelElement_t *rootDM,Join_t *join, Tupel_t **headTupleStream) {
 	DataModelElement_t *dm = NULL;
 	Selector_t *selecs = NULL;
-	Tupel_t *curTupleJoin = NULL, *nextTupleJoin = NULL, *curTupleStream = NULL, *prevTupleStream = NULL;
-	int i = 0, len = 0, applies = 0, applied = 0;
+	Tupel_t *curTupleJoin = NULL, *nextTupleJoin = NULL, *lastTupleJoin = NULL, *curTupleStream = NULL, *prevTupleStream = NULL, *tempTuple = NULL, *nextTupleStream = NULL;
+	int i = 0, len = 0, shouldMerge = 0, applied = 0, moreStreamTuple = 0, moreJoinTuple = 0;
 	#ifdef __KERNEL__
 	unsigned long flags;
 	#endif
@@ -453,50 +461,192 @@ static int doJoin(DataModelElement_t *rootDM,Join_t *join, Tupel_t **headTupleSt
 
 	// Now do the actual join...
 	curTupleStream = *headTupleStream;
-	while (curTupleJoin != NULL) {
-		applies = 1;
+	lastTupleJoin = curTupleJoin;
+	// Find the last tuple on the right hand side
+	while (lastTupleJoin->next != NULL) {
+		lastTupleJoin = lastTupleJoin->next;
+	}
+	while (curTupleStream != NULL) {
+		shouldMerge = 1;
 		for (i = 0; i < join->predicateLen; i++) {
 			if (applyPredicate(rootDM,join->predicates[i],curTupleStream,curTupleJoin) == 0) {
-				nextTupleJoin = curTupleJoin->next;
-				DEBUG_MSG(2,"Tuple does not apply. Freeing it!\n");
-				freeTupel(rootDM,curTupleJoin);
-				applies = 0;
+				shouldMerge = 0;
 				break;
 			}
 		}
-		if (applies == 1) {
-			DEBUG_MSG(2,"predicates apply. merging tuple.\n");
-			if (curTupleJoin->next != NULL) {
-				// Copy the stream tuple, because it might match another tuple
-				DEBUG_MSG(2,"Got further tuples to join. Copying current tuple.\n");
-				curTupleStream->next = copyTupel(rootDM,curTupleStream);
-				if (curTupleStream->next == NULL) {
-					// Canot copy. Abort! Free everything.
-					while (curTupleJoin != NULL) {
-						nextTupleJoin = curTupleJoin->next;
-						freeTupel(rootDM,curTupleJoin);
-						curTupleJoin = nextTupleJoin;
+		moreStreamTuple = curTupleStream->next != NULL;
+		moreJoinTuple = curTupleJoin->next != NULL;
+		// left and right hand side match
+		if (shouldMerge == 1) {
+			if (moreStreamTuple == 1 && moreJoinTuple == 1) {
+				if (curTupleJoin == lastTupleJoin) {
+					/*
+					 * Reached the last one on the right hand side. Copy the current right tuple and append it.
+					 * There are more tuples on the left side. So, it might match with another tuple.
+					 */
+					while (lastTupleJoin->next != NULL) {
+						lastTupleJoin = lastTupleJoin->next;
 					}
-					FREE(selecs);
-					return 0;
+					lastTupleJoin->next = copyTupel(rootDM,curTupleJoin);
+					if (lastTupleJoin->next == NULL) {
+						goto out_error;
+					}
+				} else {
+					/*
+					 * We're in the middle of a sequence of right tuples. Hence, copy the current
+					 * left tuple and insert it right after the current one, because it might match
+					 * another tuple on the right side.
+					 */
+					tempTuple = copyTupel(rootDM,curTupleStream);
+					if (tempTuple == NULL) {
+						goto out_error;
+					}
+					tempTuple->next = curTupleStream->next;
+					curTupleStream->next = tempTuple;
+					/*
+					 * We have further tuples in the stream. Therefore, copy the current tuple from the right side
+					 * and append it.
+					 */
+					tempTuple = lastTupleJoin;
+					while (tempTuple->next != NULL) {
+						tempTuple = tempTuple->next;
+					}
+					tempTuple->next = copyTupel(rootDM,curTupleJoin);
+					if (tempTuple->next == NULL) {
+						goto out_error;
+					}
 				}
+			} else if (moreStreamTuple == 1 && moreJoinTuple == 0) {
+				/*
+				 * Reached the end of the sequence of right tuples, but got further tuples in stream to process.
+				 * Copy the current right tuple and append it.
+				 */
+				lastTupleJoin = copyTupel(rootDM,curTupleJoin);
+				if (lastTupleJoin == NULL) {
+					goto out_error;
+				}
+				curTupleJoin->next = lastTupleJoin;
+			} else if (moreStreamTuple == 0 && moreJoinTuple == 1) {
+				/*
+				 * Reached the end of the tuples in stream, but got further tuples on the right side.
+				 * Copy the current stream tuple and append it.
+				 */
+				tempTuple = copyTupel(rootDM,curTupleStream);
+				if (tempTuple == NULL) {
+					goto out_error;
+				}
+				tempTuple->next = curTupleStream->next;
+				curTupleStream->next = tempTuple;
+			} else if (moreStreamTuple == 0 && moreJoinTuple == 0) {
+				// nothing to do
 			}
 			nextTupleJoin = curTupleJoin->next;
-			// Merge the tuples
-			mergeTuple(rootDM,&curTupleStream,curTupleJoin);
+			nextTupleStream = curTupleStream->next;
+			// Lets get serious. Merge them...
+			if (mergeTuple(rootDM,&curTupleStream,curTupleJoin) < 0) {
+				goto out_error;
+			}
 			if (prevTupleStream != NULL) {
 				prevTupleStream->next = curTupleStream;
 			} else {
 				*headTupleStream = curTupleStream;
 			}
 			prevTupleStream = curTupleStream;
-			curTupleStream = curTupleStream->next;
 			applied++;
+		} else {
+			if (moreStreamTuple == 1 && moreJoinTuple == 1) {
+				if (curTupleJoin == lastTupleJoin) {
+					/*
+					 * The current stream tuple does not match any tuple on the right side.
+					 * Free it!
+					 */
+					nextTupleStream = curTupleStream->next;
+					freeTupel(rootDM,curTupleStream);
+					if (prevTupleStream != NULL) {
+						prevTupleStream->next = nextTupleStream;
+					} else {
+						*headTupleStream = nextTupleStream;
+					}
+					/*
+					 * Got further tuples in stream. Hence, move the current right tuple to the end.
+					 */
+					nextTupleJoin = lastTupleJoin->next;
+					while (lastTupleJoin->next != NULL) {
+						lastTupleJoin = lastTupleJoin->next;
+					}
+					lastTupleJoin->next = curTupleJoin;
+					curTupleJoin->next = NULL;
+					
+				} else {
+					/*
+					 * Got further tuples on the right side. So, still use the current stream tuple, 
+					 * but move the current right tuple to the end of the list.
+					 */
+					nextTupleStream = curTupleStream;
+					nextTupleJoin = curTupleJoin->next;
+					tempTuple = lastTupleJoin;
+					while (tempTuple->next != NULL) {
+						tempTuple = tempTuple->next;
+					}
+					tempTuple->next = curTupleJoin;
+					curTupleJoin->next = NULL;
+				}
+			} else if (moreStreamTuple == 1 && moreJoinTuple == 0) {
+				/*
+				 * Current stream tuple does not match. Free it.
+				 * But keep the current right tuple, because there are further
+				 * tuples in stream.
+				 */
+				nextTupleJoin = curTupleJoin;
+				nextTupleStream = curTupleStream->next;
+				if (prevTupleStream != NULL) {
+					prevTupleStream->next = nextTupleStream;
+				} else {
+					*headTupleStream = nextTupleStream;
+				}
+				freeTupel(rootDM,curTupleStream);
+			} else if (moreStreamTuple == 0 && moreJoinTuple == 1) {
+				/*
+				 * Current tuple of the right side does not match any. Hence, free it.
+				 * But keep the current one on the left side.
+				 */
+				nextTupleStream = curTupleStream;
+				nextTupleJoin = curTupleJoin->next;
+				freeTupel(rootDM,curTupleJoin);
+			} else if (moreStreamTuple == 0 && moreJoinTuple == 0) {
+				/*
+				 * Reached the end of both sides. Free the last tuples of each side.
+				 */
+				nextTupleStream = curTupleStream->next;
+				nextTupleJoin = curTupleJoin->next;
+				if (prevTupleStream != NULL) {
+					prevTupleStream->next = NULL;
+				} else {
+					*headTupleStream = NULL;
+				}
+				freeTupel(rootDM,curTupleStream);
+				freeTupel(rootDM,curTupleJoin);
+			}
 		}
 		curTupleJoin = nextTupleJoin;
+		curTupleStream = nextTupleStream;
 	}
 	FREE(selecs);
 	return applied > 0;
+
+out_error:
+	tempTuple = *headTupleStream;
+	while (tempTuple != NULL) {
+		freeTupel(rootDM,tempTuple);
+		tempTuple = tempTuple->next;
+	}
+	*headTupleStream = NULL;
+	tempTuple = curTupleJoin;
+	while (tempTuple != NULL) {
+		freeTupel(rootDM,tempTuple);
+		tempTuple = tempTuple->next;
+	}
+	return 0;
 }
 
 /**
@@ -549,11 +699,6 @@ void executeQuery(DataModelElement_t *rootDM, Query_t *query, Tupel_t *tupleStre
 				case JOIN:
 					ret = doJoin(rootDM,(Join_t*)cur,&headTupleStream);
 					if (ret == 0) {
-						while (headTupleStream != NULL) {
-							tempTuple = headTupleStream->next;
-							freeTupel(rootDM,headTupleStream);
-							headTupleStream = tempTuple;
-						}
 						return;
 					} else if (ret == 2) {
 						sendQueryContinue(query,tupleStream,steps);
