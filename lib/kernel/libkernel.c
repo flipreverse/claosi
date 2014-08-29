@@ -50,6 +50,7 @@ static DECLARE_WAIT_QUEUE_HEAD(waitQueue);
  * The waitingQueries variable holds the number of outstanding queries.
  */ 
 static atomic_t waitingQueries;
+static unsigned long maxWaitingQueries;
 
 void enqueueQuery(Query_t *query, Tupel_t *tuple, int step) {
 	QueryJob_t *job = NULL;
@@ -252,7 +253,9 @@ static int queryExecutorWork(void *data) {
 		DEBUG_MSG(3,"%s: Waiting for incoming queries...\n",__FUNCTION__);
 		
 		wait_event(waitQueue,kthread_should_stop() || atomic_read(&waitingQueries) > 0);
-
+		if (atomic_read(&waitingQueries) > maxWaitingQueries) {
+			maxWaitingQueries = atomic_read(&waitingQueries);
+		}
 		while (atomic_read(&waitingQueries) > 0) {
 			ACQUIRE_READ_LOCK(slcLock);
 			spin_lock(&listLock);
@@ -616,6 +619,7 @@ static int __init slc_init(void) {
 
 	atomic_set(&waitingQueries,0);
 	atomic_set(&missedTimer,0);
+	maxWaitingQueries = 0;
 	// Init ...
 	queryExecThread = (struct task_struct*)kthread_create(queryExecutorWork,NULL,"queryExecThread");
 	if (IS_ERR(queryExecThread)) {
@@ -657,6 +661,7 @@ static void __exit slc_exit(void) {
 	}
 	kfree(sharedMemoryPages);
 
+	INFO_MSG("Max amount of outstanding queries: %lu\n",maxWaitingQueries);
 	INFO_MSG("Missed %d timer\n", atomic_read(&missedTimer));
 	INFO_MSG("Destroyed SLC\n");
 }
