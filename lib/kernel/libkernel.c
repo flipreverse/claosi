@@ -483,7 +483,7 @@ struct vm_operations_struct communicationFile_mmap_ops = {
 	.fault		=	communicationFileMmapFault,
 };
 
-static int communicationFileRead(struct file *fil, char __user *buffer, size_t buffer_length, loff_t *pos) {
+static ssize_t communicationFileRead(struct file *fil, char __user *buffer, size_t buffer_length, loff_t *pos) {
 	int ret = 0;
 
 	if (*pos > 0) {
