@@ -1,7 +1,7 @@
 # Author: A. Lochmann C 2010
 # Based on a makefile found at: http://ubuntuforums.org/showthread.php?t=1204739
 KDIR?=/lib/modules/`uname -r`/build
-KARCH?=`uname -i`
+KARCH?=`uname -m`
 KCROSS?=
 INCLUDE_PATH:= ./include
 BUILD_PATH:=build
