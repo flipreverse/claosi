@@ -57,7 +57,7 @@ int registerProvider(DataModelElement_t *dm, Query_t *queries) {
 		}
 	}
 	if (queries != NULL) {
-		if ((ret = checkQueries(SLC_DATA_MODEL,queries,NULL)) < 0) {
+		if ((ret = checkQueries(SLC_DATA_MODEL,queries,NULL,0)) < 0) {
 			RELEASE_WRITE_LOCK(slcLock);
 			return ret;
 		}
@@ -97,7 +97,7 @@ int unregisterProvider(DataModelElement_t *dm, Query_t *queries) {
 		return -EPARAM;
 	}
 	if (queries != NULL) {
-		if ((ret = checkQueries(SLC_DATA_MODEL,queries,NULL)) < 0) {
+		if ((ret = checkQueries(SLC_DATA_MODEL,queries,NULL,0)) < 0) {
 			RELEASE_WRITE_LOCK(slcLock);
 			return ret;
 		}
@@ -144,7 +144,7 @@ int registerQuery(Query_t *queries) {
 	ACQUIRE_WRITE_LOCK(slcLock);
 
 	if (queries != NULL) {
-		if ((ret = checkQueries(SLC_DATA_MODEL,queries,NULL)) < 0) {
+		if ((ret = checkQueries(SLC_DATA_MODEL,queries,NULL,0)) < 0) {
 			RELEASE_WRITE_LOCK(slcLock);
 			return ret;
 		}
@@ -179,7 +179,7 @@ int unregisterQuery(Query_t *queries) {
 	ACQUIRE_WRITE_LOCK(slcLock);
 
 	if (queries != NULL) {
-		if ((ret = checkQueries(SLC_DATA_MODEL,queries,NULL)) < 0) {
+		if ((ret = checkQueries(SLC_DATA_MODEL,queries,NULL,0)) < 0) {
 			RELEASE_WRITE_LOCK(slcLock);
 			return ret;
 		}

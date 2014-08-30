@@ -891,9 +891,10 @@ EXPORT_SYMBOL(freeQuery);
  * @param rootDM a pointer to the slc datamodel
  * @param rootQuery the root operator of this query
  * @param errOperator will point to the faulty operator, if not NULL
+ * @param sync {@link queries} shall be executed synchronously
  * @return 0 on success and a value below zero, if an error was discovered.
  */
-int checkQuerySyntax(DataModelElement_t *rootDM, Operator_t *rootQuery, Operator_t **errOperator) {
+int checkQuerySyntax(DataModelElement_t *rootDM, Operator_t *rootQuery, Operator_t **errOperator, int sync) {
 	int i = 0, j = 0, counter = 0;
 	Operator_t *cur = rootQuery;
 	GenStream_t *stream = NULL;
@@ -935,6 +936,9 @@ int checkQuerySyntax(DataModelElement_t *rootDM, Operator_t *rootQuery, Operator
 					if (dm->dataModelType != EVENT) {
 						return -EWRONGSTREAMTYPE;
 					}
+					if (sync == 1) {
+						return -EPARAM;
+					}
 				} else if (cur->type == GEN_OBJECT) {
 					if (dm->dataModelType != OBJECT) {
 						return -EWRONGSTREAMTYPE;
@@ -942,6 +946,9 @@ int checkQuerySyntax(DataModelElement_t *rootDM, Operator_t *rootQuery, Operator
 					objStream = (ObjectStream_t*)cur;
 					if (objStream->objectEvents > (OBJECT_CREATE | OBJECT_DELETE | OBJECT_STATUS)) {
 						return -ENOOBJSTATUS;
+					}
+					if (sync == 1 && (objStream->objectEvents & (OBJECT_CREATE | OBJECT_DELETE)) != 0) {
+						return -EPARAM;
 					}
 				}
 				counter = 0;
@@ -1062,9 +1069,10 @@ int checkQuerySyntax(DataModelElement_t *rootDM, Operator_t *rootQuery, Operator
  * @param rootDM a pointer to the slc datamodelquery
  * @param query a pointer to the first query in that list
  * @param errOperator will point to the faulty operator, if not NULL
+ * @param sync {@link queries} shall be executed synchronously
  * @return 0 on success and a value below zero, if an error was discovered.
  */
-int checkQueries(DataModelElement_t *rootDM, Query_t *queries, Operator_t **errOperator) {
+int checkQueries(DataModelElement_t *rootDM, Query_t *queries, Operator_t **errOperator, int sync) {
 	int ret = 0;
 	Query_t *cur = queries;
 
@@ -1075,7 +1083,7 @@ int checkQueries(DataModelElement_t *rootDM, Query_t *queries, Operator_t **errO
 		if (cur->onQueryCompleted == NULL) {
 			return -ERESULTFUNCPTR;
 		}
-		if ((ret = checkQuerySyntax(rootDM,cur->root,errOperator)) < 0) {
+		if ((ret = checkQuerySyntax(rootDM,cur->root,errOperator,sync)) < 0) {
 			return ret;
 		}
 		cur = cur->next;

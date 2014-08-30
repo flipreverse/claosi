@@ -330,8 +330,8 @@ static inline void initQuery(Query_t *query) {
 	query->size = 0;
 }
 
-int checkQuerySyntax(DataModelElement_t *rootDM, Operator_t *rootQuery, Operator_t **errOperator);
-int checkQueries(DataModelElement_t *rootDM, Query_t *queries, Operator_t **errOperator);
+int checkQuerySyntax(DataModelElement_t *rootDM, Operator_t *rootQuery, Operator_t **errOperator, int sync);
+int checkQueries(DataModelElement_t *rootDM, Query_t *queries, Operator_t **errOperator, int sync);
 #ifdef __KERNEL__
 int addQueries(DataModelElement_t *rootDM, Query_t *queries, unsigned long *flags);
 #else

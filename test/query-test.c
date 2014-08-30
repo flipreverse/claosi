@@ -56,7 +56,7 @@ int main() {
 	INIT_SELECT(selectTest,NULL,2)
 	ADD_ELEMENT(selectTest,0,elemUTime,"process.process.utime")
 	ADD_ELEMENT(selectTest,1,elemPacket,"net.packetType")
-	if ((ret = checkQuerySyntax(&model1,GET_BASE(txStream),&errOperator)) == 0) {
+	if ((ret = checkQuerySyntax(&model1,GET_BASE(txStream),&errOperator,0)) == 0) {
 		printQuery(GET_BASE(txStream));
 	} else {
 		printf("Failed. Reason: %d,%d\n",-ret,ESELECTORS);
@@ -92,14 +92,15 @@ int main() {
 	printf("-------------------------\n");
 
 	printf("Checking txSrc query: \n");
-	INIT_SRC_STREAM(txSrc,"process.process.utime",0,0,GET_BASE(joinProcess),100)
+	INIT_SRC_STREAM(txSrc,"process.process.utime",1,0,GET_BASE(joinProcess),100)
+	SET_SELECTOR_INT(txSrc,0,1)
 	INIT_JOIN(joinProcess,"process.process", GET_BASE(joinApp),1)
 	ADD_PREDICATE(joinProcess,0,joinProcessPredicate)
 	SET_PREDICATE(joinProcessPredicate,EQUAL, OP_STREAM, "net.packetType.socket", OP_STREAM, "process.process.sockets")
 	INIT_JOIN(joinApp,"ui.app",NULL,1)
 	ADD_PREDICATE(joinApp,0,joinAppPredicate)
 	SET_PREDICATE(joinAppPredicate,EQUAL, OP_STREAM, "process.process", OP_STREAM, "ui.app.processes")
-	if ((ret = checkQuerySyntax(&model1,GET_BASE(txSrc),&errOperator)) == 0) {
+	if ((ret = checkQuerySyntax(&model1,GET_BASE(txSrc),&errOperator,0)) == 0) {
 		printQuery(GET_BASE(txSrc));
 	} else {
 		printf("Failed. Reason: %d\n",-ret);
@@ -108,7 +109,7 @@ int main() {
 
 	printf("Checking processObj query: \n");
 	INIT_OBJ_STREAM(processObj,"process.process",0,0,NULL,OBJECT_CREATE)
-	if ((ret = checkQuerySyntax(&model1,GET_BASE(processObj),&errOperator)) == 0) {
+	if ((ret = checkQuerySyntax(&model1,GET_BASE(processObj),&errOperator,0)) == 0) {
 		printQuery(GET_BASE(processObj));
 	} else {
 		printf("Failed. Reason: %d\n",-ret);
