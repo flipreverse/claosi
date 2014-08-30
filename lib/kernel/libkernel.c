@@ -165,7 +165,7 @@ static enum hrtimer_restart hrtimerHandler(struct hrtimer *curTimer) {
 	QueryTimerJob_t *timerJob = container_of(curTimer,QueryTimerJob_t,timer);
 	Source_t *src = (Source_t*)timerJob->dm->typeInfo;
 	GenStream_t *stream = (GenStream_t*)timerJob->query->root;
-	Tupel_t *tuple= NULL;
+	Tupel_t *curTuple= NULL, *tempTuple = NULL;
 	
 	unsigned long flags;
 	
@@ -186,11 +186,19 @@ static enum hrtimer_restart hrtimerHandler(struct hrtimer *curTimer) {
 	DEBUG_MSG(2,"%s: Creating tuple\n",__FUNCTION__);
 	// Only one timer at a time is allowed to access this source
 	ACQUIRE_WRITE_LOCK(src->lock);
-	tuple = src->callback(stream->selectors,stream->selectorsLen);
+	curTuple = src->callback(stream->selectors,stream->selectorsLen);
 	RELEASE_WRITE_LOCK(src->lock);
-	if (tuple != NULL) {
-		DEBUG_MSG(2,"Enqueue tuple\n");
-		enqueueQuery(timerJob->query,tuple,0);
+	while (curTuple != NULL) {
+		tempTuple = curTuple->next;
+		/*
+		 * unlink curTuple from the list.
+		 * Otherwise executeQuery() believes there are more tuple to process.
+		 * Each tuple gets enqueued separately.
+		 */
+		curTuple->next = NULL;
+		// Forward any query to the execution thread
+		enqueueQuery(timerJob->query,curTuple,0);
+		curTuple = tempTuple;
 	}
 	/*
 	 * Restart the timer. Do *not* return HRTIMER_RESTART. It will force the kernel to *immediately* restart this timer and 

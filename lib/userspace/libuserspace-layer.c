@@ -62,7 +62,7 @@ static void timerHandler(union sigval data) {
 	QueryTimerJob_t *timerJob = (QueryTimerJob_t*)data.sival_ptr;
 	Source_t *src = (Source_t*)timerJob->dm->typeInfo;
 	GenStream_t *stream = (GenStream_t*)timerJob->query->root;
-	Tupel_t *tuple= NULL;
+	Tupel_t *curTuple= NULL, *tempTuple = NULL;
 
 	/**
 	 * It is possible that the component deletes queries thus stopping a timer while a timer expires.
@@ -82,12 +82,19 @@ static void timerHandler(union sigval data) {
 	DEBUG_MSG(3,"%s: Creating tuple\n",__FUNCTION__);
 	// Only one timer at a time is allowed to access this source
 	ACQUIRE_WRITE_LOCK(src->lock);
-	tuple = src->callback(stream->selectors,stream->selectorsLen);
+	curTuple = src->callback(stream->selectors,stream->selectorsLen);
 	RELEASE_WRITE_LOCK(src->lock);
-	
-	if (tuple != NULL) {
-		DEBUG_MSG(3,"%s: Enqueue tuple\n",__FUNCTION__);
-		enqueueQuery(timerJob->query,tuple,0);
+	while (curTuple != NULL) {
+		tempTuple = curTuple->next;
+		/*
+		 * unlink curTuple from the list.
+		 * Otherwise executeQuery() believes there are more tuple to process.
+		 * Each tuple gets enqueued separately.
+		 */
+		curTuple->next = NULL;
+		// Forward any query to the execution thread
+		enqueueQuery(timerJob->query,curTuple,0);
+		curTuple = tempTuple;
 	}
 	RELEASE_READ_LOCK(slcLock);
 }
