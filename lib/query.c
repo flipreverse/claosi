@@ -212,15 +212,16 @@ static Selector_t* buildSelectorsArray(DataModelElement_t *rootDM, DataModelElem
 	}
 	*len = counter;
 	DEBUG_MSG(2,"Allocated %d selectors at %p\n",counter,array);
-	curDM = joinDM->parent;
 	// Now, collect each selector and parse its value
-	i = counter - 1;
-	while (curDM != NULL && i >= 0) {
+	for (curDM = joinDM->parent, i = counter - 1; curDM != NULL && i >= 0; curDM = curDM->parent) {
 		if (curDM->dataModelType != OBJECT) {
 			continue;
 		}
 		for (j = 0; j < join->predicateLen; j++) {
 			counter = 0;
+			if (join->predicates[j]->type != EQUAL) {
+				continue;
+			}
 			if (join->predicates[j]->left.type == OP_JOIN && join->predicates[j]->right.type == OP_POD) {
 				// the value is provided by the right operand of the i-th predicate
 				dm = getDescription(rootDM,(char*)&join->predicates[j]->left.value);
@@ -287,6 +288,13 @@ static Selector_t* buildSelectorsArray(DataModelElement_t *rootDM, DataModelElem
 				DEBUG_MSG(1,"buildarray dm==NULL\n");
 			}
 		}
+	}
+	/*
+	 * The user did not provide a sufficient amount of selectors. Abort processing.
+	 */
+	if (i >= 0) {
+		FREE(array);
+		return NULL;
 	}
 	return array;
 }
@@ -440,7 +448,7 @@ static int doJoin(DataModelElement_t *rootDM,Join_t *join, Tupel_t **headTupleSt
 	}
 	selecs = buildSelectorsArray(rootDM,dm,join,*headTupleStream,&len);
 	if (selecs == NULL) {
-		return 0;
+		goto out_error;
 	}
 	// Retrieve the new information...
 	if (dm->dataModelType == OBJECT) {
@@ -451,12 +459,10 @@ static int doJoin(DataModelElement_t *rootDM,Join_t *join, Tupel_t **headTupleSt
 		RELEASE_WRITE_LOCK(((Source_t*)dm->typeInfo)->lock);
 	} else {
 		ERR_MSG("DM is neither a source nor an object!\n");
-		FREE(selecs);
-		return 0;
+		goto out_error;
 	}
 	if (curTupleJoin == NULL) {
-		FREE(selecs);
-		return 0;
+		goto out_error;
 	}
 
 	// Now do the actual join...
@@ -635,16 +641,18 @@ static int doJoin(DataModelElement_t *rootDM,Join_t *join, Tupel_t **headTupleSt
 	return applied > 0;
 
 out_error:
-	tempTuple = *headTupleStream;
-	while (tempTuple != NULL) {
-		freeTupel(rootDM,tempTuple);
-		tempTuple = tempTuple->next;
+	FREE(selecs);
+	curTupleStream = *headTupleStream;
+	while (curTupleStream != NULL) {
+		tempTuple = curTupleStream->next;
+		freeTupel(rootDM,curTupleStream);
+		curTupleStream = tempTuple;
 	}
 	*headTupleStream = NULL;
-	tempTuple = curTupleJoin;
-	while (tempTuple != NULL) {
-		freeTupel(rootDM,tempTuple);
-		tempTuple = tempTuple->next;
+	while (curTupleJoin != NULL) {
+		tempTuple = curTupleJoin->next;
+		freeTupel(rootDM,curTupleJoin);
+		curTupleJoin = tempTuple;
 	}
 	return 0;
 }
