@@ -189,31 +189,38 @@ static int applyPredicate(DataModelElement_t *rootDM, Predicate_t *predicate, Tu
  * @param join a pointer to the join operator
  * @param tupleStream a pointer to the tuple which should be enlarged by the join
  */
-static Selector_t* buildSelectorsArray(DataModelElement_t *rootDM, DataModelElement_t *joinDM, Join_t *join, Tupel_t *tupleStream, int *len) {
+static int buildSelectorsArray(DataModelElement_t *rootDM, DataModelElement_t *joinDM, Join_t *join, Tupel_t *tupleStream, Selector_t **selecArray, int *len, char *runOnce) {
 	DataModelElement_t *curDM = NULL, *dm = NULL;
 	Selector_t *array = NULL;
 	void *value = NULL;
-	int counter = 0, i = 0, j = 0;
+	int counter = 0, i = 0, j = 0, wildcards = 0;
 
 	curDM = joinDM->parent;
-	// Count the number of objects on the path upwards until the root node.
-	while (curDM != NULL) {
-		if (curDM->dataModelType == OBJECT) {
-			counter++;
+	// *selecArry will be NULL, if we get called for the first time
+	if (*selecArray == NULL) {
+		// Count the number of objects on the path upwards until the root node.
+		while (curDM != NULL) {
+			if (curDM->dataModelType == OBJECT) {
+				counter++;
+			}
+			curDM = curDM->parent;
 		}
-		curDM = curDM->parent;
+		if (counter == 0) {
+			return -1;
+		}
+		array = ALLOC(sizeof(Selector_t) * counter);
+		if (array == NULL) {
+			return -1;
+		}
+		*selecArray = array;
+		*len = counter;
+		DEBUG_MSG(2,"Allocated %d selectors at %p\n",counter,array);
+	} else {
+		DEBUG_MSG(2,"Rebuilding selectors array with %d elements\n",*len);
+		array = *selecArray;
 	}
-	if (counter == 0) {
-		return NULL;
-	}
-	array = ALLOC(sizeof(Selector_t) * counter);
-	if (array == NULL) {
-		return NULL;
-	}
-	*len = counter;
-	DEBUG_MSG(2,"Allocated %d selectors at %p\n",counter,array);
 	// Now, collect each selector and parse its value
-	for (curDM = joinDM->parent, i = counter - 1; curDM != NULL && i >= 0; curDM = curDM->parent) {
+	for (curDM = joinDM->parent, i = *len - 1; curDM != NULL && i >= 0; curDM = curDM->parent) {
 		if (curDM->dataModelType != OBJECT) {
 			continue;
 		}
@@ -242,6 +249,7 @@ static Selector_t* buildSelectorsArray(DataModelElement_t *rootDM, DataModelElem
 			} else {
 				continue;
 			}
+
 			/*
 			 * counter == 1 indicates that the value is already part of the stream 
 			 * and it is not necessary to parse the value from the i-th predicate
@@ -253,6 +261,9 @@ static Selector_t* buildSelectorsArray(DataModelElement_t *rootDM, DataModelElem
 							memcpy((char*)&array[i].value,value,SIZE_INT);
 						} else {
 							STRTOINT((char*)value,(*(int*)&array[i].value));
+							if (*(int*)&array[i].value == -1) {
+								wildcards++;
+							}
 						}
 						DEBUG_MSG(2,"copied int to index %d: %d\n",i,*(int*)array[i].value);
 						break;
@@ -262,6 +273,9 @@ static Selector_t* buildSelectorsArray(DataModelElement_t *rootDM, DataModelElem
 							memcpy((char*)&array[i].value,value,SIZE_BYTE);
 						} else {
 							STRTOCHAR((char*)value,array[i].value[0]);
+							if (array[i].value[0] == -1) {
+								wildcards++;
+							}
 						}
 						DEBUG_MSG(2,"copied byte to index %d: %c\n",i,array[i].value[0]);
 						break;
@@ -272,20 +286,30 @@ static Selector_t* buildSelectorsArray(DataModelElement_t *rootDM, DataModelElem
 							memcpy((char*)&array[i].value,value,SIZE_FLOAT);
 						} else {
 							*(float*)&array[i].value = atof((char*)&value);
+							if (*(float*)&array[i].value == -1) {
+								wildcards++;
+							}
 						}
 						DEBUG_MSG(2,"copied float to index %d: %e\n",i,*(float*)array[i].value);
 						#endif
 						break;
 
 					case STRING:
-						strncpy((char*)&array[i].value,(char*)*(PTR_TYPE*)value,MAX_NAME_LEN);
+						if (counter == 1) {
+							strncpy((char*)&array[i].value,(char*)*(PTR_TYPE*)value,MAX_NAME_LEN);
+						} else {
+							strncpy((char*)&array[i].value,(char*)value,MAX_NAME_LEN);
+							if (*(char*)&array[i].value == '*') {
+								wildcards++;
+							}
+						}
 						DEBUG_MSG(2,"copied string to index %d@%p: %s\n",i,(char*)*(PTR_TYPE*)value,array[i].value);
 						break;
 				}
 				i--;
 				break;
 			} else {
-				DEBUG_MSG(1,"buildarray dm==NULL\n");
+				ERR_MSG("%s:%d: dm=%s, curDM=%s\n",__FUNCTION__,__LINE__,dm->name, curDM->name);
 			}
 		}
 	}
@@ -294,9 +318,17 @@ static Selector_t* buildSelectorsArray(DataModelElement_t *rootDM, DataModelElem
 	 */
 	if (i >= 0) {
 		FREE(array);
-		return NULL;
+		*selecArray = NULL;
+		*runOnce = 0;
+		return -1;
 	}
-	return array;
+	/*
+	 * #selectors has to be equal to the number of object on the path to the datamodel node.
+	 * If the user set all selectors to their type-specific wildcards, tell the caller to call
+	 * this function only once.
+	 */
+	*runOnce = wildcards == *len;
+	return 0;
 }
 
 static void applyFilter(DataModelElement_t *rootDM, Filter_t *filterOperator, Tupel_t **headTuple) {
@@ -434,6 +466,7 @@ static int doJoin(DataModelElement_t *rootDM,Join_t *join, Tupel_t **headTupleSt
 	Selector_t *selecs = NULL;
 	Tupel_t *curTupleJoin = NULL, *nextTupleJoin = NULL, *lastTupleJoin = NULL, *curTupleStream = NULL, *prevTupleStream = NULL, *tempTuple = NULL, *nextTupleStream = NULL;
 	int i = 0, len = 0, shouldMerge = 0, applied = 0, moreStreamTuple = 0, moreJoinTuple = 0;
+	char createSelecOnce = 0; 
 	#ifdef __KERNEL__
 	unsigned long flags;
 	#endif
@@ -446,8 +479,7 @@ static int doJoin(DataModelElement_t *rootDM,Join_t *join, Tupel_t **headTupleSt
 	if (dm->layerCode != LAYER_CODE) {
 		return 2;
 	}
-	selecs = buildSelectorsArray(rootDM,dm,join,*headTupleStream,&len);
-	if (selecs == NULL) {
+	if (buildSelectorsArray(rootDM,dm,join,*headTupleStream,&selecs,&len,&createSelecOnce) == -1) {
 		goto out_error;
 	}
 	// Retrieve the new information...
@@ -486,16 +518,18 @@ static int doJoin(DataModelElement_t *rootDM,Join_t *join, Tupel_t **headTupleSt
 		if (shouldMerge == 1) {
 			if (moreStreamTuple == 1 && moreJoinTuple == 1) {
 				if (curTupleJoin == lastTupleJoin) {
-					/*
-					 * Reached the last one on the right hand side. Copy the current right tuple and append it.
-					 * There are more tuples on the left side. So, it might match with another tuple.
-					 */
-					while (lastTupleJoin->next != NULL) {
-						lastTupleJoin = lastTupleJoin->next;
-					}
-					lastTupleJoin->next = copyTupel(rootDM,curTupleJoin);
-					if (lastTupleJoin->next == NULL) {
-						goto out_error;
+					if (createSelecOnce == 1) {
+						/*
+						 * Reached the last one on the right hand side. Copy the current right tuple and append it.
+						 * There are more tuples on the left side. So, it might match with another tuple.
+						 */
+						while (lastTupleJoin->next != NULL) {
+							lastTupleJoin = lastTupleJoin->next;
+						}
+						lastTupleJoin->next = copyTupel(rootDM,curTupleJoin);
+						if (lastTupleJoin->next == NULL) {
+							goto out_error;
+						}
 					}
 				} else {
 					/*
@@ -509,29 +543,34 @@ static int doJoin(DataModelElement_t *rootDM,Join_t *join, Tupel_t **headTupleSt
 					}
 					tempTuple->next = curTupleStream->next;
 					curTupleStream->next = tempTuple;
-					/*
-					 * We have further tuples in the stream. Therefore, copy the current tuple from the right side
-					 * and append it.
-					 */
-					tempTuple = lastTupleJoin;
-					while (tempTuple->next != NULL) {
-						tempTuple = tempTuple->next;
-					}
-					tempTuple->next = copyTupel(rootDM,curTupleJoin);
-					if (tempTuple->next == NULL) {
-						goto out_error;
+					
+					if (createSelecOnce == 1) {
+						/*
+						 * We have further tuples in the stream. Therefore, copy the current tuple from the right side
+						 * and append it.
+						 */
+						tempTuple = lastTupleJoin;
+						while (tempTuple->next != NULL) {
+							tempTuple = tempTuple->next;
+						}
+						tempTuple->next = copyTupel(rootDM,curTupleJoin);
+						if (tempTuple->next == NULL) {
+							goto out_error;
+						}
 					}
 				}
 			} else if (moreStreamTuple == 1 && moreJoinTuple == 0) {
-				/*
-				 * Reached the end of the sequence of right tuples, but got further tuples in stream to process.
-				 * Copy the current right tuple and append it.
-				 */
-				lastTupleJoin = copyTupel(rootDM,curTupleJoin);
-				if (lastTupleJoin == NULL) {
-					goto out_error;
+				if (createSelecOnce == 1) {
+					/*
+					 * Reached the end of the sequence of right tuples, but got further tuples in stream to process.
+					 * Copy the current right tuple and append it.
+					 */
+					lastTupleJoin = copyTupel(rootDM,curTupleJoin);
+					if (lastTupleJoin == NULL) {
+						goto out_error;
+					}
+					curTupleJoin->next = lastTupleJoin;
 				}
-				curTupleJoin->next = lastTupleJoin;
 			} else if (moreStreamTuple == 0 && moreJoinTuple == 1) {
 				/*
 				 * Reached the end of the tuples in stream, but got further tuples on the right side.
@@ -577,12 +616,15 @@ static int doJoin(DataModelElement_t *rootDM,Join_t *join, Tupel_t **headTupleSt
 					 * Got further tuples in stream. Hence, move the current right tuple to the end.
 					 */
 					nextTupleJoin = lastTupleJoin->next;
-					while (lastTupleJoin->next != NULL) {
-						lastTupleJoin = lastTupleJoin->next;
+					if (createSelecOnce == 1) {
+						while (lastTupleJoin->next != NULL) {
+							lastTupleJoin = lastTupleJoin->next;
+						}
+						lastTupleJoin->next = curTupleJoin;
+						curTupleJoin->next = NULL;
+					} else {
+						freeTupel(rootDM,lastTupleJoin);
 					}
-					lastTupleJoin->next = curTupleJoin;
-					curTupleJoin->next = NULL;
-					
 				} else {
 					/*
 					 * Got further tuples on the right side. So, still use the current stream tuple, 
@@ -590,12 +632,16 @@ static int doJoin(DataModelElement_t *rootDM,Join_t *join, Tupel_t **headTupleSt
 					 */
 					nextTupleStream = curTupleStream;
 					nextTupleJoin = curTupleJoin->next;
-					tempTuple = lastTupleJoin;
-					while (tempTuple->next != NULL) {
-						tempTuple = tempTuple->next;
+					if (createSelecOnce == 1) {
+						tempTuple = lastTupleJoin;
+						while (tempTuple->next != NULL) {
+							tempTuple = tempTuple->next;
+						}
+						tempTuple->next = curTupleJoin;
+						curTupleJoin->next = NULL;
+					} else {
+						freeTupel(rootDM,curTupleJoin);
 					}
-					tempTuple->next = curTupleJoin;
-					curTupleJoin->next = NULL;
 				}
 			} else if (moreStreamTuple == 1 && moreJoinTuple == 0) {
 				/*
@@ -603,7 +649,12 @@ static int doJoin(DataModelElement_t *rootDM,Join_t *join, Tupel_t **headTupleSt
 				 * But keep the current right tuple, because there are further
 				 * tuples in stream.
 				 */
-				nextTupleJoin = curTupleJoin;
+				if (createSelecOnce == 1) {
+					nextTupleJoin = curTupleJoin;
+				} else {
+					nextTupleJoin = curTupleJoin->next;
+					freeTupel(rootDM,curTupleJoin);
+				}
 				nextTupleStream = curTupleStream->next;
 				if (prevTupleStream != NULL) {
 					prevTupleStream->next = nextTupleStream;
@@ -634,6 +685,37 @@ static int doJoin(DataModelElement_t *rootDM,Join_t *join, Tupel_t **headTupleSt
 				freeTupel(rootDM,curTupleJoin);
 			}
 		}
+		// No further tuples on the right side && at least one more tuple in stream && next stream tuple is not equal to the current one && rebuild selector array new stream tuple 
+		if (nextTupleJoin == NULL && nextTupleStream != NULL  && nextTupleStream != curTupleStream && createSelecOnce == 0) {
+			do {
+				// Rebuild the selectors array => read the selectors from the next tuple in stream
+				buildSelectorsArray(rootDM,dm,join,nextTupleStream,&selecs,&len,&createSelecOnce);
+				// Call the join node again to retrieve a new list of tuples (a.k.a right side) to join
+				if (dm->dataModelType == OBJECT) {
+					nextTupleJoin = ((Object_t*)dm->typeInfo)->status(selecs,len);
+				} else if (dm->dataModelType == SOURCE) {
+					ACQUIRE_WRITE_LOCK(((Source_t*)dm->typeInfo)->lock);
+					nextTupleJoin = ((Source_t*)dm->typeInfo)->callback(selecs,len);
+					RELEASE_WRITE_LOCK(((Source_t*)dm->typeInfo)->lock);
+				}
+				if (nextTupleJoin != NULL) {
+					lastTupleJoin = nextTupleJoin;
+					// Find the last tuple on the right hand side
+					while (lastTupleJoin->next != NULL) {
+						lastTupleJoin = lastTupleJoin->next;
+					}
+				} else {
+					tempTuple = nextTupleStream->next;
+					if (prevTupleStream != NULL) {
+						prevTupleStream->next = NULL;
+					} else {
+						*headTupleStream = NULL;
+					}
+					freeTupel(SLC_DATA_MODEL,nextTupleStream);
+					nextTupleStream = tempTuple;
+				}
+			} while (nextTupleJoin == NULL && nextTupleStream != NULL);
+		}
 		curTupleJoin = nextTupleJoin;
 		curTupleStream = nextTupleStream;
 	}
@@ -641,7 +723,9 @@ static int doJoin(DataModelElement_t *rootDM,Join_t *join, Tupel_t **headTupleSt
 	return applied > 0;
 
 out_error:
-	FREE(selecs);
+	if (selecs != NULL) {
+		FREE(selecs);
+	}
 	curTupleStream = *headTupleStream;
 	while (curTupleStream != NULL) {
 		tempTuple = curTupleStream->next;
