@@ -124,6 +124,10 @@ enum SizeUnit {
 	SIZEUNIT_END
 };
 
+enum PredicateFlags {
+	PRED_SELEC		=	1 << 1,
+};
+
 typedef void (*queryCompletedFunction)(unsigned int,Tupel_t*);
 /**
  * An object, event or source someone registers on may be nested into
@@ -241,6 +245,7 @@ typedef struct __attribute__((packed)) ObjectStream {
 } ObjectStream_t;
 
 typedef struct __attribute__((packed)) Predicate {
+		unsigned short flags;
 		unsigned short type;
 		Operand_t left;
 		Operand_t right;

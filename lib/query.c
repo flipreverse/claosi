@@ -24,6 +24,9 @@ static int applyPredicate(DataModelElement_t *rootDM, Predicate_t *predicate, Tu
 	void *valueLeft = NULL, *valueRight = NULL;
 	DataModelElement_t *dm = NULL;
 
+	if (TEST_BIT(predicate->flags,PRED_SELEC)) {
+		return 1;
+	}
 	if (predicate->left.type == OP_POD) {
 		//valueLeft = &predicate->left.value;
 		valueLeft = NULL;
@@ -255,6 +258,7 @@ static int buildSelectorsArray(DataModelElement_t *rootDM, DataModelElement_t *j
 			 * and it is not necessary to parse the value from the i-th predicate
 			 */
 			if (dm != NULL && dm == curDM) {
+				SET_BIT(join->predicates[j]->flags,PRED_SELEC);
 				switch (((Object_t*)dm->typeInfo)->identifierType) {
 					case INT:
 						if (counter == 1) {
@@ -487,7 +491,9 @@ static int doJoin(DataModelElement_t *rootDM,Join_t *join, Tupel_t **headTupleSt
 		if (nextTupleJoin == NULL && nextTupleStream != NULL  && nextTupleStream != curTupleStream && createSelecOnce == 0) {
 			do {
 				// Rebuild the selectors array => read the selectors from the next tuple in stream
-				buildSelectorsArray(rootDM,dm,join,nextTupleStream,&selecs,&len,&createSelecOnce);
+				if (buildSelectorsArray(rootDM,dm,join,nextTupleStream,&selecs,&len,&createSelecOnce) == -1) {
+					goto out_error;
+				}
 				// Call the join node again to retrieve a new list of tuples (a.k.a right side) to join
 				if (dm->dataModelType == OBJECT) {
 					nextTupleJoin = ((Object_t*)dm->typeInfo)->status(selecs,len);

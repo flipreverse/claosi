@@ -109,7 +109,7 @@ static Tupel_t* getSrcUTime(Selector_t *selectors, int len) {
 	static int numCalls = 0;
 
 	numCalls++;
-	if (numCalls <= 1) {
+	if (numCalls <= 2) {
 		tuple = initTupel(20140823,2);
 		allocItem(SLC_DATA_MODEL,tuple,0,"process.process");
 		setItemInt(SLC_DATA_MODEL,tuple,"process.process",1);

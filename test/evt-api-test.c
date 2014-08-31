@@ -87,6 +87,7 @@ static Tupel_t* getSrc(Selector_t *selectors, int len) {
 	Tupel_t *tuple = NULL;
 	char *name = NULL;
 
+printf("selectors[0]=%s\n",(char*)selectors[0].value);
 	name = malloc(strlen("eth1") + 1);
 	strcpy(name,"eth0");
 	tuple = initTupel(20140531,2);
@@ -147,7 +148,7 @@ static void setupQueries(void) {
 	SET_PREDICATE(joinProcessOP_PODPredicate,EQUAL, OP_POD, "1", OP_POD, "1")
 	ADD_PREDICATE(joinProcessStime,1,joinProcessStimePredicate)
 	//SET_PREDICATE(joinProcessStimePredicate,EQUAL, OP_STREAM, "net.device", OP_JOIN, "net.device")
-	SET_PREDICATE(joinProcessStimePredicate,EQUAL, OP_STREAM, "net.device", OP_JOIN, "net.device")
+	SET_PREDICATE(joinProcessStimePredicate,EQUAL, OP_JOIN, "net.device", OP_POD, "*")
 }
 
 static void initDatamodel(void) {
