@@ -21,7 +21,7 @@
 #endif
 
 #define EVALUATION
-#undef EVALUATION
+//#undef EVALUATION
 
 #define MAX_NAME_LEN						40
 #define DECLARE_BUFFER(name)				char name[MAX_NAME_LEN + 1];
@@ -228,17 +228,23 @@ static inline unsigned long long getCycles(void) {
 	unsigned long long ret = 0;
 
 #if defined(__i386__)
-	asm volatile("cpuid\n"
-				 "rdtsc"
-				 : "=A" (ret));
+	unsigned int low = 0, high = 0;
+	asm volatile("CPUID\n\t"
+				 "RDTSC\n\t"
+				 "mov %%edx, %0\n\t"
+				 "mov %%eax, %1\n\t"
+				 : "=r" (high), "=r" (low) :
+				 : "%eax", "%edx");
+	ret = ((unsigned long long)high << 32) | (unsigned long long)low;
 #elif defined(__x86_64__)
 	unsigned int low = 0, high = 0;
 	asm volatile("CPUID\n\t"
 				 "RDTSC\n\t"
 				 "mov %%edx, %0\n\t"
 				 "mov %%eax, %1\n\t"
-				 : "=r" (high), "=r" (low):: "%rax", "%rbx", "%rcx", "%rdx");
-	ret = (high << 32) | low;
+				 : "=r" (high), "=r" (low):
+				 : "%rax", "%rbx", "%rcx", "%rdx");
+	ret = ((unsigned long long)high << 32) | (unsigned long long)low;
 #elif defined(__arm__)
 	ret = 0;
 #else
