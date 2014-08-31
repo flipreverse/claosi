@@ -400,6 +400,8 @@ int initSLC(void) {
  */
 void destroySLC(void) {
 	if (SLC_DATA_MODEL != NULL) {
-		FREE(SLC_DATA_MODEL);
+		//FREE(SLC_DATA_MODEL);
+		freeDataModel(SLC_DATA_MODEL, 1);
+		SLC_DATA_MODEL = NULL;
 	}
 }
