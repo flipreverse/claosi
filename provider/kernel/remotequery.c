@@ -9,14 +9,21 @@ static Query_t queryDisplay;
 static EventStream_t displayStream;
 
 static void printResult(unsigned int id, Tupel_t *tupel) {
+#ifndef EVALUATION
 	struct timeval time;
+#endif
 	unsigned long long timeUS;
 	int x = 0, y = 0;
 
+#ifdef EVALUATION
+	timeUS = getCycles();
+#else
 	do_gettimeofday(&time);
+	timeUS = (unsigned long long)time.tv_sec * (unsigned long long)USEC_PER_SEC + (unsigned long long)time.tv_usec;
+#endif
+
 	x = getItemInt(SLC_DATA_MODEL,tupel,"ui.eventType.xPos");
 	y = getItemInt(SLC_DATA_MODEL,tupel,"ui.eventType.yPos");
-	timeUS = (unsigned long long)time.tv_sec * (unsigned long long)USEC_PER_SEC + (unsigned long long)time.tv_usec;
 	//printk("timeStart=%llu, timeEnd=%llu, id=%u, tuple=0x%p\n",tupel->timestamp,timeUS,tupel->id,tupel);
 	printk("processing duration: %llu us, query id: %u,xPos=%d, yPos=%d\n",timeUS - tupel->timestamp,id,x,y);
 	freeTupel(SLC_DATA_MODEL,tupel);

@@ -72,6 +72,9 @@ void enqueueQuery(Query_t *query, Tupel_t *tuple, int step) {
 	job->query = query;
 	job->tuple = tuple;
 	job->step = step;
+#ifdef EVALUATION
+	job->tuple->timestamp2 = getCycles();
+#endif
 	// Enqueue it
 	list_add_tail(&job->list,&queriesToExecList);
 	atomic_inc(&waitingQueries);

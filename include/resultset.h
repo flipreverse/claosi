@@ -24,9 +24,12 @@ typedef struct __attribute__((packed)) Item {
 
 typedef struct __attribute__((packed)) Tupel {
 	struct Tupel *next;
+	#ifdef EVALUATION
+	unsigned long long timestamp2;
+	#endif
 	unsigned long long timestamp;				// The current time since 1-1-1970 in ms
 	unsigned short itemLen;						// Number of items
-	unsigned int flags;						// If the first byte contains an one, the tupel and its items are stored in one large memory area. If so, the remaining bytes contain the size of thie area in bytes.
+	unsigned int flags;							// If the first byte contains an one, the tupel and its items are stored in one large memory area. If so, the remaining bytes contain the size of thie area in bytes.
 	Item_t **items;
 } Tupel_t;
 

@@ -15,22 +15,34 @@ static Predicate_t commPredicate, stimePredicate, filterPIDPredicate, utimePred,
 static Filter_t filterPID, utimeFilter;
 
 static void printResult(unsigned int id, Tupel_t *tupel) {
+#ifndef EVALUATION
 	struct timeval time;
+#endif
 	unsigned long long timeUS;
 
+#ifdef EVALUATION
+	timeUS = getCycles();
+#else
 	gettimeofday(&time,NULL);
 	timeUS = (unsigned long long)time.tv_sec * (unsigned long long)USEC_PER_SEC + (unsigned long long)time.tv_usec;
+#endif
 	printf("processing duration: %llu us, query id: %u,",timeUS - tupel->timestamp,id);
 	printTupel(SLC_DATA_MODEL,tupel);
 	freeTupel(SLC_DATA_MODEL,tupel);
 }
 
 static void printResultJoin(unsigned int id, Tupel_t *tupel) {
+#ifndef EVALUATION
 	struct timeval time;
+#endif
 	unsigned long long timeUS;
 
+#ifdef EVALUATION
+	timeUS = getCycles();
+#else
 	gettimeofday(&time,NULL);
 	timeUS = (unsigned long long)time.tv_sec * (unsigned long long)USEC_PER_SEC + (unsigned long long)time.tv_usec;
+#endif
 	printf("Received tupel with %d items at memory address %p (process duration: %llu us): task %d: comm %s, stime %d\n",
 					tupel->itemLen,
 					tupel,
@@ -42,12 +54,18 @@ static void printResultJoin(unsigned int id, Tupel_t *tupel) {
 }
 
 static void printResultRx(unsigned int id, Tupel_t *tupel) {
+#ifndef EVALUATION
 	struct timeval time;
-	unsigned long long timeMS = 0;
+#endif
+	unsigned long long timeUS = 0;
 
+#ifdef EVALUATION
+	timeUS = getCycles();
+#else
 	gettimeofday(&time,NULL);
-	timeMS = (unsigned long long)time.tv_sec * (unsigned long long)USEC_PER_SEC + (unsigned long long)time.tv_usec;
-	printf("Received packet on device %s. Device received %d bytes so far. (itemLen=%d,tuple=%p,duration=%llu us)\n",getItemString(SLC_DATA_MODEL,tupel,"net.device"),getItemInt(SLC_DATA_MODEL,tupel,"net.device.rxBytes"),tupel->itemLen,tupel,timeMS - tupel->timestamp);
+	timeUS = (unsigned long long)time.tv_sec * (unsigned long long)USEC_PER_SEC + (unsigned long long)time.tv_usec;
+#endif
+	printf("Received packet on device %s. Device received %d bytes so far. (itemLen=%d,tuple=%p,duration=%llu us)\n",getItemString(SLC_DATA_MODEL,tupel,"net.device"),getItemInt(SLC_DATA_MODEL,tupel,"net.device.rxBytes"),tupel->itemLen,tupel,timeUS - tupel->timestamp);
 	freeTupel(SLC_DATA_MODEL,tupel);
 }
 

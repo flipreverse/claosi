@@ -20,6 +20,9 @@
 #define PAGE_SIZE 4096
 #endif
 
+#define EVALUATION
+#undef EVALUATION
+
 #define MAX_NAME_LEN						40
 #define DECLARE_BUFFER(name)				char name[MAX_NAME_LEN + 1];
 #define PROCFS_DIR_NAME						"slc"
@@ -220,5 +223,29 @@ enum {
 	EMAXQUERIES,					// The maximum number of queries assigned to a node is reached
 	ESELECTORS						//
 };
+
+static inline unsigned long long getCycles(void) {
+	unsigned long long ret = 0;
+
+#if defined(__i386__)
+	asm volatile("cpuid\n"
+				 "rdtsc"
+				 : "=A" (ret));
+#elif defined(__x86_64__)
+	unsigned int low = 0, high = 0;
+	asm volatile("CPUID\n\t"
+				 "RDTSC\n\t"
+				 "mov %%edx, %0\n\t"
+				 "mov %%eax, %1\n\t"
+				 : "=r" (high), "=r" (low):: "%rax", "%rbx", "%rcx", "%rdx");
+	ret = (high << 32) | low;
+#elif defined(__arm__)
+	ret = 0;
+#else
+#error Unknown architecture
+#endif
+
+	return ret;
+}
 
 #endif // __COMMON_H__
