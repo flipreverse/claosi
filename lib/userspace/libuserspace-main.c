@@ -61,33 +61,11 @@ static void unloadProvider(LoadedProvider_t *curProv) {
 
 static void* fifoWork(void *data) {
 	FILE *cmdFifo;
-	struct stat fifo_stat;
 	void *curDL = NULL;
 	int read = 0, ret = 0;
 	LoadedProvider_t *curProv = NULL, *tmpProv = NULL;
 	int (*onLoadFn)(void);
 
-	// Does the fifo exist?
-	if (stat(FIFO_PATH,&fifo_stat) < 0) {
-		// No. Create it.
-		if (errno == ENOENT) {
-			ERR_MSG("FIFO does not exist. Try to create it.\n");
-			if (mkfifo(FIFO_PATH,0777) < 0) {
-				perror("mkfifo");
-				pthread_exit(0);
-			}
-			DEBUG_MSG(3,"Created fifo: %s\n",FIFO_PATH);
-		} else {
-			ERR_MSG("Error probing for FIFO (%s): %s\n",FIFO_PATH,strerror(errno));
-			pthread_exit(0);
-		}
-	} else {
-		// The path exists, but is not a fifo --> Exit.
-		if (!S_ISFIFO(fifo_stat.st_mode)) {
-			ERR_MSG("%s is not a fifo.\n",FIFO_PATH);
-			pthread_exit(0);
-		}
-	}
 	while (1) {
 		cmdFifo = fopen(FIFO_PATH,"r");
 		if (cmdFifo == NULL) {
@@ -188,7 +166,30 @@ static void* fifoWork(void *data) {
 }
 
 int main(int argc, const char *argv[]) {
+	struct stat fifo_stat;
 	LIST_INIT(&providerList);
+
+	// Does the fifo exist?
+	if (stat(FIFO_PATH,&fifo_stat) < 0) {
+		// No. Create it.
+		if (errno == ENOENT) {
+			ERR_MSG("FIFO does not exist. Try to create it.\n");
+			if (mkfifo(FIFO_PATH,0777) < 0) {
+				perror("mkfifo");
+				return EXIT_FAILURE;
+			}
+			DEBUG_MSG(3,"Created fifo: %s\n",FIFO_PATH);
+		} else {
+			ERR_MSG("Error probing for FIFO (%s): %s\n",FIFO_PATH,strerror(errno));
+			return EXIT_FAILURE;
+		}
+	} else {
+		// The path exists, but is not a fifo --> Exit.
+		if (!S_ISFIFO(fifo_stat.st_mode)) {
+			ERR_MSG("%s is not a fifo.\n",FIFO_PATH);
+			return EXIT_FAILURE;
+		}
+	}
 
 	// First, bring up the layer-specific stuff
 	if (initLayer() < 0) {
