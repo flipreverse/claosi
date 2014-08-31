@@ -16,7 +16,7 @@ static void freeItem(DataModelElement_t *rootDM, void *value, DataModelElement_t
 	curValue = value;
 	do {
 		steppedDown = 0;
-		GET_TYPE_FROM_DM(curNode,type);
+		type = resolveType(rootDM,curNode);
 		/*
 		 * If the current node is a string array, it needs a special treatment.
 		 * The code must iterate over all array elements and free them as well.
@@ -150,7 +150,7 @@ static int getItemSize(DataModelElement_t *rootDM, void *value, DataModelElement
 	curValue = value;
 	do {
 		steppedDown = 0;
-		GET_TYPE_FROM_DM(curNode,type);
+		type = resolveType(rootDM,curNode);
 		//printf("curNode=%s@%d\n",curNode->name,curOffset);
 		if ((type & (STRING | ARRAY)) == (STRING | ARRAY)) {
 			DEBUG_MSG(2,"Calculating size of string array %s@%p (%d)\n",curNode->name,(void*)*(PTR_TYPE*)curValue,size);
@@ -275,7 +275,7 @@ static int copyAndCollectAdditionalMem(DataModelElement_t *rootDM, void *oldValu
 	do {
 		steppedDown = 0;
 		temp = 0;
-		GET_TYPE_FROM_DM(curNode,type);
+		type = resolveType(rootDM,curNode);
 		//printf("curNode=%s@%d\n",curNode->name,curOffset);
 		if ((type & (STRING | ARRAY)) == (STRING | ARRAY)) {
 			*((PTR_TYPE*)curValueNew) = (PTR_TYPE)freeMem;
@@ -450,7 +450,7 @@ static int copyAdditionalMem(DataModelElement_t *rootDM, void *oldValue, void *n
 	do {
 		steppedDown = 0;
 		temp = 0;
-		GET_TYPE_FROM_DM(curNode,type);
+		type = resolveType(rootDM,curNode);
 		//printf("curNode=%s@%d\n",curNode->name,curOffset);
 		if ((type & (STRING | ARRAY)) == (STRING | ARRAY)) {
 			len = temp = *(int*)(*((PTR_TYPE*)(curValueOld)));
@@ -628,7 +628,7 @@ static int rewriteAdditionalMem(DataModelElement_t *rootDM, void *valuePtr, void
 	do {
 		steppedDown = 0;
 		temp = 0;
-		GET_TYPE_FROM_DM(curNode,type);
+		type = resolveType(rootDM,curNode);
 		if ((type & (STRING | ARRAY)) == (STRING | ARRAY)) {
 			ptr = (PTR_TYPE*)(curValue);
 			*ptr = REWRITE_ADDR(*ptr,oldBaseAddr,newBaseAddr);

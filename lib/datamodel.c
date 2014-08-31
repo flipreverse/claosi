@@ -150,29 +150,7 @@ int getDataModelSize(DataModelElement_t *rootDM, DataModelElement_t *elem, int i
 	if (elem == NULL) {
 		return -1;
 	}
-	do {
-		ret = 0;
-		if (elem->dataModelType == REF) {
-			elem = getDescription(rootDM,(char*)elem->typeInfo);
-			ret = 1;
-		} else if (elem->dataModelType == SOURCE) {
-			type = ((Source_t*)elem->typeInfo)->returnType;
-			if (type & COMPLEX) {
-				elem = getDescription(rootDM,((Source_t*)elem->typeInfo)->returnName);
-				ret = 1;
-			}
-		} else if (elem->dataModelType == EVENT) {
-			type = ((Event_t*)elem->typeInfo)->returnType;
-			if (type & COMPLEX) {
-				elem = getDescription(rootDM,((Event_t*)elem->typeInfo)->returnName);
-				ret = 1;
-			}
-		} else if (elem->dataModelType == OBJECT) {
-			type = ((Object_t*)elem->typeInfo)->identifierType;
-		} else {
-			type = elem->dataModelType;
-		}
-	} while (ret == 1);
+	type = resolveType(rootDM,elem);
 
 	if ((type & ARRAY) && ignoreArray == 0) {
 		size = SIZE_ARRAY;

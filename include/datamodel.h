@@ -125,7 +125,45 @@ int calcDatamodelSize(DataModelElement_t *node);
 void copyAndCollectDatamodel(DataModelElement_t *node, void *freeMem);
 void rewriteDatamodelAddress(DataModelElement_t *node, void *oldBaseAddr, void *newBaseAddr);
 void sendDatamodel(DataModelElement_t *root, int type);
-//#define getSize(rootDMVar, elemVar) getDataModelSize(rootDMVar,elemVar,1)
+
+/**
+ * Sometimes a path specifitcations leads to a source, object, event or a reference.
+ * If so, it is necessary to resolve the actual type by interpreting the type-specific information stored in
+ * typeInfo.
+ * This function will resolve the data type of {@link elem}. 
+ * @param rootDM a pointer to the root of the datamodel
+ * @param elem a pointer to a datamodel node whose type should be resolved
+ * @return the plain type of {@link elem}
+ */
+static inline int resolveType(DataModelElement_t *rootDM, DataModelElement_t *elem) {
+	int ret = 0, type = 0;
+
+	do {
+		ret = 0;
+		if (elem->dataModelType == REF) {
+			elem = getDescription(rootDM,(char*)elem->typeInfo);
+			ret = 1;
+		} else if (elem->dataModelType == SOURCE) {
+			type = ((Source_t*)elem->typeInfo)->returnType;
+			if (type & COMPLEX) {
+				elem = getDescription(rootDM,((Source_t*)elem->typeInfo)->returnName);
+				ret = 1;
+			}
+		} else if (elem->dataModelType == EVENT) {
+			type = ((Event_t*)elem->typeInfo)->returnType;
+			if (type & COMPLEX) {
+				elem = getDescription(rootDM,((Event_t*)elem->typeInfo)->returnName);
+				ret = 1;
+			}
+		} else if (elem->dataModelType == OBJECT) {
+			type = ((Object_t*)elem->typeInfo)->identifierType;
+		} else {
+			type = elem->dataModelType;
+		}
+	} while (ret == 1);
+
+	return type;
+}
 
 #define SET_CHILDREN_ARRAY(varName,numChildren) if (numChildren > 0) { \
 		varName.children = ALLOC_STATIC_CHILDREN_ARRAY(numChildren); \

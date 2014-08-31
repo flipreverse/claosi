@@ -36,14 +36,14 @@ static int applyPredicate(DataModelElement_t *rootDM, Predicate_t *predicate, Tu
 		if (valueLeft == NULL) {
 			return 0;
 		}
-		GET_TYPE_FROM_DM(dm,typeLeft);
+		typeLeft = resolveType(rootDM,dm);
 	} else if (predicate->left.type == OP_JOIN) {
 		// Resolve the memory location where the value is stored we want to compare
 		valueLeft = getMemberPointer(rootDM,tupleJoin,(char*)&predicate->left.value,&dm);
 		if (valueLeft == NULL) {
 			return 0;
 		}
-		GET_TYPE_FROM_DM(dm,typeLeft);
+		typeLeft = resolveType(rootDM,dm);
 	} else {
 		return 0;
 	}
@@ -57,14 +57,14 @@ static int applyPredicate(DataModelElement_t *rootDM, Predicate_t *predicate, Tu
 		if (valueRight == NULL) {
 			return 0;
 		}
-		GET_TYPE_FROM_DM(dm,typeRight);
+		typeRight = resolveType(rootDM,dm);
 	} else if (predicate->right.type == OP_JOIN) {
 		// Resolve the memory location where the value is stored we want to compare
 		valueRight = getMemberPointer(rootDM,tupleJoin,(char*)&predicate->right.value,&dm);
 		if (valueRight == NULL) {
 			return 0;
 		}
-		GET_TYPE_FROM_DM(dm,typeRight);
+		typeRight = resolveType(rootDM,dm);
 	} else {
 		return 0;
 	}

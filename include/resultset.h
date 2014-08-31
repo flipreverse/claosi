@@ -17,26 +17,6 @@ enum TupleFlags {
 
 #define ALLOC_ITEM_ARRAY(size)	(Item_t**)ALLOC(sizeof(Item_t**) * size)
 
-/**
- * This macro does the same as GET_MEMBER_POINTER_ALGO_ONLY besides it declares
- * the datamodelElementVar and the valuePtrVar.
- * This macro is used in all get and set methods.
- */
-/**
- * Sometimes a path specifitcations leads to a Source, Object or an Event.
- * If so, it is necessary to resolve the actual type by interpreting the type-specific information stored in
- * typeInfo.
- */
-#define GET_TYPE_FROM_DM(varName,varType) if (varName->dataModelType == SOURCE) { \
-	varType = ((Source_t*)varName->typeInfo)->returnType; \
-} else if (varName->dataModelType == EVENT) { \
-	varType = ((Event_t*)varName->typeInfo)->returnType; \
-} else if (varName->dataModelType == OBJECT) { \
-	varType = ((Object_t*)varName->typeInfo)->identifierType; \
-} else { \
-	varType = varName->dataModelType; \
-}
-
 typedef struct __attribute__((packed)) Item {
 	DECLARE_BUFFER(name)						// A path describing the way down to the datamodel element stored at value, e.g. "net.packetType" and value points to the first element of packetType.
 	void *value;								// A pointer to a memory area where the values resides
