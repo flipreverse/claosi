@@ -173,6 +173,7 @@ static Tupel_t* getComm(Selector_t *selectors, int len) {
 	}
 	// Resolve it to a struct task_struct
 	task = get_pid_task(pid,PIDTYPE_PID);
+	put_pid(pid);
 	if (task == NULL) {
 		return NULL;
 	}
@@ -183,7 +184,6 @@ static Tupel_t* getComm(Selector_t *selectors, int len) {
 	}
 	strcpy(comm,task->comm);
 	// Give them back to the kernel
-	put_pid(pid);
 	put_task_struct(task);
 
 	do_gettimeofday(&time);
@@ -218,13 +218,13 @@ static Tupel_t* getSTime(Selector_t *selectors, int len) {
 	}
 	// Resolve it to a struct task_struct
 	task = get_pid_task(pid,PIDTYPE_PID);
+	put_pid(pid);
 	if (task == NULL) {
 		return NULL;
 	}
 	// .. and read the stime
 	sTimeUS = jiffies_to_usecs(task->stime);
 	// Give them back to the kernel
-	put_pid(pid);
 	put_task_struct(task);
 
 	do_gettimeofday(&time);
@@ -260,13 +260,13 @@ static Tupel_t* getUTime(Selector_t *selectors, int len) {
 	}
 	// Resolve it to a struct task_struct
 	task = get_pid_task(pid,PIDTYPE_PID);
+	put_pid(pid);
 	if (task == NULL) {
 		return NULL;
 	}
 	// .. and read the utime
 	uTimeUS = jiffies_to_usecs(task->utime);
 	// Give them back to the kernel
-	put_pid(pid);
 	put_task_struct(task);
 	//printk("task=%d, comm=%s, utime=%u(%lu), stime=%u(%lu)\n",task->pid,task->comm,jiffies_to_usecs(task->utime),task->utime,jiffies_to_usecs(task->stime),task->stime);
 
@@ -307,6 +307,7 @@ static Tupel_t* getSockets(Selector_t *selectors, int len) {
 	}
 	// Resolve it to a struct task_struct
 	task = get_pid_task(pid,PIDTYPE_PID);
+	put_pid(pid);
 	if (task == NULL) {
 		return NULL;
 	}
@@ -355,7 +356,6 @@ static Tupel_t* getSockets(Selector_t *selectors, int len) {
 	spin_unlock(&task->files->file_lock);
 
 	// Give them back to the kernel
-	put_pid(pid);
 	put_task_struct(task);
 
 	return head;
