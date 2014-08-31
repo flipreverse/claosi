@@ -106,19 +106,25 @@ static Tupel_t* getSrcSTime(Selector_t *selectors, int len) {
 
 static Tupel_t* getSrcUTime(Selector_t *selectors, int len) {
 	Tupel_t *tuple = NULL;
+	static int numCalls = 0;
 
-	tuple = initTupel(20140823,2);
-	allocItem(SLC_DATA_MODEL,tuple,0,"process.process");
-	setItemInt(SLC_DATA_MODEL,tuple,"process.process",1);
-	allocItem(SLC_DATA_MODEL,tuple,1,"process.process.utime");
-	setItemInt(SLC_DATA_MODEL,tuple,"process.process.utime",0xcaffee);
-#if 1
-	tuple->next = initTupel(20140712,2);
-	allocItem(SLC_DATA_MODEL,tuple->next,0,"process.process");
-	setItemInt(SLC_DATA_MODEL,tuple->next,"process.process",1);
-	allocItem(SLC_DATA_MODEL,tuple->next,1,"process.process.utime");
-	setItemInt(SLC_DATA_MODEL,tuple->next,"process.process.utime",1337);
-#endif
+	numCalls++;
+	if (numCalls <= 1) {
+		tuple = initTupel(20140823,2);
+		allocItem(SLC_DATA_MODEL,tuple,0,"process.process");
+		setItemInt(SLC_DATA_MODEL,tuple,"process.process",1);
+		allocItem(SLC_DATA_MODEL,tuple,1,"process.process.utime");
+		setItemInt(SLC_DATA_MODEL,tuple,"process.process.utime",0xcaffee);
+		#if 1
+		tuple->next = initTupel(20140712,2);
+		allocItem(SLC_DATA_MODEL,tuple->next,0,"process.process");
+		setItemInt(SLC_DATA_MODEL,tuple->next,"process.process",1);
+		allocItem(SLC_DATA_MODEL,tuple->next,1,"process.process.utime");
+		setItemInt(SLC_DATA_MODEL,tuple->next,"process.process.utime",1337);
+		#endif
+	} else {
+		return NULL;
+	}
 	return tuple;
 }
 

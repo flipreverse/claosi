@@ -88,15 +88,15 @@ static Tupel_t* getSrc(Selector_t *selectors, int len) {
 	char *name = NULL;
 
 	name = malloc(strlen("eth1") + 1);
-	strcpy(name,"eth1");
+	strcpy(name,"eth0");
 	tuple = initTupel(20140531,2);
 	allocItem(SLC_DATA_MODEL,tuple,0,"net.device");
 	setItemString(SLC_DATA_MODEL,tuple,"net.device",name);
-	allocItem(SLC_DATA_MODEL,tuple,1,"net.device.stime");
-	setItemInt(SLC_DATA_MODEL,tuple,"net.device.stime",42);
-	
-	name = malloc(strlen("eth0") + 1);
-	strcpy(name,"eth0");
+	allocItem(SLC_DATA_MODEL,tuple,1,"net.device.rxBytes");
+	setItemInt(SLC_DATA_MODEL,tuple,"net.device.rxBytes",42);
+
+	name = malloc(strlen("eth1") + 1);
+	strcpy(name,"eth1");
 	tuple->next = initTupel(20140712,2);
 	allocItem(SLC_DATA_MODEL,tuple->next,0,"net.device");
 	setItemString(SLC_DATA_MODEL,tuple->next,"net.device",name);
@@ -122,8 +122,8 @@ static void issueEvent(void) {
 	char *name = NULL;
 	tupel = initTupel(20140530,2);
 
-	name = malloc(strlen("eth0") + 1);
-	strcpy(name,"eth0");
+	name = malloc(strlen("eth1") + 1);
+	strcpy(name,"eth1");
 	allocItem(SLC_DATA_MODEL,tupel,0,"net.device");
 	setItemString(SLC_DATA_MODEL,tupel,"net.device",name);
 	allocItem(SLC_DATA_MODEL,tupel,1,"net.packetType");
@@ -146,8 +146,8 @@ static void setupQueries(void) {
 	ADD_PREDICATE(joinProcessStime,0,joinProcessOP_PODPredicate)
 	SET_PREDICATE(joinProcessOP_PODPredicate,EQUAL, OP_POD, "1", OP_POD, "1")
 	ADD_PREDICATE(joinProcessStime,1,joinProcessStimePredicate)
-	SET_PREDICATE(joinProcessStimePredicate,EQUAL, OP_JOIN, "net.device", OP_STREAM, "net.device")
-	
+	//SET_PREDICATE(joinProcessStimePredicate,EQUAL, OP_STREAM, "net.device", OP_JOIN, "net.device")
+	SET_PREDICATE(joinProcessStimePredicate,EQUAL, OP_STREAM, "net.device", OP_JOIN, "net.device")
 }
 
 static void initDatamodel(void) {
