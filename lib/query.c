@@ -479,32 +479,50 @@ static int doJoin(DataModelElement_t *rootDM,Join_t *join, Tupel_t **headTupleSt
 	if (dm->layerCode != LAYER_CODE) {
 		return 2;
 	}
-	if (buildSelectorsArray(rootDM,dm,join,*headTupleStream,&selecs,&len,&createSelecOnce) == -1) {
-		goto out_error;
-	}
-	// Retrieve the new information...
-	if (dm->dataModelType == OBJECT) {
-		curTupleJoin = ((Object_t*)dm->typeInfo)->status(selecs,len);
-	} else if (dm->dataModelType == SOURCE) {
-		ACQUIRE_WRITE_LOCK(((Source_t*)dm->typeInfo)->lock);
-		curTupleJoin = ((Source_t*)dm->typeInfo)->callback(selecs,len);
-		RELEASE_WRITE_LOCK(((Source_t*)dm->typeInfo)->lock);
-	} else {
-		ERR_MSG("DM is neither a source nor an object!\n");
-		goto out_error;
-	}
-	if (curTupleJoin == NULL) {
-		goto out_error;
-	}
 
+	nextTupleStream = *headTupleStream;
 	// Now do the actual join...
-	curTupleStream = *headTupleStream;
-	lastTupleJoin = curTupleJoin;
-	// Find the last tuple on the right hand side
-	while (lastTupleJoin->next != NULL) {
-		lastTupleJoin = lastTupleJoin->next;
-	}
-	while (curTupleStream != NULL) {
+	while (1) {
+		// No further tuples on the right side && at least one more tuple in stream && next stream tuple is not equal to the current one && rebuild selector array new stream tuple 
+		if (nextTupleJoin == NULL && nextTupleStream != NULL  && nextTupleStream != curTupleStream && createSelecOnce == 0) {
+			do {
+				// Rebuild the selectors array => read the selectors from the next tuple in stream
+				buildSelectorsArray(rootDM,dm,join,nextTupleStream,&selecs,&len,&createSelecOnce);
+				// Call the join node again to retrieve a new list of tuples (a.k.a right side) to join
+				if (dm->dataModelType == OBJECT) {
+					nextTupleJoin = ((Object_t*)dm->typeInfo)->status(selecs,len);
+				} else if (dm->dataModelType == SOURCE) {
+					ACQUIRE_WRITE_LOCK(((Source_t*)dm->typeInfo)->lock);
+					nextTupleJoin = ((Source_t*)dm->typeInfo)->callback(selecs,len);
+					RELEASE_WRITE_LOCK(((Source_t*)dm->typeInfo)->lock);
+				} else {
+					ERR_MSG("DM is neither a source nor an object!\n");
+					goto out_error;
+				}
+				if (nextTupleJoin != NULL) {
+					lastTupleJoin = nextTupleJoin;
+					// Find the last tuple on the right hand side
+					while (lastTupleJoin->next != NULL) {
+						lastTupleJoin = lastTupleJoin->next;
+					}
+				} else {
+					tempTuple = nextTupleStream->next;
+					if (prevTupleStream != NULL) {
+						prevTupleStream->next = NULL;
+					} else {
+						*headTupleStream = NULL;
+					}
+					freeTupel(SLC_DATA_MODEL,nextTupleStream);
+					nextTupleStream = tempTuple;
+				}
+			} while (nextTupleJoin == NULL && nextTupleStream != NULL);
+		}
+		if (nextTupleStream == NULL) {
+			break;
+		}
+		curTupleJoin = nextTupleJoin;
+		curTupleStream = nextTupleStream;
+
 		shouldMerge = 1;
 		for (i = 0; i < join->predicateLen; i++) {
 			if (applyPredicate(rootDM,join->predicates[i],curTupleStream,curTupleJoin) == 0) {
@@ -685,39 +703,6 @@ static int doJoin(DataModelElement_t *rootDM,Join_t *join, Tupel_t **headTupleSt
 				freeTupel(rootDM,curTupleJoin);
 			}
 		}
-		// No further tuples on the right side && at least one more tuple in stream && next stream tuple is not equal to the current one && rebuild selector array new stream tuple 
-		if (nextTupleJoin == NULL && nextTupleStream != NULL  && nextTupleStream != curTupleStream && createSelecOnce == 0) {
-			do {
-				// Rebuild the selectors array => read the selectors from the next tuple in stream
-				buildSelectorsArray(rootDM,dm,join,nextTupleStream,&selecs,&len,&createSelecOnce);
-				// Call the join node again to retrieve a new list of tuples (a.k.a right side) to join
-				if (dm->dataModelType == OBJECT) {
-					nextTupleJoin = ((Object_t*)dm->typeInfo)->status(selecs,len);
-				} else if (dm->dataModelType == SOURCE) {
-					ACQUIRE_WRITE_LOCK(((Source_t*)dm->typeInfo)->lock);
-					nextTupleJoin = ((Source_t*)dm->typeInfo)->callback(selecs,len);
-					RELEASE_WRITE_LOCK(((Source_t*)dm->typeInfo)->lock);
-				}
-				if (nextTupleJoin != NULL) {
-					lastTupleJoin = nextTupleJoin;
-					// Find the last tuple on the right hand side
-					while (lastTupleJoin->next != NULL) {
-						lastTupleJoin = lastTupleJoin->next;
-					}
-				} else {
-					tempTuple = nextTupleStream->next;
-					if (prevTupleStream != NULL) {
-						prevTupleStream->next = NULL;
-					} else {
-						*headTupleStream = NULL;
-					}
-					freeTupel(SLC_DATA_MODEL,nextTupleStream);
-					nextTupleStream = tempTuple;
-				}
-			} while (nextTupleJoin == NULL && nextTupleStream != NULL);
-		}
-		curTupleJoin = nextTupleJoin;
-		curTupleStream = nextTupleStream;
 	}
 	FREE(selecs);
 	return applied > 0;
