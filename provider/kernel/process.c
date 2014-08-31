@@ -1,12 +1,14 @@
 #include <linux/module.h>
 #include <linux/kprobes.h>
 #include <linux/if_ether.h>
+#include <linux/fdtable.h>
+#include <net/sock.h>
 #include <datamodel.h>
 #include <query.h>
 #include <api.h>
 
 DECLARE_ELEMENTS(nsProcess, model)
-DECLARE_ELEMENTS(objProcess, srcUTime, srcSTime, srcComm)
+DECLARE_ELEMENTS(objProcess, srcUTime, srcSTime, srcComm, srcProcessSockets)
 
 DECLARE_QUERY_LIST(fork)
 DECLARE_QUERY_LIST(exit)
@@ -283,17 +285,93 @@ static Tupel_t* getUTime(Selector_t *selectors, int len) {
 	return tuple;
 }
 
+static Tupel_t* getSockets(Selector_t *selectors, int len) {
+	Tupel_t *curTuple = NULL, *head = NULL, *prevTuple = NULL;
+	struct timeval time;
+	struct fdtable *fdt = NULL;
+	struct file *file = NULL;
+	struct pid *pid = NULL;
+	struct task_struct *task = NULL;
+	struct socket *sock = NULL;
+	unsigned long long timeUS = 0;
+	int foo = 0, i = 0;
+	char lastFileEmpty = 0;
+
+	if (selectors == NULL) {
+		return NULL;
+	}
+	// Retrieve the kernel representation of a pid
+	pid = find_get_pid(*(int*)(&selectors[0].value));
+	if (pid == NULL) {
+		return NULL;
+	}
+	// Resolve it to a struct task_struct
+	task = get_pid_task(pid,PIDTYPE_PID);
+	if (task == NULL) {
+		return NULL;
+	}
+
+	do_gettimeofday(&time);
+	timeUS = (unsigned long long)time.tv_sec * (unsigned long long)USEC_PER_SEC + (unsigned long long)time.tv_usec;
+
+	// .. and read a process sockets
+	spin_lock(&task->files->file_lock);
+	fdt = files_fdtable(task->files);
+	for (i = 0; i < fdt->max_fds; i++) {
+		file = rcu_dereference_check_fdtable(task->files, fdt->fd[i]);
+		if (file == NULL) {
+			/*
+			 * Two empty fds in a row indicate the end of the used area of fdt
+			 */
+			if (lastFileEmpty > 0) {
+				break;
+			}
+			lastFileEmpty++;
+			continue;
+		}
+		lastFileEmpty = 0;
+		// Refers the current fd to a socket?
+		sock = sock_from_file(file,&foo);
+		if (sock == NULL) {
+			continue;
+		}
+		// Yeah, it does. \o/ Allocate a tuple and copy the information
+		curTuple = initTupel(timeUS,2);
+		if (curTuple == NULL) {
+			continue;
+		}
+		if (head == NULL) {
+			head = curTuple;
+		}
+		allocItem(SLC_DATA_MODEL,curTuple,0,"process.process");
+		setItemInt(SLC_DATA_MODEL,curTuple,"process.process",*(int*)(&selectors[0].value));
+		allocItem(SLC_DATA_MODEL,curTuple,1,"process.process.sockets");
+		setItemInt(SLC_DATA_MODEL,curTuple,"process.process.sockets",SOCK_INODE(sock)->i_ino);
+		if (prevTuple != NULL) {
+			prevTuple->next = curTuple;
+		}
+		prevTuple = curTuple;
+	}
+	spin_unlock(&task->files->file_lock);
+
+	// Give them back to the kernel
+	put_pid(pid);
+	put_task_struct(task);
+
+	return head;
+}
+
 static void initDatamodel(void) {
 	int i = 0;
 	INIT_SOURCE_POD(srcUTime,"utime",objProcess,INT,getUTime)
 	INIT_SOURCE_POD(srcSTime,"stime",objProcess,INT,getSTime)
 	INIT_SOURCE_POD(srcComm,"comm",objProcess,STRING,getComm)
-	//INIT_SOURCE_COMPLEX(srcProcessSockets,"sockets",objProcess,"net.socket",getSrc) //TODO: Should be an array
-	INIT_OBJECT(objProcess,"process",nsProcess,3,INT,activateProcess,deactivateProcess,generateProcessStatus)
+	INIT_SOURCE_COMPLEX(srcProcessSockets,"sockets",objProcess,"net.socket",getSockets) //TODO: Should be an array
+	INIT_OBJECT(objProcess,"process",nsProcess,4,INT,activateProcess,deactivateProcess,generateProcessStatus)
 	ADD_CHILD(objProcess,0,srcUTime)
 	ADD_CHILD(objProcess,1,srcSTime)
 	ADD_CHILD(objProcess,2,srcComm)
-	//ADD_CHILD(objProcess,3,srcProcessSockets)
+	ADD_CHILD(objProcess,3,srcProcessSockets)
 
 	INIT_NS(nsProcess,"process",model,1)
 	ADD_CHILD(nsProcess,0,objProcess)
