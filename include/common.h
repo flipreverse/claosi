@@ -150,7 +150,7 @@ static DEFINE_SPINLOCK(varNamePrefix ## ListLock);
 #define MSLEEP(x)							usleep((x) * 1000)
 #define LAYER_CODE							0x2
 #define ENDPOINT_CONNECTED()				(1)
-#define INIT_SLEEP_TIME						1000
+#define INIT_SLEEP_TIME						500
 
 #define DECLARE_QUERY_LIST(varNamePrefix) static LIST_HEAD(varNamePrefix ## QueriesListHEAD,QuerySelectors) varNamePrefix ## QueriesList = LIST_HEAD_INITIALIZER(varNamePrefix ## QueriesList); \
 static pthread_mutex_t varNamePrefix ## ListLock;
@@ -252,13 +252,15 @@ static inline  unsigned long long getCycles(void) {
 			: "%eax", "%edx", "%ecx", "%esi", "memory");
 	ret = ((unsigned long long)high << 32) | (unsigned long long)low;
 #elif defined(__x86_64__)
-	asm volatile(	"mov $0,%%eax\n"
-			"CPUID\n\t"
-			"RDTSC\n\t"
-			"mov %%edx, %0\n\t"
-			"mov %%eax, %1\n\t"
-			: "=r" (high), "=r" (low):
-			: "%rax", "%rcx", "%rdx", "%rbx", "memory");
+		asm volatile(	"mov %%rbx,%%rsi\n"
+			"mov $0,%%rax\n"
+			"CPUID\n"
+			"RDTSC\n"
+			"mov %%rdx, %0\n"
+			"mov %%rax, %1\n"
+			"mov %%rsi,%%rbx\n"
+			: "=m" (high), "=m" (low) :
+			: "%rax", "%rdx", "%rcx", "%rsi", "memory");
 	ret = ((unsigned long long)high << 32) | (unsigned long long)low;
 #elif defined(__arm__)
 	ret = 0;

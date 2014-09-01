@@ -216,7 +216,7 @@ static void* commThreadWork(void *data) {
 			DEBUG_MSG(3,"Read msg with type 0x%x and addr %p (rewritten addr = %p)\n",msg->type,msg->addr,REWRITE_ADDR(msg->addr,sharedMemoryUserBase,sharedMemoryKernelBase));
 			switch (msg->type) {
 				case MSG_DM_SNAPSHOT:
-					DEBUG_MSG(2,"Received a complete snapshot of our datamode.\n");
+					DEBUG_MSG(1,"Received a complete snapshot of our datamodel.\n");
 				case MSG_DM_ADD:
 					dm = (DataModelElement_t*)REWRITE_ADDR(msg->addr,sharedMemoryKernelBase,sharedMemoryUserBase);
 					// Rewrite all pointer within the datamodel
