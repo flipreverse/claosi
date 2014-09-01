@@ -224,23 +224,27 @@ enum {
 	ESELECTORS						//
 };
 
-static inline unsigned long long getCycles(void) {
+static inline  unsigned long long getCycles(void) {
 	unsigned long long ret = 0;
-
-#if defined(__i386__)
 	unsigned int low = 0, high = 0;
-	asm volatile(	"push %%ebx\n"
+
+#ifdef __KERNEL__
+	unsigned long flags = 0;
+
+	local_irq_save(flags);
+#endif
+#if defined(__i386__)
+		asm volatile(	"mov %%ebx,%%esi\n"
 			"mov $0,%%eax\n"
 			"CPUID\n"
 			"RDTSC\n"
 			"mov %%edx, %0\n"
 			"mov %%eax, %1\n"
-			"pop %%ebx\n"
-			: "=r" (high), "=r" (low) :
-			: "%eax", "%edx", "%ecx", "memory");
+			"mov %%esi,%%ebx\n"
+			: "=m" (high), "=m" (low) :
+			: "%eax", "%edx", "%ecx", "%esi", "memory");
 	ret = ((unsigned long long)high << 32) | (unsigned long long)low;
 #elif defined(__x86_64__)
-	unsigned int low = 0, high = 0;
 	asm volatile(	"mov $0,%%eax\n"
 			"CPUID\n\t"
 			"RDTSC\n\t"
@@ -253,6 +257,9 @@ static inline unsigned long long getCycles(void) {
 	ret = 0;
 #else
 #error Unknown architecture
+#endif
+#ifdef __KERNEL__
+	local_irq_restore(flags);
 #endif
 
 	return ret;
