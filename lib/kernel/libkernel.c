@@ -538,7 +538,6 @@ static int communicationFileClose(struct inode *inode, struct file *filp) {
 
 	kfree(info);
 	filp->private_data = NULL;
-	atomic_dec(&communicationFileMmapRef);
 
 	return 0;
 }
