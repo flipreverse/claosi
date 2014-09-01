@@ -229,21 +229,25 @@ static inline unsigned long long getCycles(void) {
 
 #if defined(__i386__)
 	unsigned int low = 0, high = 0;
-	asm volatile("CPUID\n\t"
-				 "RDTSC\n\t"
-				 "mov %%edx, %0\n\t"
-				 "mov %%eax, %1\n\t"
-				 : "=r" (high), "=r" (low) :
-				 : "%eax", "%edx");
+	asm volatile(	"push %%ebx\n"
+			"mov $0,%%eax\n"
+			"CPUID\n"
+			"RDTSC\n"
+			"mov %%edx, %0\n"
+			"mov %%eax, %1\n"
+			"pop %%ebx\n"
+			: "=r" (high), "=r" (low) :
+			: "%eax", "%edx", "%ecx", "memory");
 	ret = ((unsigned long long)high << 32) | (unsigned long long)low;
 #elif defined(__x86_64__)
 	unsigned int low = 0, high = 0;
-	asm volatile("CPUID\n\t"
-				 "RDTSC\n\t"
-				 "mov %%edx, %0\n\t"
-				 "mov %%eax, %1\n\t"
-				 : "=r" (high), "=r" (low):
-				 : "%rax", "%rbx", "%rcx", "%rdx");
+	asm volatile(	"mov $0,%%eax\n"
+			"CPUID\n\t"
+			"RDTSC\n\t"
+			"mov %%edx, %0\n\t"
+			"mov %%eax, %1\n\t"
+			: "=r" (high), "=r" (low):
+			: "%rax", "%rcx", "%rdx", "%rbx", "memory");
 	ret = ((unsigned long long)high << 32) | (unsigned long long)low;
 #elif defined(__arm__)
 	ret = 0;
