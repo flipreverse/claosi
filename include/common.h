@@ -20,6 +20,9 @@
 #define PAGE_SIZE 4096
 #endif
 
+#define EVALUATION
+//#undef EVALUATION
+
 #define MAX_NAME_LEN						40
 #define DECLARE_BUFFER(name)				char name[MAX_NAME_LEN + 1];
 #define PROCFS_DIR_NAME						"slc"
@@ -227,5 +230,46 @@ enum {
 	EMAXQUERIES,					// The maximum number of queries assigned to a node is reached
 	ESELECTORS						//
 };
+
+static inline  unsigned long long getCycles(void) {
+	unsigned long long ret = 0;
+	unsigned int low = 0, high = 0;
+
+#ifdef __KERNEL__
+	unsigned long flags = 0;
+
+	local_irq_save(flags);
+#endif
+#if defined(__i386__)
+		asm volatile(	"mov %%ebx,%%esi\n"
+			"mov $0,%%eax\n"
+			"CPUID\n"
+			"RDTSC\n"
+			"mov %%edx, %0\n"
+			"mov %%eax, %1\n"
+			"mov %%esi,%%ebx\n"
+			: "=m" (high), "=m" (low) :
+			: "%eax", "%edx", "%ecx", "%esi", "memory");
+	ret = ((unsigned long long)high << 32) | (unsigned long long)low;
+#elif defined(__x86_64__)
+	asm volatile(	"mov $0,%%eax\n"
+			"CPUID\n\t"
+			"RDTSC\n\t"
+			"mov %%edx, %0\n\t"
+			"mov %%eax, %1\n\t"
+			: "=r" (high), "=r" (low):
+			: "%rax", "%rcx", "%rdx", "%rbx", "memory");
+	ret = ((unsigned long long)high << 32) | (unsigned long long)low;
+#elif defined(__arm__)
+	ret = 0;
+#else
+#error Unknown architecture
+#endif
+#ifdef __KERNEL__
+	local_irq_restore(flags);
+#endif
+
+	return ret;
+}
 
 #endif // __COMMON_H__

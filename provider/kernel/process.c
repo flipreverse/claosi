@@ -23,12 +23,18 @@ static int handlerFork(struct kretprobe_instance *ri, struct pt_regs *regs) {
 	Tupel_t *tuple = NULL;
 	struct list_head *pos = NULL;
 	QuerySelectors_t *querySelec = NULL;
+#ifndef EVALUATION
 	struct timeval time;
+#endif
 	unsigned long flags;
 	unsigned long long timeUS = 0;
 
+#ifdef EVALUATION
+	timeUS = getCycles();
+#else
 	do_gettimeofday(&time);
 	timeUS = (unsigned long long)time.tv_sec * (unsigned long long)USEC_PER_SEC + (unsigned long long)time.tv_usec;
+#endif
 
 	forEachQueryObject(slcLock, fork, pos, querySelec, OBJECT_CREATE)
 		tuple = initTupel(timeUS,1);
@@ -48,12 +54,18 @@ static int handlerExit(struct kprobe *p, struct pt_regs *regs) {
 	Tupel_t *tuple = NULL;
 	struct list_head *pos = NULL;
 	QuerySelectors_t *querySelec = NULL;
+#ifndef EVALUATION
 	struct timeval time;
+#endif
 	unsigned long flags;
 	unsigned long long timeUS = 0;
 
+#ifdef EVALUATION
+	timeUS = getCycles();
+#else
 	do_gettimeofday(&time);
 	timeUS = (unsigned long long)time.tv_sec * (unsigned long long)USEC_PER_SEC + (unsigned long long)time.tv_usec;
+#endif
 
 	forEachQueryObject(slcLock, exit, pos, querySelec, OBJECT_DELETE)
 		tuple = initTupel(timeUS,1);
@@ -130,11 +142,17 @@ static void deactivateProcess(Query_t *query) {
 static Tupel_t* generateProcessStatus(Selector_t *selectors, int len) {
 	struct task_struct *curTask = NULL;
 	Tupel_t *head = NULL, *curTuple = NULL, *prevTuple = NULL;
+#ifndef EVALUATION
 	struct timeval time;
+#endif
 	unsigned long long timeUS = 0;
 
+#ifdef EVALUATION
+	timeUS = getCycles();
+#else
 	do_gettimeofday(&time);
 	timeUS = (unsigned long long)time.tv_sec * (unsigned long long)USEC_PER_SEC + (unsigned long long)time.tv_usec;
+#endif
 
 	for_each_process(curTask) {
 		curTuple = initTupel(timeUS,1);
@@ -157,7 +175,9 @@ static Tupel_t* generateProcessStatus(Selector_t *selectors, int len) {
 
 static Tupel_t* getComm(Selector_t *selectors, int len) {
 	Tupel_t *tuple = NULL;
+#ifndef EVALUATION
 	struct timeval time;
+#endif
 	unsigned long long timeUS = 0;
 	struct pid *pid = NULL;
 	struct task_struct *task = NULL;
@@ -186,8 +206,13 @@ static Tupel_t* getComm(Selector_t *selectors, int len) {
 	// Give them back to the kernel
 	put_task_struct(task);
 
+#ifdef EVALUATION
+	timeUS = getCycles();
+#else
 	do_gettimeofday(&time);
 	timeUS = (unsigned long long)time.tv_sec * (unsigned long long)USEC_PER_SEC + (unsigned long long)time.tv_usec;
+#endif
+
 	tuple = initTupel(timeUS,2);
 	if (tuple == NULL) {
 		return NULL;
@@ -202,7 +227,9 @@ static Tupel_t* getComm(Selector_t *selectors, int len) {
 
 static Tupel_t* getSTime(Selector_t *selectors, int len) {
 	Tupel_t *tuple = NULL;
+#ifndef EVALUATION
 	struct timeval time;
+#endif
 	unsigned long long timeUS = 0;
 	struct pid *pid = NULL;
 	struct task_struct *task = NULL;
@@ -227,8 +254,13 @@ static Tupel_t* getSTime(Selector_t *selectors, int len) {
 	// Give them back to the kernel
 	put_task_struct(task);
 
+#ifdef EVALUATION
+	timeUS = getCycles();
+#else
 	do_gettimeofday(&time);
 	timeUS = (unsigned long long)time.tv_sec * (unsigned long long)USEC_PER_SEC + (unsigned long long)time.tv_usec;
+#endif
+
 	tuple = initTupel(timeUS,2);
 	if (tuple == NULL) {
 		return NULL;
@@ -244,7 +276,9 @@ static Tupel_t* getSTime(Selector_t *selectors, int len) {
 
 static Tupel_t* getUTime(Selector_t *selectors, int len) {
 	Tupel_t *tuple = NULL;
+#ifndef EVALUATION
 	struct timeval time;
+#endif
 	unsigned long long timeUS = 0;
 	struct pid *pid = NULL;
 	struct task_struct *task = NULL;
@@ -270,8 +304,13 @@ static Tupel_t* getUTime(Selector_t *selectors, int len) {
 	put_task_struct(task);
 	//printk("task=%d, comm=%s, utime=%u(%lu), stime=%u(%lu)\n",task->pid,task->comm,jiffies_to_usecs(task->utime),task->utime,jiffies_to_usecs(task->stime),task->stime);
 
+#ifdef EVALUATION
+	timeUS = getCycles();
+#else
 	do_gettimeofday(&time);
 	timeUS = (unsigned long long)time.tv_sec * (unsigned long long)USEC_PER_SEC + (unsigned long long)time.tv_usec;
+#endif
+
 	tuple = initTupel(timeUS,2);
 	if (tuple == NULL) {
 		return NULL;
@@ -287,7 +326,9 @@ static Tupel_t* getUTime(Selector_t *selectors, int len) {
 
 static Tupel_t* getSockets(Selector_t *selectors, int len) {
 	Tupel_t *curTuple = NULL, *head = NULL, *prevTuple = NULL;
+#ifndef EVALUATION
 	struct timeval time;
+#endif
 	struct fdtable *fdt = NULL;
 	struct file *file = NULL;
 	struct pid *pid = NULL;
@@ -312,8 +353,12 @@ static Tupel_t* getSockets(Selector_t *selectors, int len) {
 		return NULL;
 	}
 
+#ifdef EVALUATION
+	timeUS = getCycles();
+#else
 	do_gettimeofday(&time);
 	timeUS = (unsigned long long)time.tv_sec * (unsigned long long)USEC_PER_SEC + (unsigned long long)time.tv_usec;
+#endif
 
 	// .. and read a process sockets
 	spin_lock(&task->files->file_lock);

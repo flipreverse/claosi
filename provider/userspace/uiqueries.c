@@ -10,11 +10,17 @@ static Predicate_t xPosPred, yPosPred;
 static Filter_t posFilter;
 
 static void printResult(unsigned int id, Tupel_t *tupel) {
+#ifndef EVALUATION
 	struct timeval time;
+#endif
 	unsigned long long timeUS;
 
+#ifdef EVALUATION
+	timeUS = getCycles();
+#else
 	gettimeofday(&time,NULL);
 	timeUS = (unsigned long long)time.tv_sec * (unsigned long long)USEC_PER_SEC + (unsigned long long)time.tv_usec;
+#endif
 	printf("processing duration: %llu us,",timeUS - tupel->timestamp);
 	printTupel(SLC_DATA_MODEL,tupel);
 	freeTupel(SLC_DATA_MODEL,tupel);

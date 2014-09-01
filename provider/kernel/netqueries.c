@@ -12,62 +12,98 @@ static Filter_t filter;
 static Query_t queryRX, queryTX,queryTX2, queryRXBytes, queryTXBytes, queryDevStatus, queryDevObj;
 
 static void printResultRx(unsigned int id, Tupel_t *tupel) {
+#ifndef EVALUATION
 	struct timeval time;
-	unsigned long long timeMS = 0;
+#endif
+	unsigned long long timeUS = 0;
 
+#ifdef EVALUATION
+	timeUS = getCycles();
+#else
 	do_gettimeofday(&time);
-	timeMS = (unsigned long long)time.tv_sec * (unsigned long long)USEC_PER_SEC + (unsigned long long)time.tv_usec;
-	printk("Received packet on device %s. Device received %d bytes so far. (itemLen=%d,tuple=%p,duration=%llu us)\n",getItemString(SLC_DATA_MODEL,tupel,"net.device"),getItemInt(SLC_DATA_MODEL,tupel,"net.device.rxBytes"),tupel->itemLen,tupel,timeMS - tupel->timestamp);
+	timeUS = (unsigned long long)time.tv_sec * (unsigned long long)USEC_PER_SEC + (unsigned long long)time.tv_usec;
+#endif
+	printk("Received packet on device %s. Device received %d bytes so far. (itemLen=%d,tuple=%p,duration=%llu us)\n",getItemString(SLC_DATA_MODEL,tupel,"net.device"),getItemInt(SLC_DATA_MODEL,tupel,"net.device.rxBytes"),tupel->itemLen,tupel,timeUS - tupel->timestamp);
 	freeTupel(SLC_DATA_MODEL,tupel);
 }
 
 static void printResultTx(unsigned int id, Tupel_t *tupel) {
+#ifndef EVALUATION
 	struct timeval time;
-	unsigned long long timeMS = 0;
+#endif
+	unsigned long long timeUS = 0;
 
+#ifdef EVALUATION
+	timeUS = getCycles();
+#else
 	do_gettimeofday(&time);
-	timeMS = (unsigned long long)time.tv_sec * (unsigned long long)USEC_PER_SEC + (unsigned long long)time.tv_usec;
-	printk("Received tupel with %d items at memory address %p at %llu us, dev=%s, tx\n",tupel->itemLen,tupel,timeMS - tupel->timestamp,getItemString(SLC_DATA_MODEL,tupel,"net.device"));
+	timeUS = (unsigned long long)time.tv_sec * (unsigned long long)USEC_PER_SEC + (unsigned long long)time.tv_usec;
+#endif
+	printk("Received tupel with %d items at memory address %p at %llu us, dev=%s, tx\n",tupel->itemLen,tupel,timeUS - tupel->timestamp,getItemString(SLC_DATA_MODEL,tupel,"net.device"));
 	freeTupel(SLC_DATA_MODEL,tupel);
 }
 
 static void printResultRxBytes(unsigned int id, Tupel_t *tupel) {
+#ifndef EVALUATION
 	struct timeval time;
-	unsigned long long timeMS = 0;
+#endif
+	unsigned long long timeUS = 0;
 
+#ifdef EVALUATION
+	timeUS = getCycles();
+#else
 	do_gettimeofday(&time);
-	timeMS = (unsigned long long)time.tv_sec * (unsigned long long)USEC_PER_SEC + (unsigned long long)time.tv_usec;
-	printk("Received tupel with %d items at memory address %p at %llu us, dev=%s, rxBytes=%d\n",tupel->itemLen,tupel,timeMS - tupel->timestamp,getItemString(SLC_DATA_MODEL,tupel,"net.device"),getItemInt(SLC_DATA_MODEL,tupel,"net.device.rxBytes"));
+	timeUS = (unsigned long long)time.tv_sec * (unsigned long long)USEC_PER_SEC + (unsigned long long)time.tv_usec;
+#endif
+	printk("Received tupel with %d items at memory address %p at %llu us, dev=%s, rxBytes=%d\n",tupel->itemLen,tupel,timeUS - tupel->timestamp,getItemString(SLC_DATA_MODEL,tupel,"net.device"),getItemInt(SLC_DATA_MODEL,tupel,"net.device.rxBytes"));
 	freeTupel(SLC_DATA_MODEL,tupel);
 }
 
 static void printResultTxBytes(unsigned int id, Tupel_t *tupel) {
+#ifndef EVALUATION
 	struct timeval time;
-	unsigned long long timeMS = 0;
+#endif
+	unsigned long long timeUS = 0;
 
+#ifdef EVALUATION
+	timeUS = getCycles();
+#else
 	do_gettimeofday(&time);
-	timeMS = (unsigned long long)time.tv_sec * (unsigned long long)USEC_PER_SEC + (unsigned long long)time.tv_usec;
-	printk("Received tupel with %d items at memory address %p at %llu us, dev=%s, txBytes=%d\n",tupel->itemLen,tupel,timeMS - tupel->timestamp,getItemString(SLC_DATA_MODEL,tupel,"net.device"),getItemInt(SLC_DATA_MODEL,tupel,"net.device.txBytes"));
+	timeUS = (unsigned long long)time.tv_sec * (unsigned long long)USEC_PER_SEC + (unsigned long long)time.tv_usec;
+#endif
+	printk("Received tupel with %d items at memory address %p at %llu us, dev=%s, txBytes=%d\n",tupel->itemLen,tupel,timeUS - tupel->timestamp,getItemString(SLC_DATA_MODEL,tupel,"net.device"),getItemInt(SLC_DATA_MODEL,tupel,"net.device.txBytes"));
 	freeTupel(SLC_DATA_MODEL,tupel);
 }
 
 static void printResultDevStatus(unsigned int id, Tupel_t *tupel) {
+#ifndef EVALUATION
 	struct timeval time;
-	unsigned long long timeMS = 0;
+#endif
+	unsigned long long timeUS = 0;
 
+#ifdef EVALUATION
+	timeUS = getCycles();
+#else
 	do_gettimeofday(&time);
-	timeMS = (unsigned long long)time.tv_sec * (unsigned long long)USEC_PER_SEC + (unsigned long long)time.tv_usec;
-	printk("Received tupel with %d items at memory address %p at %llu us, dev=%s status\n",tupel->itemLen,tupel,timeMS - tupel->timestamp,getItemString(SLC_DATA_MODEL,tupel,"net.device"));
+	timeUS = (unsigned long long)time.tv_sec * (unsigned long long)USEC_PER_SEC + (unsigned long long)time.tv_usec;
+#endif
+	printk("Received tupel with %d items at memory address %p at %llu us, dev=%s status\n",tupel->itemLen,tupel,timeUS - tupel->timestamp,getItemString(SLC_DATA_MODEL,tupel,"net.device"));
 	freeTupel(SLC_DATA_MODEL,tupel);
 }
 
 static void printResultDev(unsigned int id, Tupel_t *tupel) {
+#ifndef EVALUATION
 	struct timeval time;
-	unsigned long long timeMS = 0;
+#endif
+	unsigned long long timeUS = 0;
 
+#ifdef EVALUATION
+	timeUS = getCycles();
+#else
 	do_gettimeofday(&time);
-	timeMS = (unsigned long long)time.tv_sec * (unsigned long long)USEC_PER_SEC + (unsigned long long)time.tv_usec;
-	printk("Received tupel with %d items at memory address %p at %llu us, dev=%s changed\n",tupel->itemLen,tupel,timeMS - tupel->timestamp,getItemString(SLC_DATA_MODEL,tupel,"net.device"));
+	timeUS = (unsigned long long)time.tv_sec * (unsigned long long)USEC_PER_SEC + (unsigned long long)time.tv_usec;
+#endif
+	printk("Received tupel with %d items at memory address %p at %llu us, dev=%s changed\n",tupel->itemLen,tupel,timeUS - tupel->timestamp,getItemString(SLC_DATA_MODEL,tupel,"net.device"));
 	freeTupel(SLC_DATA_MODEL,tupel);
 }
 

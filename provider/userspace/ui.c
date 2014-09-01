@@ -19,7 +19,9 @@ DECLARE_QUERY_LIST(app);
 
 static void* displayEvtWork(void *data) {
 	Tupel_t *tuple = NULL;
+	#ifndef EVALUATION
 	struct timeval curTime;
+	#endif
 	unsigned long long timeUS = 0;
 
 	while (1) {
@@ -27,8 +29,14 @@ static void* displayEvtWork(void *data) {
 		if (displayEvtThreadRunning == 0) {
 			break;
 		}
-		gettimeofday(&curTime,NULL);
-		timeUS = (unsigned long long)curTime.tv_sec * (unsigned long long)USEC_PER_SEC + (unsigned long long)curTime.tv_usec;
+
+#ifdef EVALUATION
+	timeUS = getCycles();
+#else
+	gettimeofday(&curTime,NULL);
+	timeUS = (unsigned long long)curTime.tv_sec * (unsigned long long)USEC_PER_SEC + (unsigned long long)curTime.tv_usec;
+#endif
+
 		tuple = initTupel(timeUS,1);
 		if (tuple == NULL) {
 			continue;
@@ -95,12 +103,19 @@ static void deactivateApp(Query_t *query) {
 
 static Tupel_t* statusApp(Selector_t *selectors, int len) {
 	Tupel_t *tuple = NULL;
-	struct timeval curTime;
+	#ifndef EVALUATION
+	struct timeval time;
+	#endif
 	char *name = NULL;
 	unsigned long long timeUS = 0;
 
-	gettimeofday(&curTime,NULL);
-	timeUS = (unsigned long long)curTime.tv_sec * (unsigned long long)USEC_PER_SEC + (unsigned long long)curTime.tv_usec;
+#ifdef EVALUATION
+	timeUS = getCycles();
+#else
+	gettimeofday(&time,NULL);
+	timeUS = (unsigned long long)time.tv_sec * (unsigned long long)USEC_PER_SEC + (unsigned long long)time.tv_usec;
+#endif
+
 	tuple = initTupel(timeUS,1);
 	if (tuple == NULL) {
 		return NULL;
@@ -119,12 +134,19 @@ static Tupel_t* statusApp(Selector_t *selectors, int len) {
 
 static Tupel_t* sourceForegroundApp(Selector_t *selectors, int len) {
 	Tupel_t *tuple = NULL;
-	struct timeval curTime;
+	#ifndef EVALUATION
+	struct timeval time;
+	#endif
 	char *name = NULL;
 	unsigned long long timeUS = 0;
 
-	gettimeofday(&curTime,NULL);
-	timeUS = (unsigned long long)curTime.tv_sec * (unsigned long long)USEC_PER_SEC + (unsigned long long)curTime.tv_usec;
+#ifdef EVALUATION
+	timeUS = getCycles();
+#else
+	gettimeofday(&time,NULL);
+	timeUS = (unsigned long long)time.tv_sec * (unsigned long long)USEC_PER_SEC + (unsigned long long)time.tv_usec;
+#endif
+
 	tuple = initTupel(timeUS,1);
 	if (tuple == NULL) {
 		return NULL;

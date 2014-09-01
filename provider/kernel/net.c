@@ -25,7 +25,9 @@ static char rxSymbolName[] = "__netif_receive_skb";
 static int handlerTX(struct kprobe *p, struct pt_regs *regs) {
 	struct sk_buff *skb = NULL;
 	Tupel_t *tupel = NULL;
+#ifndef EVALUATION
 	struct timeval time;
+#endif
 	struct list_head *pos = NULL;
 	QuerySelectors_t *querySelec = NULL;
 	char *devName = NULL;
@@ -42,8 +44,13 @@ skb = (struct sk_buff*)regs->ARM_r0;
 #error Unknown architecture
 #endif
 
+#ifdef EVALUATION
+	timeUS = getCycles();
+#else
 	do_gettimeofday(&time);
 	timeUS = (unsigned long long)time.tv_sec * (unsigned long long)USEC_PER_SEC + (unsigned long long)time.tv_usec;
+#endif
+
 	forEachQueryEvent(slcLock,tx,pos,querySelec)
 		if (strcmp(skb->dev->name,GET_SELECTORS(querySelec->query)[0].value) != 0) {
 			continue;
@@ -72,7 +79,9 @@ skb = (struct sk_buff*)regs->ARM_r0;
 static int handlerRX(struct kprobe *p, struct pt_regs *regs) {
 	struct sk_buff *skb = NULL;
 	Tupel_t *tupel = NULL;
+#ifndef EVALUATION
 	struct timeval time;
+#endif
 	struct list_head *pos = NULL;
 	QuerySelectors_t *querySelec = NULL;
 	char *devName = NULL;
@@ -89,8 +98,12 @@ skb = (struct sk_buff*)regs->ARM_r0;
 #error Unknown architecture
 #endif
 
+#ifdef EVALUATION
+	timeUS = getCycles();
+#else
 	do_gettimeofday(&time);
 	timeUS = (unsigned long long)time.tv_sec * (unsigned long long)USEC_PER_SEC + (unsigned long long)time.tv_usec;
+#endif
 
 	// Acquire the slcLock to avoid change in the datamodel while creating the tuple
 	forEachQueryEvent(slcLock,rx,pos,querySelec)
@@ -189,7 +202,9 @@ static Tupel_t* getRxBytes(Selector_t *selectors, int len) {
 	unsigned long rxBytes = 0;
 	Tupel_t *tuple = NULL;
 	char *devName = NULL;
+#ifndef EVALUATION
 	struct timeval time;
+#endif
 	unsigned long long timeUS = 0;
 	
 	if (len == 0 || selectors == NULL) {
@@ -211,8 +226,13 @@ static Tupel_t* getRxBytes(Selector_t *selectors, int len) {
 	// Give the device back to the kernel
 	dev_put(dev);
 
+#ifdef EVALUATION
+	timeUS = getCycles();
+#else
 	do_gettimeofday(&time);
 	timeUS = (unsigned long long)time.tv_sec * (unsigned long long)USEC_PER_SEC + (unsigned long long)time.tv_usec;
+#endif
+
 	tuple = initTupel(timeUS,2);
 	if (tuple == NULL) {
 		return NULL;
@@ -232,7 +252,9 @@ static Tupel_t* getTxBytes(Selector_t *selectors, int len) {
 	unsigned long txBytes = 0;
 	Tupel_t *tuple = NULL;
 	char *devName = NULL;
+#ifndef EVALUATION
 	struct timeval time;
+#endif
 	unsigned long long timeUS = 0;
 
 	if (len == 0 || selectors == NULL) {
@@ -254,8 +276,13 @@ static Tupel_t* getTxBytes(Selector_t *selectors, int len) {
 	// Give the device back to the kernel
 	dev_put(dev);
 
+#ifdef EVALUATION
+	timeUS = getCycles();
+#else
 	do_gettimeofday(&time);
 	timeUS = (unsigned long long)time.tv_sec * (unsigned long long)USEC_PER_SEC + (unsigned long long)time.tv_usec;
+#endif
+
 	tuple = initTupel(timeUS,2);
 	if (tuple == NULL) {
 		return NULL;
@@ -271,7 +298,9 @@ static Tupel_t* getTxBytes(Selector_t *selectors, int len) {
 static int handlerOpen(struct kprobe *p, struct pt_regs *regs) {
 	struct net_device *dev = NULL;
 	Tupel_t *tupel = NULL;
+#ifndef EVALUATION
 	struct timeval time;
+#endif
 	struct list_head *pos = NULL;
 	QuerySelectors_t *querySelec = NULL;
 	GenStream_t *stream = NULL;
@@ -289,8 +318,13 @@ dev = (struct net_device*)regs->ARM_r0;
 #error Unknown architecture
 #endif
 
+#ifdef EVALUATION
+	timeUS = getCycles();
+#else
 	do_gettimeofday(&time);
 	timeUS = (unsigned long long)time.tv_sec * (unsigned long long)USEC_PER_SEC + (unsigned long long)time.tv_usec;
+#endif
+
 	// Acquire the slcLock to avoid change in the datamodel while creating the tuple
 	forEachQueryObject(slcLock, dev, pos, querySelec, OBJECT_CREATE)
 		stream = ((GenStream_t*)querySelec->query->root);
@@ -320,7 +354,9 @@ dev = (struct net_device*)regs->ARM_r0;
 static int handlerClose(struct kprobe *p, struct pt_regs *regs) {
 	struct net_device *dev = NULL;
 	Tupel_t *tupel = NULL;
+#ifndef EVALUATION
 	struct timeval time;
+#endif
 	struct list_head *pos = NULL;
 	QuerySelectors_t *querySelec = NULL;
 	GenStream_t *stream = NULL;
@@ -338,8 +374,13 @@ dev = (struct net_device*)regs->ARM_r0;
 #error Unknown architecture
 #endif
 
+#ifdef EVALUATION
+	timeUS = getCycles();
+#else
 	do_gettimeofday(&time);
 	timeUS = (unsigned long long)time.tv_sec * (unsigned long long)USEC_PER_SEC + (unsigned long long)time.tv_usec;
+#endif
+
 	// Acquire the slcLock to avoid change in the datamodel while creating the tuple
 	forEachQueryObject(slcLock, dev, pos, querySelec, OBJECT_DELETE)
 		stream = ((GenStream_t*)querySelec->query->root);
@@ -412,11 +453,17 @@ static Tupel_t* generateDeviceStatus(Selector_t *selectors, int len) {
 	struct net_device *curDev = NULL;
 	Tupel_t *head = NULL, *curTuple = NULL, *prevTuple = NULL;
 	char *devName = NULL;
+	#ifndef EVALUATION
 	struct timeval time;
+	#endif
 	unsigned long long timeUS = 0;
 
+#ifdef EVALUATION
+	timeUS = getCycles();
+#else
 	do_gettimeofday(&time);
 	timeUS = (unsigned long long)time.tv_sec * (unsigned long long)USEC_PER_SEC + (unsigned long long)time.tv_usec;
+#endif
 
 	for_each_netdev(&init_net, curDev) {
 		devName = ALLOC(strlen(curDev->name) + 1);
