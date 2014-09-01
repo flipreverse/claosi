@@ -15,6 +15,8 @@
 
 #define SEM_KEY 0xcaffee
 #define TIMER_SIGNAL SIGRTMIN
+#define CALC_SLEEP_TIME
+#undef CALC_SLEEP_TIME
 
 static int fdCommunicationFile  = 0;
 /**
@@ -48,8 +50,31 @@ static pthread_mutex_t listLock;
  * A list head for the list of remaining queries
  */
 STAILQ_HEAD(QueryExecListHead,QueryJob) queriesToExecList;
+#ifdef CALC_SLEEP_TIME
+/**
+ * Number of successfull reads from the rx buffer
+ */
+static int successfullReads = 0;
+/**
+ * Number of failed reads from the rx buffer
+ */
+static int failedReads = 0;
+#endif
+/**
+ * Amount of time to sleep after a failed read from the rx buffer
+ */
+static int sleepTime = INIT_SLEEP_TIME;
+/**
+ * Account for the number of missed timers - have a look at timerHandler()
+ */
 static int missedTimer;
+/**
+ * Count the queued queries
+ */
 static int waitingQueries;
+/**
+ * Evaluate the maximum of waiting queries
+ */
 static int maxWaitingQueries;
 
  union semun {
@@ -148,6 +173,32 @@ static void* queryExecutorWork(void *data) {
 	return NULL;
 }
 
+#ifdef CALC_SLEEP_TIME
+static int calcSleepTime(int sleepTime, int readSuccess) {
+	int ret = sleepTime, temp = 0;
+
+	if (readSuccess > 0) {
+		successfullReads++;
+		failedReads = 0;
+	} else {
+		successfullReads = 0;
+		failedReads++;
+	}
+	if (successfullReads > SLEEP_THRESH_SUCESS) {
+		temp = INIT_SLEEP_TIME - (successfullReads - SLEEP_THRESH_SUCESS) * SLEEP_STEP;
+		ret = (temp < SLEEP_MIN ? SLEEP_MIN : temp);
+	}
+	if (failedReads > SLEEP_THRESH_FAILED) {
+		temp = INIT_SLEEP_TIME + (failedReads - SLEEP_THRESH_FAILED) * SLEEP_STEP;
+		ret = (temp > SLEEP_MAX ? SLEEP_MAX : temp);
+	}
+	ret = 1000;
+	return ret;
+}
+#else
+#define calcSleepTime(x,y)		(INIT_SLEEP_TIME)
+#endif
+
 static void* commThreadWork(void *data) {
 	LayerMessage_t *msg = NULL;
 	DataModelElement_t *dm = NULL;
@@ -160,7 +211,7 @@ static void* commThreadWork(void *data) {
 	while (commThreadRunning == 1) {
 		msg = ringBufferReadBegin(rxBuffer);
 		if (msg == NULL) {
-			sleep(1);
+			usleep(sleepTime);
 		} else {
 			DEBUG_MSG(3,"Read msg with type 0x%x and addr %p (rewritten addr = %p)\n",msg->type,msg->addr,REWRITE_ADDR(msg->addr,sharedMemoryUserBase,sharedMemoryKernelBase));
 			switch (msg->type) {
@@ -290,6 +341,8 @@ static void* commThreadWork(void *data) {
 			}
 			ringBufferReadEnd(rxBuffer);
 		}
+		sleepTime = calcSleepTime(sleepTime,msg != NULL);
+		DEBUG_MSG(3,"sleepTime = %d us\n",sleepTime);
 	}
 
 	pthread_exit(0);
@@ -493,6 +546,11 @@ int initLayer(void) {
 	sharedMemoryKernelBase = (void*)addr;
 	ringBufferInit();
 
+#ifdef CALC_SLEEP_TIME
+	successfullReads = 0;
+	failedReads = 0;
+#endif
+	sleepTime = INIT_SLEEP_TIME;
 	waitingQueries = 0;
 	// Create the semaphore for the query list and ...
 	waitingQueriesSemID = semget(SEM_KEY,1,IPC_CREAT|IPC_EXCL|0600);

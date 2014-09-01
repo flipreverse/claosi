@@ -30,6 +30,11 @@
 #define TEST_BIT(varName,bit)				(((varName) & bit) == bit)
 #define SET_BIT(varName,bit)				((varName) |= bit)
 #define CLEAR_BIT(varName,bit)				((varName) = (varName) & ~(1 << bit))
+#define SLEEP_THRESH_SUCESS					2
+#define SLEEP_THRESH_FAILED					2
+#define SLEEP_STEP							10000
+#define SLEEP_MIN							1000
+#define SLEEP_MAX							1000000
 
 #ifdef __KERNEL__
 #define	ALLOC(size)							kmalloc(size,GFP_KERNEL & ~__GFP_WAIT)
@@ -48,6 +53,7 @@
 #define MSLEEP(x)							mdelay(x)
 #define LAYER_CODE							0x1
 #define ENDPOINT_CONNECTED()				(atomic_read(&communicationFileMmapRef) >= 1)
+#define INIT_SLEEP_TIME						1000
 extern atomic_t communicationFileMmapRef;
 
 /**
@@ -141,6 +147,7 @@ static DEFINE_SPINLOCK(varNamePrefix ## ListLock);
 #define MSLEEP(x)							usleep((x) * 1000)
 #define LAYER_CODE							0x2
 #define ENDPOINT_CONNECTED()				(1)
+#define INIT_SLEEP_TIME						1000
 
 #define DECLARE_QUERY_LIST(varNamePrefix) static LIST_HEAD(varNamePrefix ## QueriesListHEAD,QuerySelectors) varNamePrefix ## QueriesList = LIST_HEAD_INITIALIZER(varNamePrefix ## QueriesList); \
 static pthread_mutex_t varNamePrefix ## ListLock;

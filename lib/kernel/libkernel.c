@@ -17,6 +17,8 @@
 #include <communication.h>
 
 #define PROCFS_READ_BUFFER_SIZE		10
+#define CALC_SLEEP_TIME
+#undef CALC_SLEEP_TIME
 
 #ifndef VM_RESERVED
 # define VM_RESERVED				(VM_DONTEXPAND | VM_DONTDUMP)
@@ -40,7 +42,9 @@ static struct page **sharedMemoryPages = NULL;
 static LIST_HEAD(queriesToExecList);
 // Synchronize access to queriesToExecList
 static DEFINE_SPINLOCK(listLock);
-
+/**
+ * Account for the number of missed timers - have a look at hrtimerHandler()
+ */
 static atomic_t missedTimer;
 static DECLARE_WAIT_QUEUE_HEAD(waitQueue);
 /*
@@ -50,6 +54,23 @@ static DECLARE_WAIT_QUEUE_HEAD(waitQueue);
  * The waitingQueries variable holds the number of outstanding queries.
  */ 
 static atomic_t waitingQueries;
+#ifdef CALC_SLEEP_TIME
+/**
+ * Number of successfull reads from the rx buffer
+ */
+static int successfullReads;
+/**
+ * Number of failed reads from the rx buffer
+ */
+static int failedReads;
+#endif
+/**
+ * Amount of time to sleep after a failed read from the rx buffer
+ */
+static int sleepTime;
+/**
+ * Evaluate the maximum of waiting queries
+ */
 static unsigned long maxWaitingQueries;
 
 void enqueueQuery(Query_t *query, Tupel_t *tuple, int step) {
@@ -288,6 +309,32 @@ static int queryExecutorWork(void *data) {
 	return 0;
 }
 
+#ifdef CALC_SLEEP_TIME
+static int calcSleepTime(int sleepTime, int readSuccess) {
+	int ret = sleepTime, temp = 0;
+
+	if (readSuccess > 0) {
+		successfullReads++;
+		failedReads = 0;
+	} else {
+		successfullReads = 0;
+		failedReads++;
+	}
+	if (successfullReads > SLEEP_THRESH_SUCESS) {
+		temp = INIT_SLEEP_TIME - (successfullReads - SLEEP_THRESH_SUCESS) * SLEEP_STEP;
+		ret = (temp < SLEEP_MIN ? SLEEP_MIN : temp);
+	}
+	if (failedReads > SLEEP_THRESH_FAILED) {
+		temp = INIT_SLEEP_TIME + (failedReads - SLEEP_THRESH_FAILED) * SLEEP_STEP;
+		ret = (temp > SLEEP_MAX ? SLEEP_MAX : temp);
+	}
+	ret = 100000;
+	return ret;
+}
+#else
+#define calcSleepTime(x,y)		(100000)
+#endif
+
 static int commThreadWork(void *data) {
 	LayerMessage_t *msg = NULL;
 	DataModelElement_t *dm = NULL;
@@ -301,7 +348,7 @@ static int commThreadWork(void *data) {
 	while (!kthread_should_stop()) {
 		msg = ringBufferReadBegin(rxBuffer);
 		if (msg == NULL) {
-			msleep(1000);
+			usleep_range(sleepTime,sleepTime+500);
 		} else {
 			DEBUG_MSG(3,"Read msg with type 0x%x and addr 0x%p (rewritten addr = 0x%p)\n",msg->type,msg->addr,REWRITE_ADDR(msg->addr,sharedMemoryUserBase,sharedMemoryKernelBase));
 			switch (msg->type) {
@@ -438,6 +485,8 @@ static int commThreadWork(void *data) {
 			}
 			ringBufferReadEnd(rxBuffer);
 		}
+		sleepTime = calcSleepTime(sleepTime,msg != NULL);
+		DEBUG_MSG(3,"sleepTime = %d us\n",sleepTime);
 	}
 
 	return 0;
@@ -627,6 +676,11 @@ static int __init slc_init(void) {
 	atomic_set(&waitingQueries,0);
 	atomic_set(&missedTimer,0);
 	maxWaitingQueries = 0;
+#ifdef CALC_SLEEP_TIME
+	successfullReads = 0;
+	failedReads = 0;
+#endif
+	sleepTime = INIT_SLEEP_TIME;
 	// Init ...
 	queryExecThread = (struct task_struct*)kthread_create(queryExecutorWork,NULL,"queryExecThread");
 	if (IS_ERR(queryExecThread)) {
