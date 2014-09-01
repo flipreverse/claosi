@@ -49,6 +49,8 @@ static pthread_mutex_t listLock;
  */
 STAILQ_HEAD(QueryExecListHead,QueryJob) queriesToExecList;
 static int missedTimer;
+static int waitingQueries;
+static int maxWaitingQueries;
 
  union semun {
 	int val;					/* Value for SETVAL */
@@ -124,7 +126,10 @@ static void* queryExecutorWork(void *data) {
 				continue;
 			}
 		}
-
+		ret =__sync_fetch_and_sub(&waitingQueries,1);
+		if (ret > maxWaitingQueries) {
+			maxWaitingQueries = ret;
+		}
 		ACQUIRE_READ_LOCK(slcLock);
 		pthread_mutex_lock(&listLock);
 		// Dequeue the head and execute the query
@@ -317,6 +322,7 @@ void enqueueQuery(Query_t *query, Tupel_t *tuple, int step) {
 	pthread_mutex_lock(&listLock);
 	STAILQ_INSERT_TAIL(&queriesToExecList,job,listEntry);
 	pthread_mutex_unlock(&listLock);
+	__sync_add_and_fetch(&waitingQueries,1);
 	// Signal the execution thread a query is ready for execution
 	if (semop(waitingQueriesSemID,&operation,1) < 0) {
 		ERR_MSG("Error executing p() von semaphore: %s\n",strerror(errno));
@@ -487,6 +493,7 @@ int initLayer(void) {
 	sharedMemoryKernelBase = (void*)addr;
 	ringBufferInit();
 
+	waitingQueries = 0;
 	// Create the semaphore for the query list and ...
 	waitingQueriesSemID = semget(SEM_KEY,1,IPC_CREAT|IPC_EXCL|0600);
 	if (waitingQueriesSemID < 0) {
@@ -544,5 +551,6 @@ void exitLayer(void) {
 	close(fdCommunicationFile);
 	
 	pthread_mutex_destroy(&listLock);
+	INFO_MSG("Max amount of outstanding queries: %d\n",maxWaitingQueries);
 	INFO_MSG("Missed %d timer\n", missedTimer);
 }
