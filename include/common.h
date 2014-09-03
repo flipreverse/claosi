@@ -231,6 +231,7 @@ enum {
 	ESELECTORS						//
 };
 
+#ifdef EVALUATION
 static inline  unsigned long long getCycles(void) {
 	unsigned long long ret = 0;
 	unsigned int low = 0, high = 0;
@@ -273,5 +274,6 @@ static inline  unsigned long long getCycles(void) {
 
 	return ret;
 }
+#endif
 
 #endif // __COMMON_H__

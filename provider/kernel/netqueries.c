@@ -3,6 +3,9 @@
 #include <query.h>
 #include <api.h>
 
+#define PRINT_TUPLE
+#undef PRINT_TUPLE
+
 static EventStream_t rxStream, txStream, txStream2;
 static SourceStream_t rxBytesSrc, txBytesSrc;
 static ObjectStream_t devStatusStream, devObjStream;
@@ -23,7 +26,10 @@ static void printResultRx(unsigned int id, Tupel_t *tupel) {
 	do_gettimeofday(&time);
 	timeUS = (unsigned long long)time.tv_sec * (unsigned long long)USEC_PER_SEC + (unsigned long long)time.tv_usec;
 #endif
+#ifdef PRINT_TUPLE
 	printk("Received packet on device %s. Device received %d bytes so far. (itemLen=%d,tuple=%p,duration=%llu us)\n",getItemString(SLC_DATA_MODEL,tupel,"net.device"),getItemInt(SLC_DATA_MODEL,tupel,"net.device.rxBytes"),tupel->itemLen,tupel,timeUS - tupel->timestamp);
+#endif
+
 	freeTupel(SLC_DATA_MODEL,tupel);
 }
 
@@ -39,7 +45,10 @@ static void printResultTx(unsigned int id, Tupel_t *tupel) {
 	do_gettimeofday(&time);
 	timeUS = (unsigned long long)time.tv_sec * (unsigned long long)USEC_PER_SEC + (unsigned long long)time.tv_usec;
 #endif
+#ifdef PRINT_TUPLE
 	printk("Received tupel with %d items at memory address %p at %llu us, dev=%s, tx\n",tupel->itemLen,tupel,timeUS - tupel->timestamp,getItemString(SLC_DATA_MODEL,tupel,"net.device"));
+#endif
+
 	freeTupel(SLC_DATA_MODEL,tupel);
 }
 
@@ -55,7 +64,10 @@ static void printResultRxBytes(unsigned int id, Tupel_t *tupel) {
 	do_gettimeofday(&time);
 	timeUS = (unsigned long long)time.tv_sec * (unsigned long long)USEC_PER_SEC + (unsigned long long)time.tv_usec;
 #endif
+#ifdef PRINT_TUPLE
 	printk("Received tupel with %d items at memory address %p at %llu us, dev=%s, rxBytes=%d\n",tupel->itemLen,tupel,timeUS - tupel->timestamp,getItemString(SLC_DATA_MODEL,tupel,"net.device"),getItemInt(SLC_DATA_MODEL,tupel,"net.device.rxBytes"));
+#endif
+
 	freeTupel(SLC_DATA_MODEL,tupel);
 }
 
@@ -71,7 +83,10 @@ static void printResultTxBytes(unsigned int id, Tupel_t *tupel) {
 	do_gettimeofday(&time);
 	timeUS = (unsigned long long)time.tv_sec * (unsigned long long)USEC_PER_SEC + (unsigned long long)time.tv_usec;
 #endif
+#ifdef PRINT_TUPLE
 	printk("Received tupel with %d items at memory address %p at %llu us, dev=%s, txBytes=%d\n",tupel->itemLen,tupel,timeUS - tupel->timestamp,getItemString(SLC_DATA_MODEL,tupel,"net.device"),getItemInt(SLC_DATA_MODEL,tupel,"net.device.txBytes"));
+#endif
+
 	freeTupel(SLC_DATA_MODEL,tupel);
 }
 
@@ -87,7 +102,10 @@ static void printResultDevStatus(unsigned int id, Tupel_t *tupel) {
 	do_gettimeofday(&time);
 	timeUS = (unsigned long long)time.tv_sec * (unsigned long long)USEC_PER_SEC + (unsigned long long)time.tv_usec;
 #endif
+#ifdef PRINT_TUPLE
 	printk("Received tupel with %d items at memory address %p at %llu us, dev=%s status\n",tupel->itemLen,tupel,timeUS - tupel->timestamp,getItemString(SLC_DATA_MODEL,tupel,"net.device"));
+#endif
+
 	freeTupel(SLC_DATA_MODEL,tupel);
 }
 
@@ -103,7 +121,10 @@ static void printResultDev(unsigned int id, Tupel_t *tupel) {
 	do_gettimeofday(&time);
 	timeUS = (unsigned long long)time.tv_sec * (unsigned long long)USEC_PER_SEC + (unsigned long long)time.tv_usec;
 #endif
+#ifdef PRINT_TUPLE
 	printk("Received tupel with %d items at memory address %p at %llu us, dev=%s changed\n",tupel->itemLen,tupel,timeUS - tupel->timestamp,getItemString(SLC_DATA_MODEL,tupel,"net.device"));
+#endif
+
 	freeTupel(SLC_DATA_MODEL,tupel);
 }
 
@@ -131,28 +152,28 @@ static void setupQueries(void) {
 	initQuery(&queryTX);
 	queryTX.onQueryCompleted = printResultTx;
 	queryTX.root = GET_BASE(txStream);
-	queryTX.next = &queryTX2;
+	//queryTX.next = &queryTX2;
 	INIT_EVT_STREAM(txStream,"net.device.onTx",1,0,NULL)
 	SET_SELECTOR_STRING(txStream,0,"eth1")
 
 	initQuery(&queryTX2);
 	queryTX2.onQueryCompleted = printResultTx;
 	queryTX2.root = GET_BASE(txStream2);
-	queryTX2.next = &queryTXBytes;
+	//queryTX2.next = &queryTXBytes;
 	INIT_EVT_STREAM(txStream2,"net.device.onTx",1,0,NULL)
 	SET_SELECTOR_STRING(txStream2,0,"eth0")
 
 	initQuery(&queryTXBytes);
 	queryTXBytes.onQueryCompleted = printResultTxBytes;
 	queryTXBytes.root = GET_BASE(txBytesSrc);
-	queryTXBytes.next = &queryDevStatus;
+	//queryTXBytes.next = &queryDevStatus;
 	INIT_SRC_STREAM(txBytesSrc,"net.device.txBytes",1,0,NULL,2000)
 	SET_SELECTOR_STRING(txBytesSrc,0,"eth0")
 	
 	initQuery(&queryDevStatus);
 	queryDevStatus.onQueryCompleted = printResultDevStatus;
 	queryDevStatus.root = GET_BASE(devStatusStream);
-	queryDevStatus.next = &queryDevObj;
+	//queryDevStatus.next = &queryDevObj;
 	INIT_OBJ_STREAM(devStatusStream,"net.device",0,0,NULL,OBJECT_STATUS);
 
 	initQuery(&queryDevObj);

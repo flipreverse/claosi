@@ -1,41 +1,30 @@
 #include <query.h>
 #include <api.h>
+#include <statistic.h>
 #include <stdio.h>
 #include <sys/time.h>
 #include <unistd.h>
 #include <pthread.h>
 #include <time.h>
 
-static Query_t queryUtime, queryJoin, queryRX;
-static SourceStream_t utimeStream;
+#define PRINT_TUPLE
+#undef PRINT_TUPLE
+
+static Query_t queryJoin, queryRX;
 static ObjectStream_t processObjStatusJoin;
 static EventStream_t rxStream;
 static Join_t joinComm, joinStime, joinRXBytes;
-static Predicate_t commPredicate, stimePredicate, filterPIDPredicate, utimePred, rxBytesPredicate;
-static Filter_t filterPID, utimeFilter;
+static Predicate_t commPredicate, stimePredicate, filterPIDPredicate, rxBytesPredicate;
+static Filter_t filterPID;
 
-static void printResult(unsigned int id, Tupel_t *tupel) {
-#ifndef EVALUATION
-	struct timeval time;
-#endif
-	unsigned long long timeUS;
-
-#ifdef EVALUATION
-	timeUS = getCycles();
-#else
-	gettimeofday(&time,NULL);
-	timeUS = (unsigned long long)time.tv_sec * (unsigned long long)USEC_PER_SEC + (unsigned long long)time.tv_usec;
-#endif
-	printf("processing duration: %llu us, query id: %u,",timeUS - tupel->timestamp,id);
-	printTupel(SLC_DATA_MODEL,tupel);
-	freeTupel(SLC_DATA_MODEL,tupel);
-}
+DECLARE_STATISTIC_VARS(Fork);
+DECLARE_STATISTIC_VARS(RX);
 
 static void printResultJoin(unsigned int id, Tupel_t *tupel) {
 #ifndef EVALUATION
 	struct timeval time;
 #endif
-	unsigned long long timeUS;
+	unsigned long long timeUS, duration = 0;
 
 #ifdef EVALUATION
 	timeUS = getCycles();
@@ -43,13 +32,19 @@ static void printResultJoin(unsigned int id, Tupel_t *tupel) {
 	gettimeofday(&time,NULL);
 	timeUS = (unsigned long long)time.tv_sec * (unsigned long long)USEC_PER_SEC + (unsigned long long)time.tv_usec;
 #endif
+	duration = timeUS - tupel->timestamp;
+
+#ifdef PRINT_TUPLE
 	printf("Received tupel with %d items at memory address %p (process duration: %llu us): task %d: comm %s, stime %d\n",
 					tupel->itemLen,
 					tupel,
-					timeUS - tupel->timestamp,
+					duration,
 					getItemInt(SLC_DATA_MODEL,tupel,"process.process"),
 					getItemString(SLC_DATA_MODEL,tupel,"process.process.comm"),
 					getItemInt(SLC_DATA_MODEL,tupel,"process.process.stime"));
+#endif
+	ACCOUNT_STATISTIC(Fork,duration);
+
 	freeTupel(SLC_DATA_MODEL,tupel);
 }
 
@@ -57,7 +52,7 @@ static void printResultRx(unsigned int id, Tupel_t *tupel) {
 #ifndef EVALUATION
 	struct timeval time;
 #endif
-	unsigned long long timeUS = 0;
+	unsigned long long timeUS = 0, duration = 0;
 
 #ifdef EVALUATION
 	timeUS = getCycles();
@@ -65,22 +60,21 @@ static void printResultRx(unsigned int id, Tupel_t *tupel) {
 	gettimeofday(&time,NULL);
 	timeUS = (unsigned long long)time.tv_sec * (unsigned long long)USEC_PER_SEC + (unsigned long long)time.tv_usec;
 #endif
-	printf("Received packet on device %s. Device received %d bytes so far. (itemLen=%d,tuple=%p,duration=%llu us)\n",getItemString(SLC_DATA_MODEL,tupel,"net.device"),getItemInt(SLC_DATA_MODEL,tupel,"net.device.rxBytes"),tupel->itemLen,tupel,timeUS - tupel->timestamp);
+	duration = timeUS - tupel->timestamp;
+
+#ifdef PRINT_TUPLE
+	printf("Received packet on device %s. Device received %d bytes so far. (itemLen=%d,tuple=%p,duration=%llu us)\n",getItemString(SLC_DATA_MODEL,tupel,"net.device"),getItemInt(SLC_DATA_MODEL,tupel,"net.device.rxBytes"),tupel->itemLen,tupel,duration);
+#endif
+	ACCOUNT_STATISTIC(RX,duration);
+
 	freeTupel(SLC_DATA_MODEL,tupel);
 }
 
 static void setupQueries(void) {
-	initQuery(&queryUtime);
-	queryUtime.onQueryCompleted = printResult;
-	queryUtime.root = GET_BASE(utimeStream);
-	INIT_SRC_STREAM(utimeStream,"process.process.utime",0,0,GET_BASE(utimeFilter),2000)
-	INIT_FILTER(utimeFilter,NULL,1)
-	ADD_PREDICATE(utimeFilter,0,utimePred)
-	SET_PREDICATE(utimePred,GEQ, OP_STREAM, "process.process.utime", OP_POD, "4710")
-
 	initQuery(&queryJoin);
 	queryJoin.onQueryCompleted = printResultJoin;
 	queryJoin.root = GET_BASE(processObjStatusJoin);
+	//queryJoin.next = &queryRX;
 	INIT_OBJ_STREAM(processObjStatusJoin,"process.process",0,0,GET_BASE(filterPID),OBJECT_CREATE);
 	INIT_FILTER(filterPID,GET_BASE(joinStime),1)
 	ADD_PREDICATE(filterPID,0,filterPIDPredicate)
@@ -107,7 +101,7 @@ int onLoad(void) {
 
 	setupQueries();
 
-	if ((ret = registerQuery(&queryRX)) < 0 ) {
+	if ((ret = registerQuery(&queryJoin)) < 0 ) {
 		ERR_MSG("Query registration failed: %d\n",-ret);
 		return -1;
 	}
@@ -118,11 +112,13 @@ int onLoad(void) {
 int onUnload(void) {
 	int ret = 0;
 
-	if ((ret = unregisterQuery(&queryRX)) < 0 ) {
+	if ((ret = unregisterQuery(&queryJoin)) < 0 ) {
 		ERR_MSG("Unregister queries failed: %d\n",-ret);
 	}
 
-	freeOperator(GET_BASE(utimeStream),0);
+	printf("fork: n = %lu, xn = %e, sn = %e\n",nFork,xnFork,snFork);
+	printf("rx: n = %lu, xn = %e, sn = %e\n",nRX,xnRX,snRX);
+
 	freeOperator(GET_BASE(processObjStatusJoin),0);
 	freeOperator(GET_BASE(rxStream),0);
 
