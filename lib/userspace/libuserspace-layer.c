@@ -159,6 +159,10 @@ static void* queryExecutorWork(void *data) {
 		pthread_mutex_lock(&listLock);
 		// Dequeue the head and execute the query
 		cur = STAILQ_FIRST(&queriesToExecList);
+		if (cur == NULL) {
+			pthread_mutex_unlock(&listLock);
+			continue;
+		}
 		STAILQ_REMOVE_HEAD(&queriesToExecList,listEntry);
 		pthread_mutex_unlock(&listLock);
 
