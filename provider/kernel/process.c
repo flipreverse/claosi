@@ -332,26 +332,34 @@ static Tupel_t* getSockets(Selector_t *selectors, int len) {
 	struct fdtable *fdt = NULL;
 	struct file *file = NULL;
 	struct pid *pid = NULL;
-	struct task_struct *task = NULL;
+	struct task_struct *startTask, *curTask;
 	struct socket *sock = NULL;
 	unsigned long long timeUS = 0;
-	int foo = 0, i = 0;
+	int foo = 0, i = 0, runOnce = 0;
 	char lastFileEmpty = 0;
 
 	if (selectors == NULL) {
 		return NULL;
 	}
-	// Retrieve the kernel representation of a pid
-	pid = find_get_pid(*(int*)(&selectors[0].value));
-	if (pid == NULL) {
-		return NULL;
+
+	foo = *(int*)(&selectors[0].value);
+	if (foo == -1) {
+		startTask = &init_task;
+	} else {
+		runOnce = 1;
+		// Retrieve the kernel representation of a pid
+		pid = find_get_pid(foo);
+		if (pid == NULL) {
+			return NULL;
+		}
+		// Resolve it to a struct task_struct
+		startTask = get_pid_task(pid,PIDTYPE_PID);
+		put_pid(pid);
+		if (startTask == NULL) {
+			return NULL;
+		}
 	}
-	// Resolve it to a struct task_struct
-	task = get_pid_task(pid,PIDTYPE_PID);
-	put_pid(pid);
-	if (task == NULL) {
-		return NULL;
-	}
+	foo = 0;
 
 #ifdef EVALUATION
 	timeUS = getCycles();
@@ -360,48 +368,61 @@ static Tupel_t* getSockets(Selector_t *selectors, int len) {
 	timeUS = (unsigned long long)time.tv_sec * (unsigned long long)USEC_PER_SEC + (unsigned long long)time.tv_usec;
 #endif
 
-	// .. and read a process sockets
-	spin_lock(&task->files->file_lock);
-	fdt = files_fdtable(task->files);
-	for (i = 0; i < fdt->max_fds; i++) {
-		file = rcu_dereference_check_fdtable(task->files, fdt->fd[i]);
-		if (file == NULL) {
-			/*
-			 * Two empty fds in a row indicate the end of the used area of fdt
-			 */
-			if (lastFileEmpty > 0) {
-				break;
+	read_lock(&tasklist_lock);
+	//for_each_process(task) {
+	for (curTask = startTask; (curTask  = next_task(curTask)) != &init_task;) {
+		get_task_struct(curTask);
+		if (curTask->files == NULL) {
+			put_task_struct(curTask);
+			continue;
+		}
+		// .. and read a process sockets
+		spin_lock(&curTask->files->file_lock);
+		fdt = files_fdtable(curTask->files);
+		for (i = 0; i < fdt->max_fds; i++) {
+			file = rcu_dereference_check_fdtable(curTask->files, fdt->fd[i]);
+			if (file == NULL) {
+				/*
+				 * Two empty fds in a row indicate the end of the used area of fdt
+				 */
+				if (lastFileEmpty > 0) {
+					break;
+				}
+				lastFileEmpty++;
+				continue;
 			}
-			lastFileEmpty++;
-			continue;
+			lastFileEmpty = 0;
+			// Refers the current fd to a socket?
+			sock = sock_from_file(file,&foo);
+			if (sock == NULL) {
+				continue;
+			}
+			// Yeah, it does. \o/ Allocate a tuple and copy the information
+			curTuple = initTupel(timeUS,2);
+			if (curTuple == NULL) {
+				continue;
+			}
+			if (head == NULL) {
+				head = curTuple;
+			}
+			allocItem(SLC_DATA_MODEL,curTuple,0,"process.process");
+			setItemInt(SLC_DATA_MODEL,curTuple,"process.process",curTask->pid);
+			allocItem(SLC_DATA_MODEL,curTuple,1,"process.process.sockets");
+			setItemInt(SLC_DATA_MODEL,curTuple,"process.process.sockets",SOCK_INODE(sock)->i_ino);
+			if (prevTuple != NULL) {
+				prevTuple->next = curTuple;
+			}
+			prevTuple = curTuple;
 		}
-		lastFileEmpty = 0;
-		// Refers the current fd to a socket?
-		sock = sock_from_file(file,&foo);
-		if (sock == NULL) {
-			continue;
-		}
-		// Yeah, it does. \o/ Allocate a tuple and copy the information
-		curTuple = initTupel(timeUS,2);
-		if (curTuple == NULL) {
-			continue;
-		}
-		if (head == NULL) {
-			head = curTuple;
-		}
-		allocItem(SLC_DATA_MODEL,curTuple,0,"process.process");
-		setItemInt(SLC_DATA_MODEL,curTuple,"process.process",*(int*)(&selectors[0].value));
-		allocItem(SLC_DATA_MODEL,curTuple,1,"process.process.sockets");
-		setItemInt(SLC_DATA_MODEL,curTuple,"process.process.sockets",SOCK_INODE(sock)->i_ino);
-		if (prevTuple != NULL) {
-			prevTuple->next = curTuple;
-		}
-		prevTuple = curTuple;
-	}
-	spin_unlock(&task->files->file_lock);
+		spin_unlock(&curTask->files->file_lock);
 
-	// Give them back to the kernel
-	put_task_struct(task);
+		// Give them back to the kernel
+		put_task_struct(curTask);
+		if (runOnce == 1) {
+			break;
+		}
+	}
+	read_unlock(&tasklist_lock);
 
 	return head;
 }

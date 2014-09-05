@@ -313,7 +313,7 @@ static int buildSelectorsArray(DataModelElement_t *rootDM, DataModelElement_t *j
 				i--;
 				break;
 			} else {
-				ERR_MSG("%s:%d: dm=%s, curDM=%s\n",__FUNCTION__,__LINE__,dm->name, curDM->name);
+				//ERR_MSG("%s:%d: dm=%s, curDM=%s\n",__FUNCTION__,__LINE__,dm->name, curDM->name);
 			}
 		}
 	}
