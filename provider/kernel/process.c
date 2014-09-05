@@ -202,7 +202,7 @@ static Tupel_t* getComm(Selector_t *selectors, int len) {
 	if (comm == NULL) {
 		return NULL;
 	}
-	strcpy(comm,task->comm);
+	comm = get_task_comm(comm,task);
 	// Give them back to the kernel
 	put_task_struct(task);
 
