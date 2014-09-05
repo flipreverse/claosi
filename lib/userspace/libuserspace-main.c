@@ -81,6 +81,17 @@ static void* fifoWork(void *data) {
 		if (read == 0 || read == EOF) {
 			ERR_MSG("Cannot read from FIFO (%s): %s\n",FIFO_PATH,strerror(errno));
 			fclose(cmdFifo);
+			/*
+			 * Gracefully shutdown the userspace layer
+			 * 
+			 */
+			for (curProv = LIST_FIRST(&providerList); curProv != NULL; curProv = tmpProv) {
+				tmpProv = LIST_NEXT(curProv,listEntry);
+				unloadProvider(curProv);
+				LIST_REMOVE(curProv,listEntry);
+				FREE(curProv->libPath);
+				FREE(curProv);
+			}
 			pthread_exit(0);
 		}
 		fclose(cmdFifo);
