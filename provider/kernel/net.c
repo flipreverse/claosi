@@ -3,22 +3,28 @@
 #include <linux/if_ether.h>
 #include <linux/list.h>
 #include <linux/netdevice.h>
+#include <linux/tcp.h>
+#include <net/tcp.h>
+#include <net/inet_hashtables.h>
+#include <net/sock.h>
+#include <net/udp.h>
 #include <datamodel.h>
 #include <query.h>
 #include <api.h>
 
 DECLARE_ELEMENTS(nsNet, model)
 DECLARE_ELEMENTS(objSocket, objDevice, srcSocketType, srcSocketFlags, typePacketType, srcTXBytes, srcRXBytes, evtOnRX, evtOnTX)
-DECLARE_ELEMENTS(typeMacHdr, typeMacProt, typeNetHdr, typeNetProt, typeTranspHdr, typeTransProt, typeDataLen)
+DECLARE_ELEMENTS(typeMacHdr, typeMacProt, typeNetHdr, typeNetProt, typeTranspHdr, typeTransProt, typeDataLen, typeSockRef)
 
 DECLARE_QUERY_LIST(rx);
 DECLARE_QUERY_LIST(tx);
 DECLARE_QUERY_LIST(dev);
 
-static struct kprobe rxKP;
+static char rxSymbolNameTCP[] = "tcp_v4_rcv";
+static char rxSymbolNameUCP[] = "udp_rcv";
+static struct kprobe rxKPTCP, rxKPUDP, *rxKP[2];
 static char txSymbolName[] = "dev_hard_start_xmit";
 static struct kprobe txKP;
-static char rxSymbolName[] = "__netif_receive_skb";
 
 
 
@@ -70,6 +76,12 @@ skb = (struct sk_buff*)regs->ARM_r0;
 		setItemArray(SLC_DATA_MODEL,tupel,"net.packetType.macHdr",ETH_HLEN);
 		copyArrayByte(SLC_DATA_MODEL,tupel,"net.packetType.macHdr",0,skb->data,ETH_HLEN);
 		setItemByte(SLC_DATA_MODEL,tupel,"net.packetType.macProtocol",42);
+		setItemInt(SLC_DATA_MODEL,tupel,"net.packetType.dataLength",skb->len);
+		if (skb->sk) {
+			setItemInt(SLC_DATA_MODEL,tupel,"net.packetType.socket",SOCK_INODE(skb->sk->sk_socket)->i_ino);
+		} else {
+			setItemInt(SLC_DATA_MODEL,tupel,"net.packetType.socket",-1);
+		}
 		eventOccuredUnicast(querySelec->query,tupel);
 	endForEachQueryEvent(slcLock,tx)
 
@@ -78,6 +90,10 @@ skb = (struct sk_buff*)regs->ARM_r0;
 
 static int handlerRX(struct kprobe *p, struct pt_regs *regs) {
 	struct sk_buff *skb = NULL;
+	struct sock *sk = NULL;
+	const struct tcphdr *th = NULL;
+	struct iphdr *iph;
+	struct udphdr *uh = NULL;
 	Tupel_t *tupel = NULL;
 #ifndef EVALUATION
 	struct timeval time;
@@ -94,9 +110,22 @@ skb = (struct sk_buff*)regs->ax;
 skb = (struct sk_buff*)regs->ax;
 #elif defined(__arm__)
 skb = (struct sk_buff*)regs->ARM_r0;
+sock = (struct sock*)regs->ARM_r1;
 #else
 #error Unknown architecture
 #endif
+
+	if (p == &rxKPTCP) {
+		th = tcp_hdr(skb);
+		sk = __inet_lookup_skb(&tcp_hashinfo, skb, th->source, th->dest);
+	} else if (p == &rxKPUDP) {
+		iph = ip_hdr(skb);
+		uh = udp_hdr(skb);
+		sk = __udp4_lib_lookup(dev_net(skb_dst(skb)->dev), iph->saddr, uh->source,iph->daddr, uh->dest, inet_iif(skb),&udp_table);
+	}
+	if (sk == NULL) {
+		return 0;
+	}
 
 #ifdef EVALUATION
 	timeUS = getCycles();
@@ -104,7 +133,6 @@ skb = (struct sk_buff*)regs->ARM_r0;
 	do_gettimeofday(&time);
 	timeUS = (unsigned long long)time.tv_sec * (unsigned long long)USEC_PER_SEC + (unsigned long long)time.tv_usec;
 #endif
-
 	// Acquire the slcLock to avoid change in the datamodel while creating the tuple
 	forEachQueryEvent(slcLock,rx,pos,querySelec)
 		if (strcmp(skb->dev->name,GET_SELECTORS(querySelec->query)[0].value) != 0) {
@@ -125,6 +153,12 @@ skb = (struct sk_buff*)regs->ARM_r0;
 		setItemArray(SLC_DATA_MODEL,tupel,"net.packetType.macHdr",ETH_HLEN);
 		copyArrayByte(SLC_DATA_MODEL,tupel,"net.packetType.macHdr",0,skb->data,ETH_HLEN);
 		setItemByte(SLC_DATA_MODEL,tupel,"net.packetType.macProtocol",42);
+		setItemInt(SLC_DATA_MODEL,tupel,"net.packetType.dataLength",skb->len);
+		if (sk) {
+			setItemInt(SLC_DATA_MODEL,tupel,"net.packetType.socket",SOCK_INODE(sk->sk_socket)->i_ino);
+		} else {
+			setItemInt(SLC_DATA_MODEL,tupel,"net.packetType.socket",-1);
+		}
 		eventOccuredUnicast(querySelec->query,tupel);
 	endForEachQueryEvent(slcLock,rx)
 
@@ -170,15 +204,20 @@ static void activateRX(Query_t *query) {
 	addAndEnqueueQuery(rx,ret, querySelec, query)
 	// list was empty before insertion
 	if (ret == 1) {
-		memset(&rxKP,0,sizeof(struct kprobe));
-		rxKP.pre_handler = handlerRX;
-		rxKP.symbol_name = rxSymbolName;
-		ret = register_kprobe(&rxKP);
+		memset(&rxKPTCP,0,sizeof(struct kprobe));
+		memset(&rxKPUDP,0,sizeof(struct kprobe));
+		rxKPTCP.pre_handler = handlerRX;
+		rxKPTCP.symbol_name = rxSymbolNameTCP;
+		rxKP[0] = &rxKPTCP;
+		rxKPUDP.pre_handler = handlerRX;
+		rxKPUDP.symbol_name = rxSymbolNameUCP;
+		rxKP[1] = &rxKPUDP;
+		ret = register_kprobes(rxKP,2);
 		if (ret < 0) {
-			ERR_MSG("register_kprobe at %s failed. Reason: %d\n",rxKP.symbol_name,ret);
+			ERR_MSG("register_kprobe at %s and %s failed. Reason: %d\n",rxKPTCP.symbol_name,rxKPUDP.symbol_name,ret);
 			return;
 		}
-		DEBUG_MSG(1,"Registered kprobe at %s\n",rxKP.symbol_name);
+		DEBUG_MSG(1,"Registered kprobe at %s and %s\n",rxKPTCP.symbol_name,rxKPUDP.symbol_name);
 	}
 }
 
@@ -190,8 +229,8 @@ static void deactivateRX(Query_t *query) {
 	findAndDeleteQuery(rx,ret, querySelec, query, pos, next)
 	// list is now empty
 	if (ret == 1) {
-		unregister_kprobe(&rxKP);
-		DEBUG_MSG(1,"Unregistered kprobe at %s. Missed it %ld times.\n",rxKP.symbol_name,rxKP.nmissed);
+		unregister_kprobes(rxKP,2);
+		DEBUG_MSG(1,"Unregistered kprobe at %s (missed=%ld) and %s (missed=%ld).\n",rxKPTCP.symbol_name,rxKPTCP.nmissed,rxKPUDP.symbol_name,rxKPUDP.nmissed);
 	}
 }
 
@@ -523,18 +562,18 @@ static void initDatamodel(void) {
 	INIT_PLAINTYPE(typeNetProt,"networkProtocol",typePacketType,BYTE)
 	INIT_PLAINTYPE(typeTranspHdr,"transportHdr",typePacketType,(BYTE | ARRAY))
 	INIT_PLAINTYPE(typeTransProt,"transportProtocl",typePacketType,BYTE)
-	INIT_PLAINTYPE(typeDataLen,"dataLength",typePacketType,BYTE)
-	//INIT_REF(typeSockRef,"socket",typePacketType,"process.process.sockets")
+	INIT_PLAINTYPE(typeDataLen,"dataLength",typePacketType,INT)
+	INIT_REF(typeSockRef,"socket",typePacketType,"process.process.sockets")
 
-	INIT_COMPLEX_TYPE(typePacketType,"packetType",nsNet,2)
+	INIT_COMPLEX_TYPE(typePacketType,"packetType",nsNet,4)
 	ADD_CHILD(typePacketType,0,typeMacHdr);
 	ADD_CHILD(typePacketType,1,typeMacProt);
 	/*ADD_CHILD(typePacketType,2,typeNetHdr);
 	ADD_CHILD(typePacketType,3,typeNetProt);
 	ADD_CHILD(typePacketType,4,typeTranspHdr);
-	ADD_CHILD(typePacketType,5,typeTransProt);
-	ADD_CHILD(typePacketType,6,typeDataLen);
-	ADD_CHILD(typePacketType,7,typeSockRef);*/
+	ADD_CHILD(typePacketType,5,typeTransProt);*/
+	ADD_CHILD(typePacketType,2,typeDataLen);
+	ADD_CHILD(typePacketType,3,typeSockRef);
 
 	INIT_SOURCE_POD(srcTXBytes,"txBytes",objDevice,INT,getTxBytes)
 	INIT_SOURCE_POD(srcRXBytes,"rxBytes",objDevice,INT,getRxBytes)
