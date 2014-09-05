@@ -10,5 +10,6 @@ static double xn ## varSuffix = 0, sn ## varSuffix = 0;
 		sn ## varSuffix = (n ## varSuffix - 2) / (n ## varSuffix - 1) * sn ## varSuffix * sn ## varSuffix+ (varValue - xn ## varSuffix) * (varValue - xn ## varSuffix) / n ## varSuffix; \
 	}
 
+#define PRINT_STATISTIC(varSuffix)	PRINT_MSG("%s: n = %lu, xn = %e, sn = %e\n",#varSuffix,n ## varSuffix,xn ## varSuffix,sn ## varSuffix);
 
 #endif // __STATISTIC_H__
