@@ -18,7 +18,7 @@
 
 #define SAMPLE_RING_BUFFER_SIZE 60
 #define CHAR_BUFFER_SIZE 200
-#define OUTPUT_FILENAME "time-slc-net.txt"
+#define OUTPUT_FILENAME "time-slc-net-userspace.txt"
 #define WRITE_THREAD_NAME "evalWriteThread"
 
 #define isEmpty(var)		((var).read == (var).write)

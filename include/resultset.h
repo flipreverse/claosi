@@ -377,6 +377,10 @@ static inline Tupel_t* initTupel(unsigned long long timestamp, int numItems) {
 	ret->flags = 0;
 	ret->next = NULL;
 	ret->timestamp = timestamp;
+#ifdef EVALUATION
+	ret->timestamp2 = 0;
+	ret->timestamp3 = 0;
+#endif
 	ret->itemLen = numItems;
 	ret->items = (Item_t**)(ret + 1);
 	for (i = 0; i < numItems; i++) {
