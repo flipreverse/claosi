@@ -3,8 +3,8 @@
 #include <output.h>
 #include <liballoc.h>
 
-#define isEmpty(var)		(var->read == var->write)
-#define isFull(var)			((var->write + 1) % var->size == var->read)
+#define isEmpty(var)		((var)->read == (var)->write)
+#define isFull(var)			(((var)->write + 1) % (var)->size == (var)->read)
 #define FREE_THRESHOLD		(RING_BUFFER_SIZE / 2)
 
 /**
