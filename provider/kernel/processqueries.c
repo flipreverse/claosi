@@ -9,8 +9,8 @@
 static ObjectStream_t processObjCreate, processObjExit, processObjStatus, processObjStatusJoin;
 static SourceStream_t processUTimeStr, processCommStr, processSocketsStr;
 static Join_t joinComm, joinStime;
-static Predicate_t commPredicate, stimePredicate, filterPIDPredicate;
-static Filter_t filterPID;
+static Predicate_t commPredicate, stimePredicate, filterPIDPredicate, filterPIDSocketPredicate;
+static Filter_t filterPID, filterPIDSocket;
 static Query_t queryFork, queryExit, queryStatus, queryUTime, queryComm, queryJoin, querySockets;
 
 static void printResultFork(unsigned int id, Tupel_t *tupel) {
@@ -90,7 +90,7 @@ static void printResultUTime(unsigned int id, Tupel_t *tupel) {
 #endif
 	duration = timeUS - tupel->timestamp;
 
-#ifdef PRINT_TUPLE
+#ifndef PRINT_TUPLE
 	printk("Received tupel with %d items at memory address %p (process duration: %llu us): task utime %d\n",tupel->itemLen,tupel,timeUS - tupel->timestamp, getItemInt(SLC_DATA_MODEL,tupel,"process.process.utime"));
 #endif
 
@@ -159,7 +159,7 @@ static void printResultSockets(unsigned int id, Tupel_t *tupel) {
 #endif
 	duration = timeUS - tupel->timestamp;
 
-#ifdef PRINT_TUPLE
+#ifndef PRINT_TUPLE
 	printk("Received tupel with %d items at memory address %p (process duration: %llu us): task %d: socket %d\n",
 					tupel->itemLen,
 					tupel,
@@ -195,14 +195,14 @@ static void setupQueries(void) {
 	queryUTime.onQueryCompleted = printResultUTime;
 	queryUTime.root = GET_BASE(processUTimeStr);
 	INIT_SRC_STREAM(processUTimeStr,"process.process.utime",1,0,NULL,2000);
-	SET_SELECTOR_INT(processUTimeStr,0,3568)
+	SET_SELECTOR_INT(processUTimeStr,0,3863)
 
 	initQuery(&queryComm);
 	queryComm.onQueryCompleted = printResultComm;
 	queryComm.root = GET_BASE(processCommStr);
 	//queryComm.next = &queryJoin;
 	INIT_SRC_STREAM(processCommStr,"process.process.comm",1,0,NULL,2000);
-	SET_SELECTOR_INT(processCommStr,0,3568)
+	SET_SELECTOR_INT(processCommStr,0,3863)
 
 	initQuery(&queryJoin);
 	queryJoin.onQueryCompleted = printResultJoin;
@@ -222,8 +222,11 @@ static void setupQueries(void) {
 	initQuery(&querySockets);
 	querySockets.onQueryCompleted = printResultSockets;
 	querySockets.root = GET_BASE(processSocketsStr);
-	INIT_SRC_STREAM(processSocketsStr,"process.process.sockets",1,0,NULL,10000);
-	SET_SELECTOR_INT(processSocketsStr,0,6091)
+	INIT_SRC_STREAM(processSocketsStr,"process.process.sockets",1,0,GET_BASE(filterPIDSocket),2000);
+	SET_SELECTOR_INT(processSocketsStr,0,-1)
+	INIT_FILTER(filterPIDSocket,NULL,1)
+	ADD_PREDICATE(filterPIDSocket,0,filterPIDSocketPredicate)
+	SET_PREDICATE(filterPIDSocketPredicate,LEQ, OP_STREAM, "process.process", OP_POD, "3863")
 }
 
 int __init processqueries_init(void)
