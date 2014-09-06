@@ -375,7 +375,7 @@ void enqueueQuery(Query_t *query, Tupel_t *tuple, int step) {
 	job->tuple = tuple;
 	job->step = step;
 #ifdef EVALUATION
-	job->tuple->timestamp2 = getCycles();
+	job->tuple->timestamp3 = getCycles();
 #endif
 	// Enqueue it
 	DEBUG_MSG(3,"Enqueued query 0x%x with tuple %p for execution\n",job->query->queryID,job->tuple);

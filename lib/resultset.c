@@ -576,6 +576,10 @@ Tupel_t* copyTupel(DataModelElement_t *rootDM, Tupel_t *tuple) {
 	if (ret == NULL) {
 		return NULL;
 	}
+#ifdef EVALUATION
+	ret->timestamp2 = tuple->timestamp2;
+	ret->timestamp3 = tuple->timestamp3;
+#endif
 
 	for (i = 0; i < tuple->itemLen; i++) {
 		if (tuple->items[i] == NULL) {

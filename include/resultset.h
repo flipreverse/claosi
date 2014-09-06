@@ -26,6 +26,7 @@ typedef struct __attribute__((packed)) Tupel {
 	struct Tupel *next;
 	#ifdef EVALUATION
 	unsigned long long timestamp2;
+	unsigned long long timestamp3;
 	#endif
 	unsigned long long timestamp;				// The current time since 1-1-1970 in ms
 	unsigned short itemLen;						// Number of items
