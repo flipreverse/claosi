@@ -26,8 +26,6 @@ static struct kprobe rxKPTCP, rxKPUDP, *rxKP[2];
 static char txSymbolName[] = "dev_hard_start_xmit";
 static struct kprobe txKP;
 
-
-
 static int handlerTX(struct kprobe *p, struct pt_regs *regs) {
 	struct sk_buff *skb = NULL;
 	Tupel_t *tupel = NULL;
@@ -57,6 +55,7 @@ skb = (struct sk_buff*)regs->ARM_r0;
 	timeUS = (unsigned long long)time.tv_sec * (unsigned long long)USEC_PER_SEC + (unsigned long long)time.tv_usec;
 #endif
 
+	// Was the packet received by a device a query was registered on?
 	forEachQueryEvent(slcLock,tx,pos,querySelec)
 		if (strcmp(skb->dev->name,GET_SELECTORS(querySelec->query)[0].value) != 0) {
 			continue;
@@ -115,14 +114,23 @@ sock = (struct sock*)regs->ARM_r1;
 #error Unknown architecture
 #endif
 
+	/*
+	 * Initially, an instance of struct sk_buff does *not* have a socket set.
+	 * It will be resolved while being passed through the diffrent layers.
+	 * For example, the functions (tcp_v4_rcv/udp_rcv) we're probing do this job.
+	 * Hence, it's necessary to do the same stuff here.
+	 */
 	if (p == &rxKPTCP) {
+		// TCP packet
 		th = tcp_hdr(skb);
 		sk = __inet_lookup_skb(&tcp_hashinfo, skb, th->source, th->dest);
 	} else if (p == &rxKPUDP) {
+		// UDP packet
 		iph = ip_hdr(skb);
 		uh = udp_hdr(skb);
 		sk = __udp4_lib_lookup(dev_net(skb_dst(skb)->dev), iph->saddr, uh->source,iph->daddr, uh->dest, inet_iif(skb),&udp_table);
 	}
+	// No valid socket found. Abort.
 	if (sk == NULL) {
 		return 0;
 	}
@@ -135,6 +143,7 @@ sock = (struct sock*)regs->ARM_r1;
 #endif
 	// Acquire the slcLock to avoid change in the datamodel while creating the tuple
 	forEachQueryEvent(slcLock,rx,pos,querySelec)
+		// Was the packet received by a device a query was registered on?
 		if (strcmp(skb->dev->name,GET_SELECTORS(querySelec->query)[0].value) != 0) {
 			continue;
 		}
@@ -161,6 +170,8 @@ sock = (struct sock*)regs->ARM_r1;
 		}
 		eventOccuredUnicast(querySelec->query,tupel);
 	endForEachQueryEvent(slcLock,rx)
+	// Give the socket back to the kernel
+	sock_put(sk);
 
 	return 0;
 }
@@ -204,6 +215,13 @@ static void activateRX(Query_t *query) {
 	addAndEnqueueQuery(rx,ret, querySelec, query)
 	// list was empty before insertion
 	if (ret == 1) {
+		/*
+		 * Initially, an instance of struct sk_buff does *not* have a socket set.
+		 * It will be resolved while being passed through the diffrent layers.
+		 * The ipv4 variants of tcp and udp resolve the socket in tcp_v4_rcv and udp_rcv respectively.
+		 * Thus, it is insuffiecient to register a kprobe for packet reception which would be netif_receive_skb().
+		 * Furthermore, two kprobes for both functions tcp and udp are necessary.
+		 */
 		memset(&rxKPTCP,0,sizeof(struct kprobe));
 		memset(&rxKPUDP,0,sizeof(struct kprobe));
 		rxKPTCP.pre_handler = handlerRX;
