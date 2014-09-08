@@ -234,14 +234,14 @@ enum {
 #ifdef EVALUATION
 static inline  unsigned long long getCycles(void) {
 	unsigned long long ret = 0;
-	unsigned int low = 0, high = 0;
 
 #ifdef __KERNEL__
-	unsigned long flags = 0;
+//	unsigned long flags = 0;
 
-	local_irq_save(flags);
+//	local_irq_save(flags);
 #endif
 #if defined(__i386__)
+	unsigned int low = 0, high = 0;
 		asm volatile(	"mov %%ebx,%%esi\n"
 			"mov $0,%%eax\n"
 			"CPUID\n"
@@ -253,6 +253,7 @@ static inline  unsigned long long getCycles(void) {
 			: "%eax", "%edx", "%ecx", "%esi", "memory");
 	ret = ((unsigned long long)high << 32) | (unsigned long long)low;
 #elif defined(__x86_64__)
+	unsigned long long low = 0, high = 0;
 		asm volatile(	"mov %%rbx,%%rsi\n"
 			"mov $0,%%rax\n"
 			"CPUID\n"
@@ -269,7 +270,7 @@ static inline  unsigned long long getCycles(void) {
 #error Unknown architecture
 #endif
 #ifdef __KERNEL__
-	local_irq_restore(flags);
+//	local_irq_restore(flags);
 #endif
 
 	return ret;
