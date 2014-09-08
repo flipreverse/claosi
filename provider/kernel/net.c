@@ -41,7 +41,7 @@ static int handlerTX(struct kprobe *p, struct pt_regs *regs) {
 #if defined(__i386__)
 skb = (struct sk_buff*)regs->ax;
 #elif defined(__x86_64__)
-skb = (struct sk_buff*)regs->ax;
+skb = (struct sk_buff*)regs->di;
 #elif defined(__arm__)
 skb = (struct sk_buff*)regs->ARM_r0;
 #else
@@ -106,14 +106,12 @@ static int handlerRX(struct kprobe *p, struct pt_regs *regs) {
 #if defined(__i386__)
 skb = (struct sk_buff*)regs->ax;
 #elif defined(__x86_64__)
-skb = (struct sk_buff*)regs->ax;
+skb = (struct sk_buff*)regs->di;
 #elif defined(__arm__)
 skb = (struct sk_buff*)regs->ARM_r0;
-sock = (struct sock*)regs->ARM_r1;
 #else
 #error Unknown architecture
 #endif
-
 	/*
 	 * Initially, an instance of struct sk_buff does *not* have a socket set.
 	 * It will be resolved while being passed through the diffrent layers.
