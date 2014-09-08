@@ -21,7 +21,7 @@ static const char *baseDirRead = NULL, *baseDirWrite = NULL;
 static int running;
 
 static void* readerThreadWork(void *data) {
-	int cpu = (int)data, fdRead, fdWrite, bytesRead, toWrite;
+	long cpu = (long)data, fdRead, fdWrite, bytesRead, toWrite;
 	char *path, *bufferRead, bufferWrite[100];
 	Sample_t *curTS;
 	struct pollfd pollFDs;
@@ -36,8 +36,8 @@ static void* readerThreadWork(void *data) {
 		perror("malloc path");
 		pthread_exit(NULL);
 	}
-	sprintf(path,"%s/%s%d",baseDirRead,RELAYFS_NAME,cpu);
-	printf("%d: Opening %s...\n",cpu,path);
+	sprintf(path,"%s/%s%ld",baseDirRead,RELAYFS_NAME,cpu);
+	printf("%ld: Opening %s...\n",cpu,path);
 	fdRead = open(path,O_RDONLY);
 	if (fdRead < 0) {
 		perror("open relayfs file");
@@ -47,8 +47,8 @@ static void* readerThreadWork(void *data) {
 	free(path);
 
 	path = (char*)malloc(strlen(baseDirWrite) + strlen( "/" OUTPUT_FILE_NAME) + 5);
-	sprintf(path,"%s/%s%d.txt",baseDirWrite,OUTPUT_FILE_NAME,cpu);
-	printf("%d: Opening %s...\n",cpu,path);
+	sprintf(path,"%s/%s%ld.txt",baseDirWrite,OUTPUT_FILE_NAME,cpu);
+	printf("%ld: Opening %s...\n",cpu,path);
 	fdWrite = open(path,O_WRONLY|O_APPEND|O_CREAT,0744);
 	if (fdWrite < 0) {
 		perror("open output file");
@@ -104,8 +104,7 @@ static void sigHandler(int signo) {
 }
 
 int main(int argc, const char *argv[]) {
-	long cpus;
-	int i;
+	long cpus, i;
 
 	if (argc < 3) {
 		printf("specify a base directory!\n");
