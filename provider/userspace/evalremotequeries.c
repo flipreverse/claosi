@@ -56,6 +56,10 @@ static void* writeThreadWork(void *data) {
 		ERR_MSG("error:%s\n",strerror(errno));
 	}
 	PRINT_MSG("%s: tid=%ld\n",WRITE_THREAD_NAME,syscall(SYS_gettid));
+
+	written = snprintf(timestampBuffer,CHAR_BUFFER_SIZE,"ts1,ts2,ts3,ts4\n");
+	write(outputFile,timestampBuffer,written);
+
 	sleepTime.tv_sec = 0;
 	sleepTime.tv_nsec = 20000000;
 

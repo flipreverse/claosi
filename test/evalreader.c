@@ -13,6 +13,7 @@
 
 #define BUFFER_SIZE SUBBUF_SIZE
 #define OUTPUT_FILE_NAME "time-slc-net-kernel"
+#define CHAR_BUFFER_SIZE 150
 
 static pthread_t *threads;
 static pthread_attr_t threadsAttr;
@@ -22,7 +23,7 @@ static int running;
 
 static void* readerThreadWork(void *data) {
 	long cpu = (long)data, fdRead, fdWrite, bytesRead, toWrite;
-	char *path, *bufferRead, bufferWrite[100];
+	char *path, *bufferRead, bufferWrite[CHAR_BUFFER_SIZE];
 	Sample_t *curTS;
 	struct pollfd pollFDs;
 	sigset_t sigs;
@@ -66,6 +67,13 @@ static void* readerThreadWork(void *data) {
 		pthread_exit(NULL);
 	}
 
+	if (cpu == 0) {
+		toWrite = snprintf(bufferWrite,CHAR_BUFFER_SIZE,"ts1,ts2,ts3,ts4\n",curTS->ts1,curTS->ts2,curTS->ts3,curTS->ts4);
+		if (write(fdWrite,bufferWrite,toWrite) < 0) {
+			perror("write buffer");
+		}
+	}
+
 	pollFDs.fd = fdRead;
 	pollFDs.events = POLLIN;
 
@@ -82,7 +90,7 @@ static void* readerThreadWork(void *data) {
 		}
 		curTS = (Sample_t*)bufferRead;
 		while (bytesRead > 0 && bytesRead >= sizeof(Sample_t)) {
-			toWrite = snprintf(bufferWrite,100,"%llu,%llu,%llu,%llu\n",curTS->ts1,curTS->ts2,curTS->ts3,curTS->ts4);
+			toWrite = snprintf(bufferWrite,CHAR_BUFFER_SIZE,"%llu,%llu,%llu,%llu\n",curTS->ts1,curTS->ts2,curTS->ts3,curTS->ts4);
 			if (write(fdWrite,bufferWrite,toWrite) < 0) {
 				perror("write buffer");
 				break;
