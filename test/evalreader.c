@@ -68,7 +68,7 @@ static void* readerThreadWork(void *data) {
 	}
 
 	if (cpu == 0) {
-		toWrite = snprintf(bufferWrite,CHAR_BUFFER_SIZE,"ts1,ts2,ts3,ts4\n",curTS->ts1,curTS->ts2,curTS->ts3,curTS->ts4);
+		toWrite = snprintf(bufferWrite,CHAR_BUFFER_SIZE,"ts1,ts2,ts3,ts4\n");
 		if (write(fdWrite,bufferWrite,toWrite) < 0) {
 			perror("write buffer");
 		}
