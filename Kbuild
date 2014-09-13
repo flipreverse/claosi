@@ -1,9 +1,11 @@
 ccflags-y := -I$(src)/../../include
-obj-m := slc-core.o slc-net.o slc-process.o remotequery.o netqueries.o processqueries.o evalqueries.o
+obj-m := slc-core.o slc-net.o slc-process.o remotequery.o netqueries.o processqueries.o evalqueries-1.o evalqueries-2.o evalqueries-3.o
 slc-core-y := lib/kernel/libkernel.o lib/query.o lib/resultset.o lib/datamodel.o lib/api.o lib/liballoc.o lib/communication.o
 slc-net-y := provider/kernel/net.o
 slc-process-y := provider/kernel/process.o
 remotequery-y := provider/kernel/remotequery.o
 netqueries-y := provider/kernel/netqueries.o
 processqueries-y := provider/kernel/processqueries.o
-evalqueries-y := provider/kernel/evalqueries.o
+evalqueries-1-y := provider/kernel/eval-queries-1.o
+evalqueries-2-y := provider/kernel/eval-queries-2.o
+evalqueries-3-y := provider/kernel/eval-queries-3.o
