@@ -743,7 +743,7 @@ out_error:
 void executeQuery(DataModelElement_t *rootDM, Query_t *query, Tupel_t *tupleStream, int steps) {
 	Operator_t *cur = NULL;
 	int counter = 0, i = 0, ret = 0;
-	Tupel_t *headTupleStream = NULL;
+	Tupel_t *headTupleStream = NULL, *tempTuple = NULL;
 
 	if (query == NULL) {
 		DEBUG_MSG(1,"%s: Query is NULL",__func__);
@@ -804,7 +804,11 @@ void executeQuery(DataModelElement_t *rootDM, Query_t *query, Tupel_t *tupleStre
 	// It is our query. Hence, query->onCompletedFunction should point to a valid memory location
 	if (query->layerCode == LAYER_CODE) {
 		if (query->onQueryCompleted != NULL) {
-			query->onQueryCompleted(query->queryID,headTupleStream);
+			while (headTupleStream != NULL) {
+				tempTuple = headTupleStream->next;
+				query->onQueryCompleted(query->queryID,headTupleStream);
+				headTupleStream = tempTuple;
+			}
 		}
 	} else {
 		// The original query is located at the remote layer. Hand it over.
