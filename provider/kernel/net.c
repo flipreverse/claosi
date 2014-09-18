@@ -76,7 +76,7 @@ skb = (struct sk_buff*)regs->ARM_r0;
 		copyArrayByte(SLC_DATA_MODEL,tupel,"net.packetType.macHdr",0,skb->data,ETH_HLEN);
 		setItemByte(SLC_DATA_MODEL,tupel,"net.packetType.macProtocol",42);
 		setItemInt(SLC_DATA_MODEL,tupel,"net.packetType.dataLength",skb->len);
-		if (skb->sk) {
+		if (skb->sk && skb->sk->sk_socket) {
 			setItemInt(SLC_DATA_MODEL,tupel,"net.packetType.socket",SOCK_INODE(skb->sk->sk_socket)->i_ino);
 		} else {
 			setItemInt(SLC_DATA_MODEL,tupel,"net.packetType.socket",-1);
@@ -161,7 +161,7 @@ skb = (struct sk_buff*)regs->ARM_r0;
 		copyArrayByte(SLC_DATA_MODEL,tupel,"net.packetType.macHdr",0,skb->data,ETH_HLEN);
 		setItemByte(SLC_DATA_MODEL,tupel,"net.packetType.macProtocol",42);
 		setItemInt(SLC_DATA_MODEL,tupel,"net.packetType.dataLength",skb->len);
-		if (sk) {
+		if (sk && sk->sk_socket) {
 			setItemInt(SLC_DATA_MODEL,tupel,"net.packetType.socket",SOCK_INODE(sk->sk_socket)->i_ino);
 		} else {
 			setItemInt(SLC_DATA_MODEL,tupel,"net.packetType.socket",-1);
