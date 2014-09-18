@@ -9,6 +9,7 @@
 #include <signal.h>
 #include <poll.h>
 #include <sys/poll.h>
+#include <errno.h>
 #include <evaluation.h>
 
 #define BUFFER_SIZE SUBBUF_SIZE
@@ -18,15 +19,17 @@
 static pthread_t *threads;
 static pthread_attr_t threadsAttr;
 
-static const char *baseDirRead = NULL, *baseDirWrite = NULL; 
+static const char *baseDirRead = NULL, *baseDirWrite = NULL, *outputFilePrefix = OUTPUT_FILE_NAME; 
 static int running;
 
 static void* readerThreadWork(void *data) {
 	long cpu = (long)data, fdRead, fdWrite, bytesRead, toWrite;
+	struct stat outputFileStat;
 	char *path, *bufferRead, bufferWrite[CHAR_BUFFER_SIZE];
 	Sample_t *curTS;
 	struct pollfd pollFDs;
 	sigset_t sigs;
+	int fileExits = 1;
 
 	sigemptyset(&sigs);
 	sigaddset(&sigs,SIGUSR1);
@@ -48,8 +51,13 @@ static void* readerThreadWork(void *data) {
 	free(path);
 
 	path = (char*)malloc(strlen(baseDirWrite) + strlen( "/" OUTPUT_FILE_NAME) + 5);
-	sprintf(path,"%s/%s%ld.txt",baseDirWrite,OUTPUT_FILE_NAME,cpu);
+	sprintf(path,"%s/%s%ld.txt",baseDirWrite,outputFilePrefix,cpu);
 	printf("%ld: Opening %s...\n",cpu,path);
+	if (stat(path,&outputFileStat) < 0) {
+		if (errno == ENOENT) {
+			fileExits = 0;
+		}
+	}
 	fdWrite = open(path,O_WRONLY|O_APPEND|O_CREAT,0744);
 	if (fdWrite < 0) {
 		perror("open output file");
@@ -67,7 +75,7 @@ static void* readerThreadWork(void *data) {
 		pthread_exit(NULL);
 	}
 
-	if (cpu == 0) {
+	if (cpu == 0 && fileExits == 0) {
 		toWrite = snprintf(bufferWrite,CHAR_BUFFER_SIZE,"ts1,ts2,ts3,ts4\n");
 		if (write(fdWrite,bufferWrite,toWrite) < 0) {
 			perror("write buffer");
@@ -115,11 +123,15 @@ int main(int argc, const char *argv[]) {
 	long cpus, i;
 
 	if (argc < 3) {
-		printf("specify a base directory!\n");
+		printf("specify a base and output directory!\n");
 		return EXIT_FAILURE;
 	}
 	baseDirRead = argv[1];
 	baseDirWrite = argv[2];
+
+	if (argc > 3) {
+		outputFilePrefix = argv[3];
+	}
 
 	if (signal(SIGUSR1,sigHandler) < 0) {
 		perror("registering signal handler\n");
