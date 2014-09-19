@@ -337,6 +337,7 @@ static Tupel_t* getSockets(Selector_t *selectors, int len) {
 	struct socket *sock = NULL;
 	unsigned long long timeUS = 0;
 	int foo = 0, i = 0, runOnce = 0;
+	unsigned long flags;
 	char lastFileEmpty = 0;
 
 	if (selectors == NULL) {
@@ -369,7 +370,10 @@ static Tupel_t* getSockets(Selector_t *selectors, int len) {
 	timeUS = (unsigned long long)time.tv_sec * (unsigned long long)USEC_PER_SEC + (unsigned long long)time.tv_usec;
 #endif
 
-	read_lock(kernTaskListLock);
+	if (read_trylock(kernTaskListLock) == 0) {
+		return NULL;
+	}
+	local_irq_save(flags);
 	//for_each_process(task) {
 	for (curTask = startTask; (curTask  = next_task(curTask)) != &init_task;) {
 		get_task_struct(curTask);
@@ -378,7 +382,10 @@ static Tupel_t* getSockets(Selector_t *selectors, int len) {
 			continue;
 		}
 		// .. and read a process sockets
-		spin_lock(&curTask->files->file_lock);
+		if (spin_trylock(&curTask->files->file_lock) == 0) {
+			put_task_struct(curTask);
+			continue;
+		}
 		fdt = files_fdtable(curTask->files);
 		for (i = 0; i < fdt->max_fds; i++) {
 			file = rcu_dereference_check_fdtable(curTask->files, fdt->fd[i]);
@@ -423,6 +430,7 @@ static Tupel_t* getSockets(Selector_t *selectors, int len) {
 			break;
 		}
 	}
+	local_irq_restore(flags);
 	read_unlock(kernTaskListLock);
 
 	return head;
@@ -457,7 +465,7 @@ int __init process_init(void)
 		ERR_MSG("Cannot resolve symbol 'tasklist_lock'\n");
 		return -1;
 	}
-	DEBUG_MSG(3,"tasklist_lock=0x%p\n",kernTaskListLock);
+	DEBUG_MSG(1,"tasklist_lock=0x%p\n",kernTaskListLock);
 
 	ret = registerProvider(&model, NULL);
 	if (ret < 0 ) {
