@@ -17,6 +17,7 @@ static struct kretprobe forkKP;
 static char forkSymbolName[] = "do_fork";
 static struct kprobe exitKP;
 static char exitSymbolName[] = "do_exit";
+static rwlock_t *kernTaskListLock;
 
 static int handlerFork(struct kretprobe_instance *ri, struct pt_regs *regs) {
 	int retval = regs_return_value(regs);
@@ -368,7 +369,7 @@ static Tupel_t* getSockets(Selector_t *selectors, int len) {
 	timeUS = (unsigned long long)time.tv_sec * (unsigned long long)USEC_PER_SEC + (unsigned long long)time.tv_usec;
 #endif
 
-	read_lock(&tasklist_lock);
+	read_lock(kernTaskListLock);
 	//for_each_process(task) {
 	for (curTask = startTask; (curTask  = next_task(curTask)) != &init_task;) {
 		get_task_struct(curTask);
@@ -422,7 +423,7 @@ static Tupel_t* getSockets(Selector_t *selectors, int len) {
 			break;
 		}
 	}
-	read_unlock(&tasklist_lock);
+	read_unlock(kernTaskListLock);
 
 	return head;
 }
@@ -451,7 +452,15 @@ int __init process_init(void)
 	int ret = 0;
 	initDatamodel();
 
-	if ((ret = registerProvider(&model, NULL)) < 0 ) {
+	kernTaskListLock = (rwlock_t*)kallsyms_lookup_name("tasklist_lock");
+	if (kernTaskListLock == NULL) {
+		ERR_MSG("Cannot resolve symbol 'tasklist_lock'\n");
+		return -1;
+	}
+	DEBUG_MSG(3,"tasklist_lock=0x%p\n",kernTaskListLock);
+
+	ret = registerProvider(&model, NULL);
+	if (ret < 0 ) {
 		ERR_MSG("Register provider failed: %d\n",-ret);
 		return -1;
 	}
