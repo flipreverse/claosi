@@ -7,7 +7,6 @@
 #include <api.h>
 #include <evaluation.h>
 
-#include "eval-relay.c"
 #include "eval-txrx.c"
 
 static Query_t *firstQuery = NULL;
@@ -17,9 +16,6 @@ int __init evalqueries_1_init(void) {
 
 	setupQueriesTXRX(&firstQuery);
 
-	if (initRelayFS() < 0) {
-		return -1;
-	}
 	ret = registerQuery(firstQuery);
 	if (ret < 0 ) {
 		ERR_MSG("Register failed: %d\n",-ret);
@@ -37,8 +33,6 @@ void __exit evalqueries_1_exit(void) {
 	if (ret < 0 ) {
 		ERR_MSG("Unregister eval net failed: %d\n",-ret);
 	}
-
-	destroyRelayFS();
 
 	destroyQueriesTXRX();
 	DEBUG_MSG(1,"Unregistered eval net queries\n");

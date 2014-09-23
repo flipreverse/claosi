@@ -2,51 +2,11 @@ static EventStream_t rxStreamBase, txStreamBase;
 static Query_t queryRXBase, queryTXBase;
 
 static void printResultRx(unsigned int id, Tupel_t *tupel) {
-#ifndef EVALUATION
-	struct timeval time;
-#endif
-	unsigned long long timeUS = 0;
-	Sample_t sample;
-
-#ifdef EVALUATION
-	timeUS = getCycles();
-#else
-	do_gettimeofday(&time);
-	timeUS = (unsigned long long)time.tv_sec * (unsigned long long)USEC_PER_SEC + (unsigned long long)time.tv_usec;
-#endif
-
-	sample.ts1 = tupel->timestamp;
-#ifdef EVALUATION
-	sample.ts2 = tupel->timestamp2;
-	sample.ts3 = tupel->timestamp3;
-#endif
-	sample.ts4 = timeUS;
-	relay_write(relayfsOutput,&sample,sizeof(sample));
 
 	freeTupel(SLC_DATA_MODEL,tupel);
 }
 
 static void printResultTx(unsigned int id, Tupel_t *tupel) {
-#ifndef EVALUATION
-	struct timeval time;
-#endif
-	unsigned long long timeUS = 0;
-	Sample_t sample;
-
-#ifdef EVALUATION
-	timeUS = getCycles();
-#else
-	do_gettimeofday(&time);
-	timeUS = (unsigned long long)time.tv_sec * (unsigned long long)USEC_PER_SEC + (unsigned long long)time.tv_usec;
-#endif
-
-	sample.ts1 = tupel->timestamp;
-#ifdef EVALUATION
-	sample.ts2 = tupel->timestamp2;
-	sample.ts3 = tupel->timestamp3;
-#endif
-	sample.ts4 = timeUS;
-	relay_write(relayfsOutput,&sample,sizeof(sample));
 
 	freeTupel(SLC_DATA_MODEL,tupel);
 }
