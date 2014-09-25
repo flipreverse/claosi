@@ -4,7 +4,7 @@
 #include <api.h>
 
 #define PRINT_TUPLE
-#undef PRINT_TUPLE
+//#undef PRINT_TUPLE
 
 static ObjectStream_t processObjCreate, processObjExit, processObjStatus, processObjStatusJoin;
 static SourceStream_t processUTimeStr, processCommStr, processSocketsStr;
@@ -234,7 +234,7 @@ int __init processqueries_init(void)
 	int ret = 0;
 	setupQueries();
 
-	ret = registerQuery(&querySockets);
+	ret = registerQuery(&queryJoin);
 	if (ret < 0 ) {
 		ERR_MSG("Register queries failed: %d\n",-ret);
 		return -1;
@@ -247,7 +247,7 @@ int __init processqueries_init(void)
 void __exit processqueries_exit(void) {
 	int ret = 0;
 
-	ret = unregisterQuery(&querySockets);
+	ret = unregisterQuery(&queryJoin);
 	if (ret < 0 ) {
 		ERR_MSG("Unregister queries failed: %d\n",-ret);
 	}

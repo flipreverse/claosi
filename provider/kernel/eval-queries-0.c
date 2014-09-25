@@ -94,6 +94,8 @@ void __exit evalqueries_0_exit(void) {
 		destroyRelayFS();
 	}
 
+	freeOperator(GET_BASE(processObjFork),0);
+
 	DEBUG_MSG(1,"Unregistered eval fork queries\n");
 }
 
