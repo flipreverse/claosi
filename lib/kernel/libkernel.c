@@ -289,21 +289,21 @@ static int queryExecutorWork(void *data) {
 		
 		wait_event_interruptible(waitQueue,kthread_should_stop() || atomic_read(&waitingQueries) > 0);
 		while (atomic_read(&waitingQueries) > 0) {
-			ACQUIRE_READ_LOCK(slcLock);
-			spin_lock(&listLock);
 			if (atomic_read(&waitingQueries) > maxWaitingQueries) {
 				maxWaitingQueries = atomic_read(&waitingQueries);
 			}
+			read_lock(&slcLock);
+			spin_lock_irqsave(&listLock,flags);
 			// Dequeue the head and execute the query
 			cur = list_first_entry(&queriesToExecList,QueryJob_t,list);
 			list_del(&cur->list);
 			atomic_dec(&waitingQueries);
-			spin_unlock(&listLock);
+			spin_unlock_irqrestore(&listLock,flags);
 
 			DEBUG_MSG(3,"%s: Executing query 0x%x with tuple %p\n",__FUNCTION__,cur->query->queryID,cur->tuple);
 			// A queries execution just reads from the datamodel. No write lock is needed.
 			executeQuery(SLC_DATA_MODEL,cur->query,cur->tuple,cur->step);
-			RELEASE_READ_LOCK(slcLock);
+			read_unlock(&slcLock);
 			FREE(cur);
 		}
 		if (kthread_should_stop()) {
