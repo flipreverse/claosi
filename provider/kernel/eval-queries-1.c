@@ -7,6 +7,9 @@
 #include <api.h>
 #include <evaluation.h>
 
+static char *devName = "eth1";
+module_param(devName, charp, 0);
+
 #include "eval-txrx.c"
 
 static Query_t *firstQuery = NULL;

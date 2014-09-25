@@ -29,13 +29,13 @@ static void setupQueriesTXRX(Query_t **query) {
 	queryRXBase.root = GET_BASE(rxStreamBase);
 	queryRXBase.next = &queryTXBase;
 	INIT_EVT_STREAM(rxStreamBase,"net.device.onRx",1,0,NULL)
-	SET_SELECTOR_STRING(rxStreamBase,0,"eth1")
+	SET_SELECTOR_STRING(rxStreamBase,0,devName)
 
 	initQuery(&queryTXBase);
 	queryTXBase.onQueryCompleted = printResultTx;
 	queryTXBase.root = GET_BASE(txStreamBase);
 	INIT_EVT_STREAM(txStreamBase,"net.device.onTx",1,0,NULL)
-	SET_SELECTOR_STRING(txStreamBase,0,"eth1")
+	SET_SELECTOR_STRING(txStreamBase,0,devName)
 }
 
 static void destroyQueriesTXRX(void) {

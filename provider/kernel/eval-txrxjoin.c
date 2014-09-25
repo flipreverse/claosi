@@ -71,7 +71,7 @@ static void setupQueriesTXRXJoin(Query_t **query) {
 	queryRXJoin.root = GET_BASE(rxStreamJoin);
 	queryRXJoin.next = &queryTXJoin;
 	INIT_EVT_STREAM(rxStreamJoin,"net.device.onRx",1,0,GET_BASE(rxJoinProcess))
-	SET_SELECTOR_STRING(rxStreamJoin,0,"eth1")
+	SET_SELECTOR_STRING(rxStreamJoin,0,devName)
 	INIT_JOIN(rxJoinProcess,"process.process.sockets",NULL,2)
 	ADD_PREDICATE(rxJoinProcess,0,rxJoinProcessPredicateSocket)
 	SET_PREDICATE(rxJoinProcessPredicateSocket,EQUAL, OP_JOIN, "process.process.sockets", OP_STREAM, "net.packetType.socket")
@@ -82,7 +82,7 @@ static void setupQueriesTXRXJoin(Query_t **query) {
 	queryTXJoin.onQueryCompleted = printResultTxJoin;
 	queryTXJoin.root = GET_BASE(txStreamJoin);
 	INIT_EVT_STREAM(txStreamJoin,"net.device.onTx",1,0,GET_BASE(txJoinProcess))
-	SET_SELECTOR_STRING(txStreamJoin,0,"eth1")
+	SET_SELECTOR_STRING(txStreamJoin,0,devName)
 	INIT_JOIN(txJoinProcess,"process.process.sockets",NULL,2)
 	ADD_PREDICATE(txJoinProcess,0,txJoinProcessPredicate)
 	SET_PREDICATE(txJoinProcessPredicate,EQUAL, OP_JOIN, "process.process.sockets", OP_STREAM, "net.packetType.socket")
