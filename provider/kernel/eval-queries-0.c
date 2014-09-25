@@ -12,6 +12,9 @@ static Join_t joinComm, joinStime;
 static Predicate_t stimePredicate, commPredicate;
 static Query_t queryForkJoin;
 
+static int useRelayFS = 0;
+module_param(useRelayFS, int, S_IRUGO);
+
 #include "eval-relay.c"
 
 static void printResultForkJoin(unsigned int id, Tupel_t *tupel) {
@@ -34,7 +37,10 @@ static void printResultForkJoin(unsigned int id, Tupel_t *tupel) {
 	sample.ts3 = tupel->timestamp3;
 #endif
 	sample.ts4 = timeUS;
-	relay_write(relayfsOutput,&sample,sizeof(sample));
+
+	if (useRelayFS) {
+		relay_write(relayfsOutput,&sample,sizeof(sample));
+	}
 
 	freeTupel(SLC_DATA_MODEL,tupel);
 }
@@ -58,9 +64,13 @@ int __init evalqueries_0_init(void) {
 
 	initQueriesFork();
 
-	if (initRelayFS() < 0) {
-		return -1;
+
+	if (useRelayFS) {
+		if (initRelayFS() < 0) {
+			return -1;
+		}
 	}
+
 	ret = registerQuery(&queryForkJoin);
 	if (ret < 0 ) {
 		ERR_MSG("Register failed: %d\n",-ret);
@@ -80,7 +90,9 @@ void __exit evalqueries_0_exit(void) {
 		ERR_MSG("Unregister eval fork failed: %d\n",-ret);
 	}
 
-	destroyRelayFS();
+	if (useRelayFS) {
+		destroyRelayFS();
+	}
 
 	DEBUG_MSG(1,"Unregistered eval fork queries\n");
 }
