@@ -17,6 +17,10 @@ static struct kretprobe forkKP;
 static char forkSymbolName[] = "do_fork";
 static struct kprobe exitKP;
 static char exitSymbolName[] = "do_exit";
+typedef void (*put_files_struct_ptr)(struct files_struct *files);
+typedef struct files_struct* (*get_files_struct_ptr)(struct task_struct *task);
+static get_files_struct_ptr getFilesStructFn;
+static put_files_struct_ptr putFilesStructFn;
 static rwlock_t *kernTaskListLock;
 
 static int handlerFork(struct kretprobe_instance *ri, struct pt_regs *regs) {
@@ -335,6 +339,7 @@ static Tupel_t* getSockets(Selector_t *selectors, int len) {
 	struct pid *pid = NULL;
 	struct task_struct *startTask, *curTask;
 	struct socket *sock = NULL;
+	struct files_struct *files;
 	unsigned long long timeUS = 0;
 	int foo = 0, i = 0, runOnce = 0;
 	//unsigned long flags;
@@ -376,18 +381,19 @@ static Tupel_t* getSockets(Selector_t *selectors, int len) {
 	//local_irq_save(flags);
 	for (curTask = startTask; (curTask  = next_task(curTask)) != &init_task;) { // <-- same as 'for_each_process(curTask)'
 		get_task_struct(curTask);
-		if (curTask->files == NULL) {
+		// Increment the reference counter for the files struct. Otherwise it might be deleted during the following steps
+		files = getFilesStructFn(curTask);
+		if (files == NULL) {
 			put_task_struct(curTask);
 			continue;
 		}
-		// .. and read a process sockets
-		if (spin_trylock(&curTask->files->file_lock) == 0) {
+		if (spin_trylock(&files->file_lock) == 0) {
 			put_task_struct(curTask);
 			continue;
 		}
-		fdt = files_fdtable(curTask->files);
+		fdt = files_fdtable(files);
 		for (i = 0; i < fdt->max_fds; i++) {
-			file = rcu_dereference_check_fdtable(curTask->files, fdt->fd[i]);
+			file = rcu_dereference_check_fdtable(files, fdt->fd[i]);
 			if (file == NULL) {
 				/*
 				 * Two empty fds in a row indicate the end of the used area of fdt
@@ -421,9 +427,10 @@ static Tupel_t* getSockets(Selector_t *selectors, int len) {
 			}
 			prevTuple = curTuple;
 		}
-		spin_unlock(&curTask->files->file_lock);
-
-		// Give them back to the kernel
+		spin_unlock(&files->file_lock);
+		// Give the files struct back to the kernel
+		putFilesStructFn(files);
+		// Give the task back to the kernel
 		put_task_struct(curTask);
 		if (runOnce == 1) {
 			break;
@@ -464,7 +471,19 @@ int __init process_init(void)
 		ERR_MSG("Cannot resolve symbol 'tasklist_lock'\n");
 		return -1;
 	}
-	DEBUG_MSG(1,"tasklist_lock=0x%p\n",kernTaskListLock);
+
+	getFilesStructFn = (get_files_struct_ptr)kallsyms_lookup_name("get_files_struct");
+	if (getFilesStructFn == NULL) {
+		ERR_MSG("Cannot resolve symbol 'get_files_struct'\n");
+		return -1;
+	}
+
+	putFilesStructFn = (put_files_struct_ptr)kallsyms_lookup_name("put_files_struct");
+	if (putFilesStructFn == NULL) {
+		ERR_MSG("Cannot resolve symbol 'put_files_struct'\n");
+		return -1;
+	}
+	DEBUG_MSG(1,"tasklist_lock=0x%p,putFilesStructFn=0x%p,getFilesStructFn=0x%p\n",kernTaskListLock,putFilesStructFn,getFilesStructFn);
 
 	ret = registerProvider(&model, NULL);
 	if (ret < 0 ) {
