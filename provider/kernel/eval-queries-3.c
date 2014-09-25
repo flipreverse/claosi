@@ -8,11 +8,12 @@
 #include <evaluation.h>
 
 static char *devName = "eth1";
-module_param(devName, charp, 0);
+module_param(devName, charp, S_IRUGO);
+static int useRelayFS = 0;
+module_param(useRelayFS, int, S_IRUGO);
 
 #include "eval-relay.c"
 #include "eval-txrx.c"
-#include "eval-txrxjoin.c"
 #include "eval-txrxbytes.c"
 
 static Query_t *firstQuery = NULL;
@@ -21,12 +22,14 @@ int __init evalqueries_3_init(void) {
 	int ret = 0;
 
 	setupQueriesTXRX(&firstQuery);
-	setupQueriesTXRXJoin(&firstQuery);
 	setupQueriesTXRXBytes(&firstQuery);
 
-	if (initRelayFS() < 0) {
-		return -1;
+	if (useRelayFS) {
+		if (initRelayFS() < 0) {
+			return -1;
+		}
 	}
+
 	ret = registerQuery(firstQuery);
 	if (ret < 0 ) {
 		ERR_MSG("Register failed: %d\n",-ret);
@@ -45,11 +48,13 @@ void __exit evalqueries_3_exit(void) {
 		ERR_MSG("Unregister eval net failed: %d\n",-ret);
 	}
 
-	destroyRelayFS();
+	if (useRelayFS) {
+		destroyRelayFS();
+	}
 
 	destroyQueriesTXRX();
-	destroyQueriesTXRXJoin();
 	destroyQueriesTXRXBytes();
+
 	DEBUG_MSG(1,"Unregistered eval net queries\n");
 }
 

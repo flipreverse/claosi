@@ -8,8 +8,11 @@
 #include <evaluation.h>
 
 static char *devName = "eth1";
-module_param(devName, charp, 0);
+module_param(devName, charp, S_IRUGO);
+static int useRelayFS = 0;
+module_param(useRelayFS, int, S_IRUGO);
 
+#include "eval-relay.c"
 #include "eval-txrx.c"
 
 static Query_t *firstQuery = NULL;
@@ -18,6 +21,12 @@ int __init evalqueries_1_init(void) {
 	int ret = 0;
 
 	setupQueriesTXRX(&firstQuery);
+
+	if (useRelayFS) {
+		if (initRelayFS() < 0) {
+			return -1;
+		}
+	}
 
 	ret = registerQuery(firstQuery);
 	if (ret < 0 ) {
@@ -37,7 +46,12 @@ void __exit evalqueries_1_exit(void) {
 		ERR_MSG("Unregister eval net failed: %d\n",-ret);
 	}
 
+	if (useRelayFS) {
+		destroyRelayFS();
+	}
+
 	destroyQueriesTXRX();
+
 	DEBUG_MSG(1,"Unregistered eval net queries\n");
 }
 

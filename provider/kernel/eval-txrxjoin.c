@@ -23,7 +23,9 @@ static void printResultRxJoin(unsigned int id, Tupel_t *tupel) {
 	sample.ts3 = tupel->timestamp3;
 #endif
 	sample.ts4 = timeUS;
-	relay_write(relayfsOutput,&sample,sizeof(sample));
+	if (useRelayFS) {
+		relay_write(relayfsOutput,&sample,sizeof(sample));
+	}
 
 	freeTupel(SLC_DATA_MODEL,tupel);
 }
@@ -48,7 +50,9 @@ static void printResultTxJoin(unsigned int id, Tupel_t *tupel) {
 	sample.ts3 = tupel->timestamp3;
 #endif
 	sample.ts4 = timeUS;
-	relay_write(relayfsOutput,&sample,sizeof(sample));
+	if (useRelayFS) {
+		relay_write(relayfsOutput,&sample,sizeof(sample));
+	}
 
 	freeTupel(SLC_DATA_MODEL,tupel);
 }
