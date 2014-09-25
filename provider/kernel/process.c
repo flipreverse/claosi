@@ -337,7 +337,7 @@ static Tupel_t* getSockets(Selector_t *selectors, int len) {
 	struct socket *sock = NULL;
 	unsigned long long timeUS = 0;
 	int foo = 0, i = 0, runOnce = 0;
-	unsigned long flags;
+	//unsigned long flags;
 	char lastFileEmpty = 0;
 
 	if (selectors == NULL) {
@@ -373,9 +373,8 @@ static Tupel_t* getSockets(Selector_t *selectors, int len) {
 	if (read_trylock(kernTaskListLock) == 0) {
 		return NULL;
 	}
-	local_irq_save(flags);
-	//for_each_process(task) {
-	for (curTask = startTask; (curTask  = next_task(curTask)) != &init_task;) {
+	//local_irq_save(flags);
+	for (curTask = startTask; (curTask  = next_task(curTask)) != &init_task;) { // <-- same as 'for_each_process(curTask)'
 		get_task_struct(curTask);
 		if (curTask->files == NULL) {
 			put_task_struct(curTask);
@@ -430,7 +429,7 @@ static Tupel_t* getSockets(Selector_t *selectors, int len) {
 			break;
 		}
 	}
-	local_irq_restore(flags);
+	//local_irq_restore(flags);
 	read_unlock(kernTaskListLock);
 
 	return head;
