@@ -10,6 +10,7 @@
 #include <linux/delay.h>
 #include <linux/mm.h>
 #include <asm/uaccess.h>
+#include <linux/sched/rt.h>
 #include <datamodel.h>
 #include <resultset.h>
 #include <query.h>
@@ -72,6 +73,8 @@ static int sleepTime;
  * Evaluate the maximum of waiting queries
  */
 static unsigned long maxWaitingQueries;
+static int useRTPrio = 0;
+module_param(useRTPrio,int,S_IRUGO);
 
 void enqueueQuery(Query_t *query, Tupel_t *tuple, int step) {
 	QueryJob_t *job = NULL;
@@ -621,6 +624,7 @@ static int __init slc_init(void) {
 	int i = 0, j = 0;
 	kuid_t fileUID;
 	kgid_t fileGID;
+	struct sched_param param = { .sched_priority = MAX_RT_PRIO - 1 };
 
 	fileUID.val = 0;
 	fileGID.val = 0;
@@ -691,13 +695,23 @@ static int __init slc_init(void) {
 	}
 	// ... and start the query execution thread
 	wake_up_process(queryExecThread);
+	if (useRTPrio) {
+		if (sched_setscheduler(queryExecThread, SCHED_FIFO, &param) == 0) {
+			INFO_MSG("Assigend real-time priority to queryExecThread\n");
+		} else {
+			ERR_MSG("Cannot assign real-time priority to queryExecThread\n");
+		}
+	} else {
+		INFO_MSG("Running queryExecThread at normal priority\n");
+	}
+
 	// Init ...
 	commThread = (struct task_struct*)kthread_create(commThreadWork,NULL,"commThread");
 	if (IS_ERR(commThread)) {
 		kthread_stop(queryExecThread);
 		return PTR_ERR(commThread);
 	}
-	// ... and start the communication thread which read from the rxBuffer and processes the received messages.
+	// ... and start the communication thread which reads from the rxBuffer and processes the received messages.
 	wake_up_process(commThread);
 
 	INFO_MSG("Initialized SLC\n");
