@@ -228,10 +228,10 @@ static enum hrtimer_restart hrtimerHandler(struct hrtimer *curTimer) {
 	 * Restart the timer. Do *not* return HRTIMER_RESTART. It will force the kernel to *immediately* restart this timer and 
 	 * will block at least one core. It will slow down the whole system.
 	 */
-	hrtimer_start(&timerJob->timer,ns_to_ktime(timerJob->period * NSEC_PER_MSEC),HRTIMER_MODE_REL);
+	hrtimer_forward_now(&timerJob->timer,ns_to_ktime(timerJob->period * NSEC_PER_MSEC));
 	RELEASE_READ_LOCK(slcLock);
 
-	return HRTIMER_NORESTART;
+	return HRTIMER_RESTART;
 }
 
 void startSourceTimer(DataModelElement_t *dm, Query_t *query) {
