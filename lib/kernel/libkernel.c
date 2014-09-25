@@ -287,13 +287,13 @@ static int queryExecutorWork(void *data) {
 	while (1) {
 		DEBUG_MSG(3,"%s: Waiting for incoming queries...\n",__FUNCTION__);
 		
-		if (atomic_read(&waitingQueries) > maxWaitingQueries) {
-			maxWaitingQueries = atomic_read(&waitingQueries);
-		}
 		wait_event_interruptible(waitQueue,kthread_should_stop() || atomic_read(&waitingQueries) > 0);
 		while (atomic_read(&waitingQueries) > 0) {
 			ACQUIRE_READ_LOCK(slcLock);
 			spin_lock(&listLock);
+			if (atomic_read(&waitingQueries) > maxWaitingQueries) {
+				maxWaitingQueries = atomic_read(&waitingQueries);
+			}
 			// Dequeue the head and execute the query
 			cur = list_first_entry(&queriesToExecList,QueryJob_t,list);
 			list_del(&cur->list);
