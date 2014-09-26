@@ -871,7 +871,7 @@ void freeOperator(Operator_t *op, int freeOperator) {
 				if (((Group_t*)cur)->elementsLen > 0) {
 					FREE(((Group_t*)cur)->elements);
 				}
-				break;		
+				break;
 		}
 		prev = cur;
 		cur = cur->child;
@@ -1060,7 +1060,7 @@ int checkQuerySyntax(DataModelElement_t *rootDM, Operator_t *rootQuery, Operator
 					return -EWRONGORDER;
 				}
 				filter = (Filter_t*)cur;
-				if (filter->predicateLen == 0) {
+				if (filter->predicateLen == 0 || filter->predicates == NULL) {
 					return -ENOPREDICATES;
 				}
 				CHECK_PREDICATES(filter,rootDM,dm)
@@ -1071,7 +1071,7 @@ int checkQuerySyntax(DataModelElement_t *rootDM, Operator_t *rootQuery, Operator
 					return -EWRONGORDER;
 				}
 				select = (Select_t*)cur;
-				if (select->elementsLen == 0) {
+				if (select->elementsLen == 0 || select->elements == NULL) {
 					return -ENOELEMENTS;
 				}
 				CHECK_ELEMENTS(select,rootDM);
@@ -1089,7 +1089,7 @@ int checkQuerySyntax(DataModelElement_t *rootDM, Operator_t *rootQuery, Operator
 				if (sort->size == 0) {
 					return -ESIZE;
 				}
-				if (sort->elementsLen == 0) {
+				if (sort->elementsLen == 0 || sort->elements == NULL) {
 					return -ENOELEMENTS;
 				}
 				CHECK_ELEMENTS(sort,rootDM)
@@ -1100,7 +1100,7 @@ int checkQuerySyntax(DataModelElement_t *rootDM, Operator_t *rootQuery, Operator
 					return -EWRONGORDER;
 				}
 				join = (Join_t*)cur;
-				if (join->predicateLen == 0) {
+				if (join->predicateLen == 0 || join->predicates == NULL) {
 					return -ENOPREDICATES;
 				}
 				#if 0
@@ -1134,7 +1134,7 @@ int checkQuerySyntax(DataModelElement_t *rootDM, Operator_t *rootQuery, Operator
 				if (aggregate->size == 0 || aggregate->advance == 0) {
 					return -ESIZE;
 				}
-				if (aggregate->elementsLen == 0) {
+				if (aggregate->elementsLen == 0 || aggregate->elements == NULL) {
 					return -ENOELEMENTS;
 				}
 				CHECK_ELEMENTS(aggregate,rootDM)
