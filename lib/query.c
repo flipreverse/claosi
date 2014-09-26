@@ -836,31 +836,31 @@ void freeOperator(Operator_t *op, int freeOperator) {
 				break;
 
 			case FILTER:
-				if (((Filter_t*)cur)->predicateLen > 0) {
+				if (((Filter_t*)cur)->predicates != NULL) {
 					FREE(((Filter_t*)cur)->predicates);
 				}
 				break;
 				
 			case SELECT:
-				if (((Select_t*)cur)->elementsLen > 0) {
+				if (((Select_t*)cur)->elements != NULL) {
 					FREE(((Select_t*)cur)->elements);
 				}
 				break;
 				
 			case SORT:
-				if (((Sort_t*)cur)->elementsLen > 0) {
+				if (((Sort_t*)cur)->elements != NULL) {
 					FREE(((Sort_t*)cur)->elements);
 				}
 				break;
 				
 			case GROUP:
-				if (((Group_t*)cur)->elementsLen > 0) {
+				if (((Group_t*)cur)->elements != NULL) {
 					FREE(((Group_t*)cur)->elements);
 				}
 				break;
 				
 			case JOIN:
-				if (((Join_t*)cur)->predicateLen > 0) {
+				if (((Join_t*)cur)->predicates != NULL) {
 					FREE(((Join_t*)cur)->predicates);
 				}
 				break;
@@ -868,7 +868,7 @@ void freeOperator(Operator_t *op, int freeOperator) {
 			case MIN:
 			case MAX:
 			case AVG:
-				if (((Group_t*)cur)->elementsLen > 0) {
+				if (((Group_t*)cur)->elements != NULL) {
 					FREE(((Group_t*)cur)->elements);
 				}
 				break;
