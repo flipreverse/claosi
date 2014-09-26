@@ -40,32 +40,37 @@ int registerProvider(DataModelElement_t *dm, Query_t *queries) {
 		return -EPARAM;
 	}
 	if (dm != NULL) {
-		if ((ret = checkDataModelSyntax(SLC_DATA_MODEL,dm,NULL)) < 0) {
+		ret = checkDataModelSyntax(SLC_DATA_MODEL,dm,NULL);
+		if (ret < 0) {
 			RELEASE_WRITE_LOCK(slcLock);
 			return ret;
 		}
 		// First, check if the datamodel is mergable
-		if ((ret = mergeDataModel(1,SLC_DATA_MODEL,dm)) < 0) {
+		ret = mergeDataModel(1,SLC_DATA_MODEL,dm);
+		if (ret < 0) {
 			RELEASE_WRITE_LOCK(slcLock);
 			return ret;
 		}
 		sendDatamodel(dm,MSG_DM_ADD);
 		// Now merge it.
-		if ((ret = mergeDataModel(0,SLC_DATA_MODEL,dm)) < 0) {
+		ret = mergeDataModel(0,SLC_DATA_MODEL,dm);
+		if (ret < 0) {
 			RELEASE_WRITE_LOCK(slcLock);
 			return ret;
 		}
 	}
 	if (queries != NULL) {
-		if ((ret = checkQueries(SLC_DATA_MODEL,queries,NULL,0)) < 0) {
+		ret = checkQueries(SLC_DATA_MODEL,queries,NULL,0);
+		if (ret < 0) {
 			RELEASE_WRITE_LOCK(slcLock);
 			return ret;
 		}
 		#ifdef __KERNEL__
-		if ((ret = addQueries(SLC_DATA_MODEL,queries,&flags)) < 0) {
+		ret = addQueries(SLC_DATA_MODEL,queries,&flags);
 		#else
-		if ((ret = addQueries(SLC_DATA_MODEL,queries)) < 0) {
+		ret = addQueries(SLC_DATA_MODEL,queries);
 		#endif
+		if (ret < 0) {
 			RELEASE_WRITE_LOCK(slcLock);
 			return ret;
 		}
@@ -97,25 +102,29 @@ int unregisterProvider(DataModelElement_t *dm, Query_t *queries) {
 		return -EPARAM;
 	}
 	if (queries != NULL) {
-		if ((ret = checkQueries(SLC_DATA_MODEL,queries,NULL,0)) < 0) {
+		ret = checkQueries(SLC_DATA_MODEL,queries,NULL,0);
+		if (ret < 0) {
 			RELEASE_WRITE_LOCK(slcLock);
 			return ret;
 		}
 		#ifdef __KERNEL__
-		if ((ret = delQueries(SLC_DATA_MODEL,queries,&flags)) < 0) {
+		ret = delQueries(SLC_DATA_MODEL,queries,&flags);
 		#else
-		if ((ret = delQueries(SLC_DATA_MODEL,queries)) < 0) {
+		ret = delQueries(SLC_DATA_MODEL,queries);
 		#endif
+		if (ret < 0) {
 			RELEASE_WRITE_LOCK(slcLock);
 			return ret;
 		}
 	}
 	if (dm != NULL) {
-		if ((ret = checkDataModelSyntax(SLC_DATA_MODEL,dm,NULL)) < 0) {
+		ret = checkDataModelSyntax(SLC_DATA_MODEL,dm,NULL);
+		if (ret < 0) {
 			RELEASE_WRITE_LOCK(slcLock);
 			return ret;
 		}
-		if ((ret = deleteSubtree(&SLC_DATA_MODEL,dm)) < 0) {
+		ret = deleteSubtree(&SLC_DATA_MODEL,dm);
+		if (ret < 0) {
 			RELEASE_WRITE_LOCK(slcLock);
 			return ret;
 		}
@@ -144,15 +153,17 @@ int registerQuery(Query_t *queries) {
 	ACQUIRE_WRITE_LOCK(slcLock);
 
 	if (queries != NULL) {
-		if ((ret = checkQueries(SLC_DATA_MODEL,queries,NULL,0)) < 0) {
+		ret = checkQueries(SLC_DATA_MODEL,queries,NULL,0);
+		if (ret < 0) {
 			RELEASE_WRITE_LOCK(slcLock);
 			return ret;
 		}
 		#ifdef __KERNEL__
-		if ((ret = addQueries(SLC_DATA_MODEL,queries,&flags)) < 0) {
+		ret = addQueries(SLC_DATA_MODEL,queries,&flags);
 		#else
-		if ((ret = addQueries(SLC_DATA_MODEL,queries)) < 0) {
+		ret = addQueries(SLC_DATA_MODEL,queries);
 		#endif
+		if (ret < 0) {
 			RELEASE_WRITE_LOCK(slcLock);
 			return ret;
 		}
@@ -179,15 +190,17 @@ int unregisterQuery(Query_t *queries) {
 	ACQUIRE_WRITE_LOCK(slcLock);
 
 	if (queries != NULL) {
-		if ((ret = checkQueries(SLC_DATA_MODEL,queries,NULL,0)) < 0) {
+		ret = checkQueries(SLC_DATA_MODEL,queries,NULL,0);
+		if (ret < 0) {
 			RELEASE_WRITE_LOCK(slcLock);
 			return ret;
 		}
 		#ifdef __KERNEL__
-		if ((ret = delQueries(SLC_DATA_MODEL,queries,&flags)) < 0) {
+		ret = delQueries(SLC_DATA_MODEL,queries,&flags);
 		#else
-		if ((ret = delQueries(SLC_DATA_MODEL,queries)) < 0) {
+		ret = delQueries(SLC_DATA_MODEL,queries);
 		#endif
+		if (ret < 0) {
 			RELEASE_WRITE_LOCK(slcLock);
 			return ret;
 		}
