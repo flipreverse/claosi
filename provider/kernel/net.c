@@ -616,8 +616,10 @@ int __init net_init(void)
 	int ret = 0;
 	initDatamodel();
 
-	if ((ret = registerProvider(&model, NULL)) < 0 ) {
+	ret = registerProvider(&model, NULL);
+	if (ret < 0 ) {
 		ERR_MSG("Register failed: %d\n",-ret);
+		freeDataModel(&model,0);
 		return -1;
 	}
 	DEBUG_MSG(1,"Registered net provider\n");
@@ -628,7 +630,8 @@ int __init net_init(void)
 void __exit net_exit(void) {
 	int ret = 0;
 
-	if ((ret = unregisterProvider(&model, NULL)) < 0 ) {
+	ret = unregisterProvider(&model, NULL);
+	if (ret < 0 ) {
 		ERR_MSG("Unregister failed: %d\n",-ret);
 	}
 

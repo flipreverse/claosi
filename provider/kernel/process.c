@@ -488,6 +488,7 @@ int __init process_init(void)
 	ret = registerProvider(&model, NULL);
 	if (ret < 0 ) {
 		ERR_MSG("Register provider failed: %d\n",-ret);
+		freeDataModel(&model,0);
 		return -1;
 	}
 	DEBUG_MSG(1,"Registered process provider\n");
