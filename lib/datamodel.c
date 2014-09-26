@@ -634,7 +634,7 @@ int mergeDataModel(int justCheckSyntax, DataModelElement_t *oldTree, DataModelEl
  * @return 0 on success. A value below 0 indicates an error. The absolute value indicates the type of error
  */
 int checkDataModelSyntax(DataModelElement_t *rootCurrent,DataModelElement_t *rootToCheck, DataModelElement_t **errElem) {
-	DataModelElement_t *curNode = NULL, *dm = NULL;
+	DataModelElement_t *curNode = NULL;
 	Event_t *evt = NULL;
 	Object_t *obj = NULL;
 	Source_t *src = NULL;
@@ -737,10 +737,8 @@ int checkDataModelSyntax(DataModelElement_t *rootCurrent,DataModelElement_t *roo
 				if (curNode->typeInfo == NULL) {
 					return -ETYPEINFO;
 				}
-				dm = getDescription(rootToCheck,(char*)curNode->typeInfo);
-				if (dm == NULL) {
-					dm = getDescription(rootCurrent,(char*)curNode->typeInfo);
-					if (rootCurrent == NULL && dm == NULL) {
+				if (getDescription(rootToCheck,(char*)curNode->typeInfo) == NULL) {
+					if (rootCurrent == NULL || getDescription(rootCurrent,(char*)curNode->typeInfo) == NULL) {
 						return -ENOELEMENT;
 					}
 				}
