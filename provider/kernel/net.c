@@ -579,7 +579,7 @@ static void initDatamodel(void) {
 	INIT_PLAINTYPE(typeTranspHdr,"transportHdr",typePacketType,(BYTE | ARRAY))
 	INIT_PLAINTYPE(typeTransProt,"transportProtocl",typePacketType,BYTE)
 	INIT_PLAINTYPE(typeDataLen,"dataLength",typePacketType,INT)
-	INIT_REF(typeSockRef,"socket",typePacketType,"process.process.sockets")
+	INIT_REF(typeSockRef,"socket",typePacketType,"net.socket")
 
 	INIT_COMPLEX_TYPE(typePacketType,"packetType",nsNet,4)
 	ADD_CHILD(typePacketType,0,typeMacHdr);
