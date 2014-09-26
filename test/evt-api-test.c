@@ -27,15 +27,9 @@ static Tupel_t *tupel = NULL;
 static unsigned int foo = 1;
 
 void printResult(unsigned int id, Tupel_t *tuple) {
-	Tupel_t *tempTuple = NULL;
-
-	while (tuple != NULL) {
-		printf("Received tupel:\t");
-		printTupel(&model1,tuple);
-		tempTuple = tuple->next;
-		freeTupel(&model1,tuple);
-		tuple = tempTuple;
-	}
+	printf("Received tupel:\t");
+	printTupel(&model1,tuple);
+	freeTupel(&model1,tuple);
 }
 
 int main() {
