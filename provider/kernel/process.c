@@ -384,12 +384,10 @@ static Tupel_t* getSockets(Selector_t *selectors, int len) {
 		// Increment the reference counter for the files struct. Otherwise it might be deleted during the following steps
 		files = getFilesStructFn(curTask);
 		if (files == NULL) {
-			put_task_struct(curTask);
-			continue;
+			goto puttask;
 		}
 		if (spin_trylock(&files->file_lock) == 0) {
-			put_task_struct(curTask);
-			continue;
+			goto putfiles;
 		}
 		fdt = files_fdtable(files);
 		for (i = 0; i < fdt->max_fds; i++) {
@@ -429,9 +427,9 @@ static Tupel_t* getSockets(Selector_t *selectors, int len) {
 		}
 		spin_unlock(&files->file_lock);
 		// Give the files struct back to the kernel
-		putFilesStructFn(files);
+putfiles:	putFilesStructFn(files);
 		// Give the task back to the kernel
-		put_task_struct(curTask);
+puttask:	put_task_struct(curTask);
 		if (runOnce == 1) {
 			break;
 		}
