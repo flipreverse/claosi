@@ -496,10 +496,10 @@ static int doJoin(DataModelElement_t *rootDM,Join_t *join, Tupel_t **headTupleSt
 				}
 				// Call the join node again to retrieve a new list of tuples (a.k.a right side) to join
 				if (dm->dataModelType == OBJECT) {
-					nextTupleJoin = ((Object_t*)dm->typeInfo)->status(selecs,len);
+					nextTupleJoin = ((Object_t*)dm->typeInfo)->status(selecs,len,nextTupleStream);
 				} else if (dm->dataModelType == SOURCE) {
 					ACQUIRE_WRITE_LOCK(((Source_t*)dm->typeInfo)->lock);
-					nextTupleJoin = ((Source_t*)dm->typeInfo)->callback(selecs,len);
+					nextTupleJoin = ((Source_t*)dm->typeInfo)->callback(selecs,len,nextTupleStream);
 					RELEASE_WRITE_LOCK(((Source_t*)dm->typeInfo)->lock);
 				} else {
 					ERR_MSG("DM is neither a source nor an object!\n");

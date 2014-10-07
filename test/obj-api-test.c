@@ -80,7 +80,7 @@ static void unregEventCallback(Query_t *query) {
 	
 }
 
-static Tupel_t* getSrcSTime(Selector_t *selectors, int len) {
+static Tupel_t* getSrcSTime(Selector_t *selectors, int len, Tupel_t* leftTuple) {
 	Tupel_t *tuple = NULL;
 
 	tuple = initTupel(20140531,2);
@@ -98,7 +98,7 @@ static Tupel_t* getSrcSTime(Selector_t *selectors, int len) {
 	return tuple;
 }
 
-static Tupel_t* getSrcUTime(Selector_t *selectors, int len) {
+static Tupel_t* getSrcUTime(Selector_t *selectors, int len, Tupel_t* leftTuple) {
 	Tupel_t *tuple = NULL;
 	static int numCalls = 0;
 
@@ -122,7 +122,7 @@ static Tupel_t* getSrcUTime(Selector_t *selectors, int len) {
 	return tuple;
 }
 
-static Tupel_t* getSrc(Selector_t *selectors, int len) {
+static Tupel_t* getSrc(Selector_t *selectors, int len, Tupel_t* leftTuple) {
 	return NULL;
 }
 
@@ -134,7 +134,7 @@ static void unregObjectCallback(Query_t *query) {
 	
 };
 
-static Tupel_t* generateStatusObject(Selector_t *selectors, int len) {
+static Tupel_t* generateStatusObject(Selector_t *selectors, int len, Tupel_t* leftTuple) {
 	return NULL;
 }
 

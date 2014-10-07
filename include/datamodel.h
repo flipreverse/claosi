@@ -85,7 +85,7 @@ typedef struct Event {
 	int numQueries;
 } Event_t;
 
-typedef Tupel_t* (*getSource)(Selector_t *selectors, int len);
+typedef Tupel_t* (*getSource)(Selector_t *selectors, int len, Tupel_t* leftTuple);
 
 typedef struct Source {
 	unsigned short returnType;
@@ -100,7 +100,7 @@ typedef struct Tupel Tupel_t;
 
 typedef void (*activateObject)(Query_t *query);
 typedef void (*deactivateObject)(Query_t *query);
-typedef Tupel_t* (*generateStatus)(Selector_t *selectors, int len);
+typedef Tupel_t* (*generateStatus)(Selector_t *selectors, int len, Tupel_t* leftTuple);
 
 typedef struct Object {
 	unsigned short identifierType;

@@ -144,7 +144,7 @@ static void deactivateProcess(Query_t *query) {
 	}
 }
 
-static Tupel_t* generateProcessStatus(Selector_t *selectors, int len) {
+static Tupel_t* generateProcessStatus(Selector_t *selectors, int len, Tupel_t *leftTuple) {
 	struct task_struct *curTask = NULL;
 	Tupel_t *head = NULL, *curTuple = NULL, *prevTuple = NULL;
 #ifndef EVALUATION
@@ -178,7 +178,7 @@ static Tupel_t* generateProcessStatus(Selector_t *selectors, int len) {
 	return head;
 }
 
-static Tupel_t* getComm(Selector_t *selectors, int len) {
+static Tupel_t* getComm(Selector_t *selectors, int len, Tupel_t *leftTuple) {
 	Tupel_t *tuple = NULL;
 #ifndef EVALUATION
 	struct timeval time;
@@ -230,7 +230,7 @@ static Tupel_t* getComm(Selector_t *selectors, int len) {
 	return tuple;
 }
 
-static Tupel_t* getSTime(Selector_t *selectors, int len) {
+static Tupel_t* getSTime(Selector_t *selectors, int len, Tupel_t *leftTuple) {
 	Tupel_t *tuple = NULL;
 #ifndef EVALUATION
 	struct timeval time;
@@ -279,7 +279,7 @@ static Tupel_t* getSTime(Selector_t *selectors, int len) {
 	return tuple;
 }
 
-static Tupel_t* getUTime(Selector_t *selectors, int len) {
+static Tupel_t* getUTime(Selector_t *selectors, int len, Tupel_t *leftTuple) {
 	Tupel_t *tuple = NULL;
 #ifndef EVALUATION
 	struct timeval time;
@@ -329,7 +329,7 @@ static Tupel_t* getUTime(Selector_t *selectors, int len) {
 	return tuple;
 }
 
-static Tupel_t* getSockets(Selector_t *selectors, int len) {
+static Tupel_t* getSockets(Selector_t *selectors, int len, Tupel_t *leftTuple) {
 	Tupel_t *curTuple = NULL, *head = NULL, *prevTuple = NULL;
 #ifndef EVALUATION
 	struct timeval time;
@@ -341,12 +341,15 @@ static Tupel_t* getSockets(Selector_t *selectors, int len) {
 	struct socket *sock = NULL;
 	struct files_struct *files;
 	unsigned long long timeUS = 0;
-	int foo = 0, i = 0, runOnce = 0;
+	int foo = 0, i = 0, runOnce = 0, sockNo = -1;
 	//unsigned long flags;
 	char lastFileEmpty = 0;
 
 	if (selectors == NULL) {
 		return NULL;
+	}
+	if (leftTuple != NULL) {
+		sockNo = getItemInt(SLC_DATA_MODEL,leftTuple,"net.packetType.socket");
 	}
 
 	foo = *(int*)(&selectors[0].value);
@@ -406,6 +409,9 @@ static Tupel_t* getSockets(Selector_t *selectors, int len) {
 			// Refers the current fd to a socket?
 			sock = sock_from_file(file,&foo);
 			if (sock == NULL) {
+				continue;
+			}
+			if (sockNo != -1 && sockNo != SOCK_INODE(sock)->i_ino) {
 				continue;
 			}
 			// Yeah, it does. \o/ Allocate a tuple and copy the information

@@ -101,7 +101,7 @@ static void deactivateApp(Query_t *query) {
 	}
 }
 
-static Tupel_t* statusApp(Selector_t *selectors, int len) {
+static Tupel_t* statusApp(Selector_t *selectors, int len, Tupel_t* leftTuple) {
 	Tupel_t *tuple = NULL;
 	#ifndef EVALUATION
 	struct timeval time;
@@ -132,7 +132,7 @@ static Tupel_t* statusApp(Selector_t *selectors, int len) {
 	return tuple;
 }
 
-static Tupel_t* sourceForegroundApp(Selector_t *selectors, int len) {
+static Tupel_t* sourceForegroundApp(Selector_t *selectors, int len, Tupel_t* leftTuple) {
 	Tupel_t *tuple = NULL;
 	#ifndef EVALUATION
 	struct timeval time;
