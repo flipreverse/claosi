@@ -35,10 +35,13 @@ typedef struct SampleRingbuffer {
 	Sample_t elements[SAMPLE_RING_BUFFER_SIZE];
 } SampleRingbuffer_t;
 
-static ObjectStream_t processObjFork;
-static Join_t joinComm, joinStime;
-static Predicate_t stimePredicate, commPredicate;
-static Query_t queryForkJoin;
+static EventStream_t rxStreamBase, txStreamBase;
+static Select_t rxSelectPacket, txSelectPacket;
+static Filter_t rxFilterData, txFilterData;
+static Predicate_t rxPredData, txPredData;
+static Element_t rxElemPacket, txElemPacket;
+static Query_t queryRXBase, queryTXBase;
+static char *devName = "eth0";
 
 static int writeThreadRunning;
 static pthread_t writeThread;
@@ -46,6 +49,7 @@ static pthread_attr_t writeThreadAttr;
 static SampleRingbuffer_t sampleBuffer;
 static char timestampBuffer[CHAR_BUFFER_SIZE];
 static int outputFile;
+static unsigned long long nRx, nTx;
 
 static void* writeThreadWork(void *data) {
 	int cur = 0, written = 0;
@@ -75,8 +79,7 @@ static void* writeThreadWork(void *data) {
 	pthread_exit(NULL);
 	return NULL;
 }
-
-static void printResultForkJoin(unsigned int id, Tupel_t *tupel) {
+static void printResultRx(unsigned int id, Tupel_t *tupel) {
 #ifndef EVALUATION
 	struct timeval time;
 #endif
@@ -89,6 +92,10 @@ static void printResultForkJoin(unsigned int id, Tupel_t *tupel) {
 	timeUS = (unsigned long long)time.tv_sec * (unsigned long long)USEC_PER_SEC + (unsigned long long)time.tv_usec;
 #endif
 
+#ifdef PRINT_TUPLE
+	printf("Received packet on device %s. Received by process %d. Packet length=%d (itemLen=%d,tuple=%p,duration=%llu us)\n",getItemString(SLC_DATA_MODEL,tupel,"net.device"),getItemInt(SLC_DATA_MODEL,tupel,"process.process"),getItemInt(SLC_DATA_MODEL,tupel,"net.packetType.dataLength"),tupel->itemLen,tupel,timeUS - tupel->timestamp);
+#endif
+
 	if (!isFull(sampleBuffer)) {
 		sampleBuffer.elements[sampleBuffer.write].ts1 = tupel->timestamp;
 #ifdef EVALUATION
@@ -98,22 +105,65 @@ static void printResultForkJoin(unsigned int id, Tupel_t *tupel) {
 		sampleBuffer.elements[sampleBuffer.write].ts4 = timeUS;
 		sampleBuffer.write = (sampleBuffer.write + 1 == sampleBuffer.size ? 0 : sampleBuffer.write + 1);
 	}
+	nRx++;
+
+	freeTupel(SLC_DATA_MODEL,tupel);
+}
+
+static void printResultTx(unsigned int id, Tupel_t *tupel) {
+#ifndef EVALUATION
+	struct timeval time;
+#endif
+	unsigned long long timeUS = 0;
+
+#ifdef EVALUATION
+	timeUS = getCycles();
+#else
+	gettimeofday(&time,NULL);
+	timeUS = (unsigned long long)time.tv_sec * (unsigned long long)USEC_PER_SEC + (unsigned long long)time.tv_usec;
+#endif
+
+#ifdef PRINT_TUPLE
+	printf("Transmitted packet on device %s. Sent by process %d. Packet length=%d (itemLen=%d,tuple=%p,duration=%llu us)\n",getItemString(SLC_DATA_MODEL,tupel,"net.device"),getItemInt(SLC_DATA_MODEL,tupel,"process.process"),getItemInt(SLC_DATA_MODEL,tupel,"net.packetType.dataLength"),tupel->itemLen,tupel,timeUS - tupel->timestamp);
+#endif
+
+	if (!isFull(sampleBuffer)) {
+		sampleBuffer.elements[sampleBuffer.write].ts1 = tupel->timestamp;
+#ifdef EVALUATION
+		sampleBuffer.elements[sampleBuffer.write].ts2 = tupel->timestamp2;
+		sampleBuffer.elements[sampleBuffer.write].ts3 = tupel->timestamp3;
+#endif
+		sampleBuffer.elements[sampleBuffer.write].ts4 = timeUS;
+		sampleBuffer.write = (sampleBuffer.write + 1 == sampleBuffer.size ? 0 : sampleBuffer.write + 1);
+	}
+	nTx++;
 
 	freeTupel(SLC_DATA_MODEL,tupel);
 }
 
 static void setupQueries(void) {
-	initQuery(&queryForkJoin);
-	queryForkJoin.onQueryCompleted = printResultForkJoin;
-	queryForkJoin.root = GET_BASE(processObjFork);
-	//queryForkJoin.next = & querySockets;
-	INIT_OBJ_STREAM(processObjFork,"process.process",0,0,GET_BASE(joinStime),OBJECT_CREATE);
-	INIT_JOIN(joinStime,"process.process.stime", GET_BASE(joinComm),1)
-	ADD_PREDICATE(joinStime,0,stimePredicate)
-	SET_PREDICATE(stimePredicate,EQUAL, OP_STREAM, "process.process", OP_JOIN, "process.process")
-	INIT_JOIN(joinComm,"process.process.comm", NULL,1)
-	ADD_PREDICATE(joinComm,0,commPredicate)
-	SET_PREDICATE(commPredicate,EQUAL, OP_STREAM, "process.process", OP_JOIN, "process.process")
+	initQuery(&queryRXBase);
+	queryRXBase.onQueryCompleted = printResultRx;
+	queryRXBase.root = GET_BASE(rxStreamBase);
+	queryRXBase.next = &queryTXBase;
+	INIT_EVT_STREAM(rxStreamBase,"net.device.onRx",1,0,GET_BASE(rxFilterData))
+	SET_SELECTOR_STRING(rxStreamBase,0,devName)
+	INIT_FILTER(rxFilterData,GET_BASE(rxSelectPacket),1)
+	ADD_PREDICATE(rxFilterData,0,rxPredData)
+	SET_PREDICATE(rxPredData,GEQ, OP_STREAM, "net.packetType.dataLength", OP_POD, "1000")
+	INIT_SELECT(rxSelectPacket,NULL,1)
+	ADD_ELEMENT(rxSelectPacket,0,rxElemPacket,"net.packetType")
+
+	initQuery(&queryTXBase);
+	queryTXBase.onQueryCompleted = printResultTx;
+	queryTXBase.root = GET_BASE(txStreamBase);
+	INIT_EVT_STREAM(txStreamBase,"net.device.onTx",1,0,GET_BASE(txFilterData))
+	SET_SELECTOR_STRING(txStreamBase,0,devName)
+	INIT_FILTER(txFilterData,GET_BASE(txSelectPacket),1)
+	ADD_PREDICATE(txFilterData,0,txPredData)
+	SET_PREDICATE(txPredData,GEQ, OP_STREAM, "net.packetType.dataLength", OP_POD, "10")
+	INIT_SELECT(txSelectPacket,NULL,1)
+	ADD_ELEMENT(txSelectPacket,0,txElemPacket,"net.packetType")
 }
 
 int onLoad(void) {
@@ -135,7 +185,7 @@ int onLoad(void) {
 	pthread_attr_setdetachstate(&writeThreadAttr,PTHREAD_CREATE_JOINABLE);
 	pthread_create(&writeThread,&writeThreadAttr,writeThreadWork,NULL);
 
-	ret = registerQuery(&queryForkJoin);
+	ret = registerQuery(&queryRXBase);
 	if (ret < 0 ) {
 		ERR_MSG("Register failed: %d\n",-ret);
 		return -1;
@@ -148,7 +198,7 @@ int onLoad(void) {
 int onUnload(void) {
 	int ret = 0;
 
-	ret = unregisterQuery(&queryForkJoin);
+	ret = unregisterQuery(&queryRXBase);
 	if (ret < 0 ) {
 		ERR_MSG("Unregister eval net failed: %d\n",-ret);
 		return -1;
@@ -159,7 +209,9 @@ int onUnload(void) {
 	pthread_attr_destroy(&writeThreadAttr);
 	close(outputFile);
 
-	freeOperator(GET_BASE(processObjFork),0);
+	INFO_MSG("nRx=%llu, nTx=%llu\n",nRx,nTx);
+	freeOperator(GET_BASE(rxStreamBase),0);
+	freeOperator(GET_BASE(txStreamBase),0);
 	DEBUG_MSG(1,"Unregistered eval net queries\n");
 
 	return 0;
