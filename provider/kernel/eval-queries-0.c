@@ -73,7 +73,7 @@ int __init evalqueries_0_init(void) {
 
 	ret = registerQuery(&queryForkJoin);
 	if (ret < 0 ) {
-		ERR_MSG("Register failed: %d\n",-ret);
+		ERR_MSG("Register eval fork failed: %d\n",-ret);
 		destroyRelayFS();
 		return -1;
 	}

@@ -18,7 +18,7 @@
 
 #define SAMPLE_RING_BUFFER_SIZE 60
 #define CHAR_BUFFER_SIZE 200
-#define OUTPUT_FILENAME "time-slc-5.txt"
+#define OUTPUT_FILENAME "delay-slc-5.txt"
 #define WRITE_THREAD_NAME "evalWriteThread"
 
 #define isEmpty(var)		((var).read == (var).write)
@@ -137,10 +137,10 @@ int onLoad(void) {
 
 	ret = registerQuery(&queryForkJoin);
 	if (ret < 0 ) {
-		ERR_MSG("Register failed: %d\n",-ret);
+		ERR_MSG("Register eval fork failed: %d\n",-ret);
 		return -1;
 	}
-	DEBUG_MSG(1,"Registered eval net queries\n");
+	DEBUG_MSG(1,"Registered eval fork queries\n");
 
 	return 0;
 }
@@ -150,7 +150,7 @@ int onUnload(void) {
 
 	ret = unregisterQuery(&queryForkJoin);
 	if (ret < 0 ) {
-		ERR_MSG("Unregister eval net failed: %d\n",-ret);
+		ERR_MSG("Unregister eval fork failed: %d\n",-ret);
 		return -1;
 	}
 
@@ -160,7 +160,7 @@ int onUnload(void) {
 	close(outputFile);
 
 	freeOperator(GET_BASE(processObjFork),0);
-	DEBUG_MSG(1,"Unregistered eval net queries\n");
+	DEBUG_MSG(1,"Unregistered eval fork queries\n");
 
 	return 0;
 }

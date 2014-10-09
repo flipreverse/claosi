@@ -18,7 +18,7 @@
 
 #define SAMPLE_RING_BUFFER_SIZE 60
 #define CHAR_BUFFER_SIZE 200
-#define OUTPUT_FILENAME "time-slc-6.txt"
+#define OUTPUT_FILENAME "delay-slc-6.txt"
 #define WRITE_THREAD_NAME "evalWriteThread"
 
 #define isEmpty(var)		((var).read == (var).write)
@@ -41,7 +41,7 @@ static Filter_t rxFilterData, txFilterData;
 static Predicate_t rxPredData, txPredData;
 static Element_t rxElemPacket, txElemPacket;
 static Query_t queryRXBase, queryTXBase;
-static char *devName = "eth0";
+static char *devName = "p4p1";
 
 static int writeThreadRunning;
 static pthread_t writeThread;
@@ -187,10 +187,10 @@ int onLoad(void) {
 
 	ret = registerQuery(&queryRXBase);
 	if (ret < 0 ) {
-		ERR_MSG("Register failed: %d\n",-ret);
+		ERR_MSG("Register tx/rx failed: %d\n",-ret);
 		return -1;
 	}
-	DEBUG_MSG(1,"Registered eval net queries\n");
+	DEBUG_MSG(1,"Registered eval tx/rx queries\n");
 
 	return 0;
 }
@@ -200,7 +200,7 @@ int onUnload(void) {
 
 	ret = unregisterQuery(&queryRXBase);
 	if (ret < 0 ) {
-		ERR_MSG("Unregister eval net failed: %d\n",-ret);
+		ERR_MSG("Unregister eval tx/rx failed: %d\n",-ret);
 		return -1;
 	}
 
@@ -212,7 +212,7 @@ int onUnload(void) {
 	INFO_MSG("nRx=%llu, nTx=%llu\n",nRx,nTx);
 	freeOperator(GET_BASE(rxStreamBase),0);
 	freeOperator(GET_BASE(txStreamBase),0);
-	DEBUG_MSG(1,"Unregistered eval net queries\n");
+	DEBUG_MSG(1,"Unregistered eval tx/rx queries\n");
 
 	return 0;
 }

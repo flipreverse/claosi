@@ -30,10 +30,10 @@ int __init evalqueries_1_init(void) {
 
 	ret = registerQuery(firstQuery);
 	if (ret < 0 ) {
-		ERR_MSG("Register failed: %d\n",-ret);
+		ERR_MSG("Register eval tx/rx failed: %d\n",-ret);
 		return -1;
 	}
-	DEBUG_MSG(1,"Registered eval net queries\n");
+	DEBUG_MSG(1,"Registered eval tx/rx queries\n");
 
 	return 0;
 }
@@ -43,7 +43,7 @@ void __exit evalqueries_1_exit(void) {
 
 	ret = unregisterQuery(firstQuery);
 	if (ret < 0 ) {
-		ERR_MSG("Unregister eval net failed: %d\n",-ret);
+		ERR_MSG("Unregister eval tx/rx failed: %d\n",-ret);
 	}
 
 	if (useRelayFS) {
@@ -52,7 +52,7 @@ void __exit evalqueries_1_exit(void) {
 
 	destroyQueriesTXRX();
 
-	DEBUG_MSG(1,"Unregistered eval net queries\n");
+	DEBUG_MSG(1,"Unregistered eval tx/rx queries\n");
 }
 
 module_init(evalqueries_1_init);

@@ -18,7 +18,7 @@
 
 #define SAMPLE_RING_BUFFER_SIZE 60
 #define CHAR_BUFFER_SIZE 200
-#define OUTPUT_FILENAME "time-slc-7.txt"
+#define OUTPUT_FILENAME "delay-slc-7.txt"
 #define WRITE_THREAD_NAME "evalWriteThread"
 
 #define isEmpty(var)		((var).read == (var).write)
@@ -39,7 +39,7 @@ static EventStream_t rxStreamJoin, txStreamJoin;
 static Predicate_t rxJoinProcessPredicateSocket, rxJoinProcessPredicatePID, txJoinProcessPredicate, txJoinProcessPredicatePID;
 static Join_t rxJoinProcess, txJoinProcess;
 static Query_t queryRXJoin, queryTXJoin;
-static char *devName = "eth0";
+static char *devName = "p4p1";
 
 static int writeThreadRunning;
 static pthread_t writeThread;
@@ -185,10 +185,10 @@ int onLoad(void) {
 
 	ret = registerQuery(&queryRXJoin);
 	if (ret < 0 ) {
-		ERR_MSG("Register failed: %d\n",-ret);
+		ERR_MSG("Register eval tx/rx + join failed: %d\n",-ret);
 		return -1;
 	}
-	DEBUG_MSG(1,"Registered eval net queries\n");
+	DEBUG_MSG(1,"Registered eval tx/rx + join queries\n");
 
 	return 0;
 }
@@ -198,7 +198,7 @@ int onUnload(void) {
 
 	ret = unregisterQuery(&queryRXJoin);
 	if (ret < 0 ) {
-		ERR_MSG("Unregister eval net failed: %d\n",-ret);
+		ERR_MSG("Unregister eval tx/rx + join failed: %d\n",-ret);
 		return -1;
 	}
 
@@ -210,7 +210,7 @@ int onUnload(void) {
 	INFO_MSG("nRx=%llu, nTx=%llu\n",nRx,nTx);
 	freeOperator(GET_BASE(rxStreamJoin),0);
 	freeOperator(GET_BASE(txStreamJoin),0);
-	DEBUG_MSG(1,"Unregistered eval net queries\n");
+	DEBUG_MSG(1,"Unregistered eval tx/rx + join queries\n");
 
 	return 0;
 }
