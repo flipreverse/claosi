@@ -77,7 +77,7 @@ static void unregEventCallback(Query_t *query) {
 	
 }
 
-static Tupel_t* getSrc(Selector_t *selectors, int len) {
+static Tupel_t* getSrc(Selector_t *selectors, int len, Tupel_t* leftTuple) {
 	Tupel_t *tuple = NULL;
 	char *name = NULL;
 
@@ -109,7 +109,7 @@ static void unregObjectCallback(Query_t *query) {
 	
 };
 
-static Tupel_t* generateStatusObject(Selector_t *selectors, int len) {
+static Tupel_t* generateStatusObject(Selector_t *selectors, int len, Tupel_t* leftTuple) {
 	return NULL;
 }
 

@@ -109,7 +109,7 @@ static void timerHandler(union sigval data) {
 	DEBUG_MSG(3,"%s: Creating tuple\n",__FUNCTION__);
 	// Only one timer at a time is allowed to access this source
 	ACQUIRE_WRITE_LOCK(src->lock);
-	curTuple = src->callback(stream->selectors,stream->selectorsLen);
+	curTuple = src->callback(stream->selectors,stream->selectorsLen,NULL);
 	RELEASE_WRITE_LOCK(src->lock);
 	while (curTuple != NULL) {
 		tempTuple = curTuple->next;
@@ -411,7 +411,7 @@ static void* generateObjectStatus(void *data) {
 	GenStream_t *stream = (GenStream_t*)statusJob->query->root;
 
 	// The object may return a linked-list of Tuple_t
-	curTuple = statusJob->statusFn(stream->selectors,stream->selectorsLen);
+	curTuple = statusJob->statusFn(stream->selectors,stream->selectorsLen,NULL);
 	while (curTuple != NULL) {
 		tempTuple = curTuple->next;
 		/*

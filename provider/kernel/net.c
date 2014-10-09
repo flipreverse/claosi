@@ -250,7 +250,7 @@ static void deactivateRX(Query_t *query) {
 	}
 }
 
-static Tupel_t* getRxBytes(Selector_t *selectors, int len) {
+static Tupel_t* getRxBytes(Selector_t *selectors, int len, Tupel_t* leftTuple) {
 	struct net_device *dev = NULL;
 	struct rtnl_link_stats64 temp;
 	const struct rtnl_link_stats64 *stats = NULL;
@@ -300,7 +300,7 @@ static Tupel_t* getRxBytes(Selector_t *selectors, int len) {
 	return tuple;
 };
 
-static Tupel_t* getTxBytes(Selector_t *selectors, int len) {
+static Tupel_t* getTxBytes(Selector_t *selectors, int len, Tupel_t* leftTuple) {
 	struct net_device *dev = NULL;
 	struct rtnl_link_stats64 temp;
 	const struct rtnl_link_stats64 *stats = NULL;
@@ -504,7 +504,7 @@ static void deactivateDevice(Query_t *query) {
 	}
 }
 
-static Tupel_t* generateDeviceStatus(Selector_t *selectors, int len) {
+static Tupel_t* generateDeviceStatus(Selector_t *selectors, int len, Tupel_t* leftTuple) {
 	struct net_device *curDev = NULL;
 	Tupel_t *head = NULL, *curTuple = NULL, *prevTuple = NULL;
 	char *devName = NULL;
@@ -544,11 +544,11 @@ static Tupel_t* generateDeviceStatus(Selector_t *selectors, int len) {
 	return head;
 }
 
-static Tupel_t* getSockType(Selector_t *selectors, int len) {
+static Tupel_t* getSockType(Selector_t *selectors, int len, Tupel_t* leftTuple) {
 	return NULL;
 }
 
-static Tupel_t* getSockFlags(Selector_t *selectors, int len) {
+static Tupel_t* getSockFlags(Selector_t *selectors, int len, Tupel_t* leftTuple) {
 	return NULL;
 }
 
@@ -560,7 +560,7 @@ static void deactivateSocket(Query_t *query) {
 	
 }
 
-static Tupel_t* generateSocketStatus(Selector_t *selectors, int len) {
+static Tupel_t* generateSocketStatus(Selector_t *selectors, int len, Tupel_t* leftTuple) {
 	return NULL;
 }
 
