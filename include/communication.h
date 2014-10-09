@@ -1,7 +1,7 @@
 #ifndef __COMMUNICATION_H__
 #define __COMMUNICATION_H__
 
-#define BUFFER_PAGES			32
+#define BUFFER_PAGES			64
 #define NUM_PAGES				(2 * BUFFER_PAGES + 1)
 #define RING_BUFFER_SIZE		40
 
@@ -55,6 +55,7 @@ extern void *sharedMemoryUserBase;
 extern Ringbuffer_t *txBuffer;
 extern Ringbuffer_t *rxBuffer;
 extern unsigned int *globalQueryID;
+extern unsigned int skippedQueryCont;
 
 void ringBufferInit(void);
 LayerMessage_t* ringBufferReadBegin(Ringbuffer_t *ringBuffer);

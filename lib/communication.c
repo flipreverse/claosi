@@ -5,7 +5,8 @@
 
 #define isEmpty(var)		((var)->read == (var)->write)
 #define isFull(var)			(((var)->write + 1) % (var)->size == (var)->read)
-#define FREE_THRESHOLD		(RING_BUFFER_SIZE / 2)
+//#define FREE_THRESHOLD		(RING_BUFFER_SIZE / 2)
+#define FREE_THRESHOLD		(2)
 
 /**
  * Start address of the shared memory within the kernel
@@ -41,6 +42,7 @@ unsigned int *globalQueryID;
 DECLARE_LOCK(ringBufferLock);
 #define USE_WRITELOCK
 //#undef USER_WRITELOCK
+unsigned int skippedQueryCont;
 
 /**
  * Initialize the ring buffer according to the current layer.
@@ -89,6 +91,7 @@ void ringBufferInit(void) {
 #endif
 	remainingPages = BUFFER_PAGES;
 	writeOps = 0;
+	skippedQueryCont = 0;
 	INIT_LOCK(ringBufferLock);
 
 	DEBUG_MSG(2,"Initialized ring buffer using %d elements\n",RING_BUFFER_SIZE);

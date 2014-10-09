@@ -618,4 +618,5 @@ void exitLayer(void) {
 	pthread_mutex_destroy(&listLock);
 	INFO_MSG("Max amount of outstanding queries: %d\n",maxWaitingQueries);
 	INFO_MSG("Missed %d timer\n", missedTimer);
+	INFO_MSG("Skipped the sending of %d query continue message\n",skippedQueryCont);
 }
