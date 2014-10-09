@@ -441,6 +441,7 @@ static void sendQueryContinue(Query_t *query, Tupel_t *tuple, int steps) {
 			tempTuple->next = (Tupel_t*)freeMem;
 		}
 	} while(curTuple != NULL);
+	totalQueryCont++;
 	//do {
 		temp = ringBufferWrite(txBuffer,MSG_QUERY_CONTINUE,(char*)queryCont);
 		if (temp == -1) {

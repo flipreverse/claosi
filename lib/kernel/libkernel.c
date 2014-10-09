@@ -741,7 +741,7 @@ static void __exit slc_exit(void) {
 
 	INFO_MSG("Max amount of outstanding queries: %lu\n",maxWaitingQueries);
 	INFO_MSG("Missed %d timer\n", atomic_read(&missedTimer));
-	INFO_MSG("Skipped the sending of %d query continue message\n",skippedQueryCont);
+	INFO_MSG("Skipped the sending of %u/%u query continue message\n",skippedQueryCont,totalQueryCont);
 	INFO_MSG("Destroyed SLC\n");
 }
 

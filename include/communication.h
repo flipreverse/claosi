@@ -56,6 +56,7 @@ extern Ringbuffer_t *txBuffer;
 extern Ringbuffer_t *rxBuffer;
 extern unsigned int *globalQueryID;
 extern unsigned int skippedQueryCont;
+extern unsigned int totalQueryCont;
 
 void ringBufferInit(void);
 LayerMessage_t* ringBufferReadBegin(Ringbuffer_t *ringBuffer);

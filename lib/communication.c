@@ -43,6 +43,7 @@ DECLARE_LOCK(ringBufferLock);
 #define USE_WRITELOCK
 //#undef USER_WRITELOCK
 unsigned int skippedQueryCont;
+unsigned int totalQueryCont;
 
 /**
  * Initialize the ring buffer according to the current layer.
@@ -92,6 +93,7 @@ void ringBufferInit(void) {
 	remainingPages = BUFFER_PAGES;
 	writeOps = 0;
 	skippedQueryCont = 0;
+	totalQueryCont = 0;
 	INIT_LOCK(ringBufferLock);
 
 	DEBUG_MSG(2,"Initialized ring buffer using %d elements\n",RING_BUFFER_SIZE);
