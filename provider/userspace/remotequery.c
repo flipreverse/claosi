@@ -8,23 +8,19 @@
 #include <time.h>
 
 #define PRINT_TUPLE
-#undef PRINT_TUPLE
+//#undef PRINT_TUPLE
 
-static Query_t queryJoin, queryRX;
-static ObjectStream_t processObjStatusJoin;
-static EventStream_t rxStream;
-static Join_t joinComm, joinStime, joinRXBytes;
-static Predicate_t commPredicate, stimePredicate, filterPIDPredicate, rxBytesPredicate;
-static Filter_t filterPID;
+static EventStream_t rxStreamJoin, txStreamJoin;
+static Predicate_t rxJoinProcessPredicateSocket, rxJoinProcessPredicatePID, txJoinProcessPredicate, txJoinProcessPredicatePID;
+static Join_t rxJoinProcess, txJoinProcess;
+static Query_t queryRXJoin, queryTXJoin;
+static char *devName = "eth1";
 
-DECLARE_STATISTIC_VARS(Fork);
-DECLARE_STATISTIC_VARS(RX);
-
-static void printResultJoin(unsigned int id, Tupel_t *tupel) {
+static void printResultRxJoin(unsigned int id, Tupel_t *tupel) {
 #ifndef EVALUATION
 	struct timeval time;
 #endif
-	unsigned long long timeUS, duration = 0;
+	unsigned long long timeUS = 0;
 
 #ifdef EVALUATION
 	timeUS = getCycles();
@@ -32,27 +28,19 @@ static void printResultJoin(unsigned int id, Tupel_t *tupel) {
 	gettimeofday(&time,NULL);
 	timeUS = (unsigned long long)time.tv_sec * (unsigned long long)USEC_PER_SEC + (unsigned long long)time.tv_usec;
 #endif
-	duration = timeUS - tupel->timestamp;
 
 #ifdef PRINT_TUPLE
-	printf("Received tupel with %d items at memory address %p (process duration: %llu us): task %d: comm %s, stime %d\n",
-					tupel->itemLen,
-					tupel,
-					duration,
-					getItemInt(SLC_DATA_MODEL,tupel,"process.process"),
-					getItemString(SLC_DATA_MODEL,tupel,"process.process.comm"),
-					getItemInt(SLC_DATA_MODEL,tupel,"process.process.stime"));
+	printf("Received packet on device %s. Received by process %d. Packet length=%d (itemLen=%d,tuple=%p,duration=%llu us)\n",getItemString(SLC_DATA_MODEL,tupel,"net.device"),getItemInt(SLC_DATA_MODEL,tupel,"process.process"),getItemInt(SLC_DATA_MODEL,tupel,"net.packetType.dataLength"),tupel->itemLen,tupel,timeUS - tupel->timestamp);
 #endif
-	ACCOUNT_STATISTIC(Fork,duration);
 
 	freeTupel(SLC_DATA_MODEL,tupel);
 }
 
-static void printResultRx(unsigned int id, Tupel_t *tupel) {
+static void printResultTxJoin(unsigned int id, Tupel_t *tupel) {
 #ifndef EVALUATION
 	struct timeval time;
 #endif
-	unsigned long long timeUS = 0, duration = 0;
+	unsigned long long timeUS = 0;
 
 #ifdef EVALUATION
 	timeUS = getCycles();
@@ -60,40 +48,37 @@ static void printResultRx(unsigned int id, Tupel_t *tupel) {
 	gettimeofday(&time,NULL);
 	timeUS = (unsigned long long)time.tv_sec * (unsigned long long)USEC_PER_SEC + (unsigned long long)time.tv_usec;
 #endif
-	duration = timeUS - tupel->timestamp;
 
 #ifdef PRINT_TUPLE
-	printf("Received packet on device %s. Device received %d bytes so far. (itemLen=%d,tuple=%p,duration=%llu us)\n",getItemString(SLC_DATA_MODEL,tupel,"net.device"),getItemInt(SLC_DATA_MODEL,tupel,"net.device.rxBytes"),tupel->itemLen,tupel,duration);
+	printf("Transmitted packet on device %s. Sent by process %d. Packet length=%d (itemLen=%d,tuple=%p,duration=%llu us)\n",getItemString(SLC_DATA_MODEL,tupel,"net.device"),getItemInt(SLC_DATA_MODEL,tupel,"process.process"),getItemInt(SLC_DATA_MODEL,tupel,"net.packetType.dataLength"),tupel->itemLen,tupel,timeUS - tupel->timestamp);
 #endif
-	ACCOUNT_STATISTIC(RX,duration);
 
 	freeTupel(SLC_DATA_MODEL,tupel);
 }
 
 static void setupQueries(void) {
-	initQuery(&queryJoin);
-	queryJoin.onQueryCompleted = printResultJoin;
-	queryJoin.root = GET_BASE(processObjStatusJoin);
-	//queryJoin.next = &queryRX;
-	INIT_OBJ_STREAM(processObjStatusJoin,"process.process",0,0,GET_BASE(filterPID),OBJECT_CREATE);
-	INIT_FILTER(filterPID,GET_BASE(joinStime),1)
-	ADD_PREDICATE(filterPID,0,filterPIDPredicate)
-	SET_PREDICATE(filterPIDPredicate,GEQ, OP_STREAM, "process.process", OP_POD, "3000")
-	INIT_JOIN(joinStime,"process.process.stime", GET_BASE(joinComm),1)
-	ADD_PREDICATE(joinStime,0,stimePredicate)
-	SET_PREDICATE(stimePredicate,EQUAL, OP_STREAM, "process.process", OP_JOIN, "process.process")
-	INIT_JOIN(joinComm,"process.process.comm", NULL,1)
-	ADD_PREDICATE(joinComm,0,commPredicate)
-	SET_PREDICATE(commPredicate,EQUAL, OP_STREAM, "process.process", OP_JOIN, "process.process")
+	initQuery(&queryRXJoin);
+	queryRXJoin.onQueryCompleted = printResultRxJoin;
+	queryRXJoin.root = GET_BASE(rxStreamJoin);
+	queryRXJoin.next = &queryTXJoin;
+	INIT_EVT_STREAM(rxStreamJoin,"net.device.onRx",1,0,GET_BASE(rxJoinProcess))
+	SET_SELECTOR_STRING(rxStreamJoin,0,devName)
+	INIT_JOIN(rxJoinProcess,"process.process.sockets",NULL,2)
+	ADD_PREDICATE(rxJoinProcess,0,rxJoinProcessPredicateSocket)
+	SET_PREDICATE(rxJoinProcessPredicateSocket,EQUAL, OP_JOIN, "process.process.sockets", OP_STREAM, "net.packetType.socket")
+	ADD_PREDICATE(rxJoinProcess,1,rxJoinProcessPredicatePID)
+	SET_PREDICATE(rxJoinProcessPredicatePID,EQUAL, OP_JOIN, "process.process", OP_POD, "-1")
 
-	initQuery(&queryRX);
-	queryRX.onQueryCompleted = printResultRx;
-	queryRX.root = GET_BASE(rxStream);
-	INIT_EVT_STREAM(rxStream,"net.device.onRx",1,0,GET_BASE(joinRXBytes));
-	SET_SELECTOR_STRING(rxStream,0,"eth1");
-	INIT_JOIN(joinRXBytes,"net.device.rxBytes",NULL,1)
-	ADD_PREDICATE(joinRXBytes,0,rxBytesPredicate)
-	SET_PREDICATE(rxBytesPredicate,EQUAL, OP_STREAM, "net.device", OP_JOIN, "net.device")
+	initQuery(&queryTXJoin);
+	queryTXJoin.onQueryCompleted = printResultTxJoin;
+	queryTXJoin.root = GET_BASE(txStreamJoin);
+	INIT_EVT_STREAM(txStreamJoin,"net.device.onTx",1,0,GET_BASE(txJoinProcess))
+	SET_SELECTOR_STRING(txStreamJoin,0,devName)
+	INIT_JOIN(txJoinProcess,"process.process.sockets",NULL,2)
+	ADD_PREDICATE(txJoinProcess,0,txJoinProcessPredicate)
+	SET_PREDICATE(txJoinProcessPredicate,EQUAL, OP_JOIN, "process.process.sockets", OP_STREAM, "net.packetType.socket")
+	ADD_PREDICATE(txJoinProcess,1,txJoinProcessPredicatePID)
+	SET_PREDICATE(txJoinProcessPredicatePID,EQUAL, OP_JOIN, "process.process", OP_POD, "-1")
 }
 
 int onLoad(void) {
@@ -101,7 +86,7 @@ int onLoad(void) {
 
 	setupQueries();
 
-	if ((ret = registerQuery(&queryJoin)) < 0 ) {
+	if ((ret = registerQuery(&queryRXJoin)) < 0 ) {
 		ERR_MSG("Query registration failed: %d\n",-ret);
 		return -1;
 	}
@@ -112,15 +97,12 @@ int onLoad(void) {
 int onUnload(void) {
 	int ret = 0;
 
-	if ((ret = unregisterQuery(&queryJoin)) < 0 ) {
+	if ((ret = unregisterQuery(&queryRXJoin)) < 0 ) {
 		ERR_MSG("Unregister queries failed: %d\n",-ret);
 	}
 
-	printf("fork: n = %lu, xn = %e, sn = %e\n",nFork,xnFork,snFork);
-	printf("rx: n = %lu, xn = %e, sn = %e\n",nRX,xnRX,snRX);
-
-	freeOperator(GET_BASE(processObjStatusJoin),0);
-	freeOperator(GET_BASE(rxStream),0);
+	freeOperator(GET_BASE(rxStreamJoin),0);
+	freeOperator(GET_BASE(txStreamJoin),0);
 
 	return 0;
 }

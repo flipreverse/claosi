@@ -14,7 +14,7 @@
 
 
 #define PRINT_TUPLE
-#undef PRINT_TUPLE
+//#undef PRINT_TUPLE
 
 #define SAMPLE_RING_BUFFER_SIZE 60
 #define CHAR_BUFFER_SIZE 200
@@ -39,7 +39,7 @@ static EventStream_t rxStreamJoin, txStreamJoin;
 static Predicate_t rxJoinProcessPredicateSocket, rxJoinProcessPredicatePID, txJoinProcessPredicate, txJoinProcessPredicatePID;
 static Join_t rxJoinProcess, txJoinProcess;
 static Query_t queryRXJoin, queryTXJoin;
-static char *devName = "p4p1";
+static char *devName = "eth1";
 
 static int writeThreadRunning;
 static pthread_t writeThread;
@@ -78,6 +78,7 @@ static void* writeThreadWork(void *data) {
 	return NULL;
 }
 static void printResultRxJoin(unsigned int id, Tupel_t *tupel) {
+#if 0
 #ifndef EVALUATION
 	struct timeval time;
 #endif
@@ -103,12 +104,14 @@ static void printResultRxJoin(unsigned int id, Tupel_t *tupel) {
 		sampleBuffer.elements[sampleBuffer.write].ts4 = timeUS;
 		sampleBuffer.write = (sampleBuffer.write + 1 == sampleBuffer.size ? 0 : sampleBuffer.write + 1);
 	}
+#endif
 	nRx++;
 
 	freeTupel(SLC_DATA_MODEL,tupel);
 }
 
 static void printResultTxJoin(unsigned int id, Tupel_t *tupel) {
+#if 0
 #ifndef EVALUATION
 	struct timeval time;
 #endif
@@ -134,6 +137,7 @@ static void printResultTxJoin(unsigned int id, Tupel_t *tupel) {
 		sampleBuffer.elements[sampleBuffer.write].ts4 = timeUS;
 		sampleBuffer.write = (sampleBuffer.write + 1 == sampleBuffer.size ? 0 : sampleBuffer.write + 1);
 	}
+#endif
 	nTx++;
 
 	freeTupel(SLC_DATA_MODEL,tupel);

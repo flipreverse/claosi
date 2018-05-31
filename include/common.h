@@ -21,7 +21,7 @@
 #endif
 
 #define EVALUATION
-//#undef EVALUATION
+#undef EVALUATION
 
 #define MAX_NAME_LEN						40
 #define DECLARE_BUFFER(name)				char name[MAX_NAME_LEN + 1];
@@ -274,6 +274,10 @@ static inline  unsigned long long getCycles(void) {
 #endif
 
 	return ret;
+}
+#else
+static inline unsigned long long getCycles(void) {
+	return 0;
 }
 #endif
 
