@@ -94,6 +94,9 @@ static int handlerRX(struct kprobe *p, struct pt_regs *regs) {
 	struct iphdr *iph;
 	struct udphdr *uh = NULL;
 	Tupel_t *tupel = NULL;
+#if LINUX_VERSION_CODE > KERNEL_VERSION(4,7,0)
+	bool refcounted;
+#endif
 #ifndef EVALUATION
 	struct timeval time;
 #endif
@@ -121,12 +124,26 @@ skb = (struct sk_buff*)regs->ARM_r0;
 	if (p == &rxKPTCP) {
 		// TCP packet
 		th = tcp_hdr(skb);
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4,5,0)
 		sk = __inet_lookup_skb(&tcp_hashinfo, skb, th->source, th->dest);
+#elif LINUX_VERSION_CODE < KERNEL_VERSION(4,7,0)
+		sk = __inet_lookup_skb(&tcp_hashinfo, skb, __tcp_hdrlen(th), th->source, th->dest);
+#elif LINUX_VERSION_CODE < KERNEL_VERSION(4,14,0)
+		sk = __inet_lookup_skb(&tcp_hashinfo, skb, __tcp_hdrlen(th), th->source, th->dest, &refcounted);
+#else
+		sk = __inet_lookup_skb(&tcp_hashinfo, skb, __tcp_hdrlen(th), th->source, th->dest, inet_sdif(skb), &refcounted);
+#endif
 	} else if (p == &rxKPUDP) {
 		// UDP packet
 		iph = ip_hdr(skb);
-		uh = udp_hdr(skb);
+		uh = udp_hdr(skb);//dev_net(skb->dev)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4,5,0)
 		sk = __udp4_lib_lookup(dev_net(skb_dst(skb)->dev), iph->saddr, uh->source,iph->daddr, uh->dest, inet_iif(skb),&udp_table);
+#elif LINUX_VERSION_CODE < KERNEL_VERSION(4,14,0)
+		sk = __udp4_lib_lookup(dev_net(skb_dst(skb)->dev), iph->saddr, uh->source,iph->daddr, uh->dest, inet_iif(skb),&udp_table, skb);
+#else
+		sk = __udp4_lib_lookup(dev_net(skb_dst(skb)->dev), iph->saddr, uh->source,iph->daddr, uh->dest, inet_iif(skb), inet_sdif(skb), &udp_table, skb);
+#endif
 	}
 	// No valid socket found. Abort.
 	if (sk == NULL) {

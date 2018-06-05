@@ -11,6 +11,10 @@
 #include <linux/mm.h>
 #include <asm/uaccess.h>
 #include <linux/sched/rt.h>
+#include <linux/version.h>
+#if LINUX_VERSION_CODE > KERNEL_VERSION(4,11,0)
+#include <linux/sched/types.h>
+#endif
 #include <datamodel.h>
 #include <resultset.h>
 #include <query.h>
@@ -518,7 +522,12 @@ static void communicationFileMmapClose(struct vm_area_struct *vma) {
  * it does the actual mapping between kernel and user space memory
  */
 //struct page *mmap_nopage(struct vm_area_struct *vma, unsigned long address, int *type)	--changed
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4,10,0)
 static int communicationFileMmapFault(struct vm_area_struct *vma, struct vm_fault *vmf) {
+#else
+static int communicationFileMmapFault(struct vm_fault *vmf) {
+	struct vm_area_struct *vma = vmf->vma;
+#endif
 	struct page *page;
 	DataModelMmap_t *info;
 
@@ -534,7 +543,11 @@ static int communicationFileMmapFault(struct vm_area_struct *vma, struct vm_faul
 		return VM_FAULT_SIGBUS;
 	}
 	page = sharedMemoryPages[vmf->pgoff];
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4,10,0)
 	DEBUG_MSG(2,"page fault at 0x%p, mapping page 0x%p at offset %ld\n",vmf->virtual_address,page_address(page),vmf->pgoff);
+#else
+	DEBUG_MSG(2,"page fault at 0x%lx, mapping page 0x%p at offset %ld\n",vmf->address,page_address(page),vmf->pgoff);
+#endif
 	/* increment the reference count of this page */
 	get_page(page);
 	// Tell the memory management which page should be mapped at (vmf->virtual_address & PAGE_MASK)

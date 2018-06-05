@@ -10,6 +10,7 @@
 #include <linux/hrtimer.h>
 #include <asm/page.h>
 #include <linux/delay.h>
+#include <linux/version.h>
 #else
 #include <stdlib.h>
 #include <string.h>
@@ -40,9 +41,14 @@
 #define SLEEP_MAX							1000000
 
 #ifdef __KERNEL__
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4,4,0)
 #define	ALLOC(size)							kmalloc(size,GFP_KERNEL & ~__GFP_WAIT)
-#define	FREE(ptr)							kfree(ptr)
 #define REALLOC(ptr,size)					krealloc(ptr,size,GFP_KERNEL & ~__GFP_WAIT)
+#else
+#define	ALLOC(size)							kmalloc(size,GFP_KERNEL & ~__GFP_RECLAIM)
+#define REALLOC(ptr,size)					krealloc(ptr,size,GFP_KERNEL & ~__GFP_RECLAIM)
+#endif
+#define	FREE(ptr)							kfree(ptr)
 #define STRTOINT(strVar,intVar)				kstrtos32(strVar,10,&intVar)
 #define STRTOCHAR(strVar,charVar)			kstrtos8(strVar,10,&charVar)
 #define DECLARE_LOCK(varName)				rwlock_t varName
