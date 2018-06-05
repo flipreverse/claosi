@@ -13,6 +13,7 @@
 #define BUFFER_SIZE 	128
 static char pathBuffer[BUFFER_SIZE];
 static char cmdBuffer[10];
+static const char *fifoPath = FIFO_PATH;
 static pthread_t fifoWorkThread;
 static pthread_attr_t fifoWorkThreadAttr;
 
@@ -67,7 +68,7 @@ static void* fifoWork(void *data) {
 	int (*onLoadFn)(void);
 
 	while (1) {
-		cmdFifo = fopen(FIFO_PATH,"r");
+		cmdFifo = fopen(fifoPath,"r");
 		if (cmdFifo == NULL) {
 			if (errno == EINTR) {
 				continue;
@@ -180,24 +181,27 @@ int main(int argc, const char *argv[]) {
 	struct stat fifo_stat;
 	LIST_INIT(&providerList);
 
+	if (argc > 1) {
+		fifoPath = argv[1];
+	}
 	// Does the fifo exist?
-	if (stat(FIFO_PATH,&fifo_stat) < 0) {
+	if (stat(fifoPath,&fifo_stat) < 0) {
 		// No. Create it.
 		if (errno == ENOENT) {
 			ERR_MSG("FIFO does not exist. Try to create it.\n");
-			if (mkfifo(FIFO_PATH,0777) < 0) {
+			if (mkfifo(fifoPath,0777) < 0) {
 				perror("mkfifo");
 				return EXIT_FAILURE;
 			}
-			DEBUG_MSG(3,"Created fifo: %s\n",FIFO_PATH);
+			DEBUG_MSG(3,"Created fifo: %s\n",fifoPath);
 		} else {
-			ERR_MSG("Error probing for FIFO (%s): %s\n",FIFO_PATH,strerror(errno));
+			ERR_MSG("Error probing for FIFO (%s): %s\n",fifoPath,strerror(errno));
 			return EXIT_FAILURE;
 		}
 	} else {
 		// The path exists, but is not a fifo --> Exit.
 		if (!S_ISFIFO(fifo_stat.st_mode)) {
-			ERR_MSG("%s is not a fifo.\n",FIFO_PATH);
+			ERR_MSG("%s is not a fifo.\n",fifoPath);
 			return EXIT_FAILURE;
 		}
 	}
