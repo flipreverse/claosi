@@ -15,6 +15,7 @@
 #if LINUX_VERSION_CODE > KERNEL_VERSION(4,11,0)
 #include <linux/sched/types.h>
 #endif
+#include <linux/uaccess.h>
 #include <datamodel.h>
 #include <resultset.h>
 #include <query.h>
@@ -562,24 +563,32 @@ struct vm_operations_struct communicationFile_mmap_ops = {
 	.fault		=	communicationFileMmapFault,
 };
 
+#define ADDR_BUFFER_SIZE 20
 static ssize_t communicationFileRead(struct file *fil, char __user *buffer, size_t buffer_length, loff_t *pos) {
 	int ret = 0;
+	char kernBuffer[ADDR_BUFFER_SIZE];
 
 	if (*pos > 0) {
 		return 0;
 	}
-	ret = snprintf(buffer,buffer_length, "0x%lx\n",(unsigned long)sharedMemoryKernelBase);
-	if (ret >= buffer_length) {
+	ret = snprintf(kernBuffer,ADDR_BUFFER_SIZE, "0x%lx\n",(unsigned long)sharedMemoryKernelBase);
+	
+	if (ret >= ADDR_BUFFER_SIZE) {
 		// Not enough space to hold the whole string
 		ret = buffer_length;
 	} else {
 		// Account for the null byte
 		ret++;
 	}
+	if (copy_to_user(buffer, kernBuffer, ret)) {
+		ERR_MSG("Cannot copy shared memory address to userspace\n");
+		return -EFAULT;
+	}
 	*pos = ret;
 
 	return ret;
 }
+#undef ADDR_BUFFER_SIZE
 
 static int communicationFileMmap(struct file *filp, struct vm_area_struct *vma) {
 	DataModelMmap_t *info = NULL;
