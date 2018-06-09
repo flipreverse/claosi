@@ -35,7 +35,6 @@ static int handlerTX(struct kprobe *p, struct pt_regs *regs) {
 	struct list_head *pos = NULL;
 	QuerySelectors_t *querySelec = NULL;
 	char *devName = NULL;
-	unsigned long flags;
 	unsigned long long timeUS = 0;
 
 #if defined(__i386__)
@@ -82,7 +81,7 @@ skb = (struct sk_buff*)regs->ARM_r0;
 			setItemInt(SLC_DATA_MODEL,tupel,"net.packetType.socket",-1);
 		}
 		eventOccuredUnicast(querySelec->query,tupel);
-	endForEachQueryEvent(slcLock,tx)
+	endForEachQuery(slcLock,tx)
 
 	return 0;
 }
@@ -103,7 +102,6 @@ static int handlerRX(struct kprobe *p, struct pt_regs *regs) {
 	struct list_head *pos = NULL;
 	QuerySelectors_t *querySelec = NULL;
 	char *devName = NULL;
-	unsigned long flags;
 	unsigned long long timeUS = 0;
 
 #if defined(__i386__)
@@ -184,9 +182,9 @@ skb = (struct sk_buff*)regs->ARM_r0;
 			setItemInt(SLC_DATA_MODEL,tupel,"net.packetType.socket",-1);
 		}
 		eventOccuredUnicast(querySelec->query,tupel);
-	endForEachQueryEvent(slcLock,rx)
 	// Give the socket back to the kernel
 	sock_put(sk);
+	endForEachQuery(slcLock,rx)
 
 	return 0;
 }
@@ -377,7 +375,6 @@ static int handlerOpen(struct kprobe *p, struct pt_regs *regs) {
 	QuerySelectors_t *querySelec = NULL;
 	GenStream_t *stream = NULL;
 	char *devName = NULL;
-	unsigned long flags;
 	unsigned long long timeUS = 0;
 
 #if defined(__i386__)
@@ -418,7 +415,7 @@ dev = (struct net_device*)regs->ARM_r0;
 		allocItem(SLC_DATA_MODEL,tupel,0,"net.device");
 		setItemString(SLC_DATA_MODEL,tupel,"net.device",devName);
 		objectChangedUnicast(querySelec->query,tupel);
-	endForEachQueryEvent(slcLock,dev)
+	endForEachQuery(slcLock,dev)
 
 	return 0;
 }
@@ -433,7 +430,6 @@ static int handlerClose(struct kprobe *p, struct pt_regs *regs) {
 	QuerySelectors_t *querySelec = NULL;
 	GenStream_t *stream = NULL;
 	char *devName = NULL;
-	unsigned long flags;
 	unsigned long long timeUS = 0;
 
 #if defined(__i386__)
@@ -474,7 +470,7 @@ dev = (struct net_device*)regs->ARM_r0;
 		allocItem(SLC_DATA_MODEL,tupel,0,"net.device");
 		setItemString(SLC_DATA_MODEL,tupel,"net.device",devName);
 		eventOccuredUnicast(querySelec->query,tupel);
-	endForEachQueryEvent(slcLock,dev)
+	endForEachQuery(slcLock,dev)
 
 	return 0;
 }

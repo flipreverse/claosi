@@ -76,24 +76,23 @@ static DEFINE_SPINLOCK(varNamePrefix ## ListLock);
  * Iterates over every entry in <varNamePrefix>QueriesList. The current element will be stored in tempListVar.
  * It's intended to use in conjunction with events.
  */
-#define forEachQueryEvent(slcLockVar, varNamePrefix, tempListVar, tempVar)		ACQUIRE_READ_LOCK(slcLockVar); \
+#define forEachQueryEvent(slcLockVar, varNamePrefix, tempListVar, tempVar)	do { \
+	unsigned long flags; \
+	ACQUIRE_READ_LOCK(slcLockVar); \
 	spin_lock(&varNamePrefix ## ListLock); \
 	list_for_each(tempListVar,&varNamePrefix ## QueriesList) { \
 	tempVar = container_of(tempListVar,QuerySelectors_t,list);
-/**
- * Releases the <varNamePrefix>ListLock and the slcLockVar
- */
-#define endForEachQueryEvent(slcLockVar,varNamePrefix)				} \
-	spin_unlock(&varNamePrefix ## ListLock); \
-	RELEASE_READ_LOCK(slcLockVar);
+
 /**
  * Acquires the read lock on slcLockVar and <varNamePrefix>ListLock.
  * Iterates over every entry in <varNamePrefix>QueriesList. The current element will be stored in tempListVar.
  * It's intended to use in conjunction with objects. Therefore it has an additional parameter newEvent. Each query
  * in the list which does not registered for newEvent will be skipped.
  */
-#define forEachQueryObject(slcLockVar, varNamePrefix, tempListVar, tempVar, newEvent)	ACQUIRE_READ_LOCK(slcLockVar); \
-	spin_lock(&varNamePrefix ## ListLock); \
+#define forEachQueryObject(slcLockVar, varNamePrefix, tempListVar, tempVar, newEvent)	do { \
+	unsigned long flags; \
+	ACQUIRE_READ_LOCK(slcLockVar); \
+	spin_lock_irqsave(&varNamePrefix ## ListLock, flags); \
 	list_for_each(tempListVar,&varNamePrefix ## QueriesList) { \
 	tempVar = container_of(tempListVar,QuerySelectors_t,list); \
 	if ((((ObjectStream_t*)tempVar->query->root)->objectEvents & newEvent) != newEvent) { \
@@ -102,9 +101,10 @@ static DEFINE_SPINLOCK(varNamePrefix ## ListLock);
 /**
  * Releases the <varNamePrefix>ListLock and the slcLockVar
  */
-#define endForEachQueryObject(slcLockVar,varNamePrefix)				} \
-	spin_unlock(&varNamePrefix ## ListLock); \
-	RELEASE_READ_LOCK(slcLockVar);
+#define endForEachQuery(slcLockVar,varNamePrefix)				} \
+	spin_unlock_irqrestore(&varNamePrefix ## ListLock, flags); \
+	RELEASE_READ_LOCK(slcLockVar); \
+	} while (0);
 /**
  * Allocates a QuerySeletor_t, assigns the query (queryVar) to it, acquires <varNamePrefix>ListLock and inserts 
  * it in the <varNamePrefix>QueriesList.
@@ -116,15 +116,20 @@ static DEFINE_SPINLOCK(varNamePrefix ## ListLock);
 	} \
 	listEmptyVar = list_empty(&varNamePrefix ## QueriesList); \
 	tempVar->query = queryVar; \
-	spin_lock(&varNamePrefix ## ListLock); \
+	do { \
+	unsigned long flags; \
+	spin_lock_irqsave(&varNamePrefix ## ListLock, flags); \
 	list_add_tail(&tempVar->list,&varNamePrefix ## QueriesList); \
-	spin_unlock(&varNamePrefix ## ListLock);
+	spin_unlock_irqrestore(&varNamePrefix ## ListLock, flags); \
+	} while (0);
 /**
  * Searches the <varNamePrefix>QueriesList for an element which query member is equal to queryVar.
  * If it was found, it will be safely removed from list while holding the <varNamePrefix>ListLock.
  * listEmptyVar will be 1, if the list is empty after removal.
  */
-#define findAndDeleteQuery(varNamePrefix,listEmptyVar, tempVar, queryVar, listPos, listNext)	spin_lock(&varNamePrefix ## ListLock); \
+#define findAndDeleteQuery(varNamePrefix,listEmptyVar, tempVar, queryVar, listPos, listNext)	\
+	unsigned long flags; \
+	spin_lock_irqsave(&varNamePrefix ## ListLock, flags); \
 	list_for_each_safe(listPos,listNext,&varNamePrefix ## QueriesList) { \
 		tempVar = container_of(listPos,QuerySelectors_t,list); \
 		if (tempVar->query == query) { \
@@ -134,7 +139,7 @@ static DEFINE_SPINLOCK(varNamePrefix ## ListLock);
 		} \
 	} \
 	listEmptyVar = list_empty(&varNamePrefix ## QueriesList); \
-	spin_unlock(&varNamePrefix ## ListLock);
+	spin_unlock_irqrestore(&varNamePrefix ## ListLock, flags);
 
 #else
 #define	ALLOC(size)							malloc(size)
@@ -165,10 +170,6 @@ static pthread_mutex_t varNamePrefix ## ListLock;
 	pthread_mutex_lock(&varNamePrefix ## ListLock); \
 	LIST_FOREACH(tempListVar,&varNamePrefix ## QueriesList,listEntry) { 
 
-#define endForEachQueryEvent(slcLockVar,varNamePrefix)				} \
-	pthread_mutex_unlock(&varNamePrefix ## ListLock); \
-	RELEASE_READ_LOCK(slcLockVar);
-
 #define forEachQueryObject(slcLockVar, varNamePrefix, tempListVar, tempVar, newEvent)	ACQUIRE_READ_LOCK(slcLockVar); \
 	pthread_mutex_lock(&varNamePrefix ## ListLock); \
 	LIST_FOREACH(tempListVar,&varNamePrefix ## QueriesList,listEntry) { \
@@ -176,7 +177,7 @@ static pthread_mutex_t varNamePrefix ## ListLock;
 		continue; \
 	}
 
-#define endForEachQueryObject(slcLockVar,varNamePrefix)				} \
+#define endForEachQuery(slcLockVar,varNamePrefix)				} \
 	pthread_mutex_unlock(&varNamePrefix ## ListLock); \
 	RELEASE_READ_LOCK(slcLockVar);
 

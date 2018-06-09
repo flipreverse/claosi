@@ -31,7 +31,6 @@ static int handlerFork(struct kretprobe_instance *ri, struct pt_regs *regs) {
 #ifndef EVALUATION
 	struct timeval time;
 #endif
-	unsigned long flags;
 	unsigned long long timeUS = 0;
 
 #ifdef EVALUATION
@@ -49,7 +48,7 @@ static int handlerFork(struct kretprobe_instance *ri, struct pt_regs *regs) {
 		allocItem(SLC_DATA_MODEL,tuple,0,"process.process");
 		setItemInt(SLC_DATA_MODEL,tuple,"process.process",retval);
 		objectChangedUnicast(querySelec->query,tuple);
-	endForEachQueryObject(slcLock,fork)
+	endForEachQuery(slcLock,fork)
 
 	return 0;
 }
@@ -62,7 +61,6 @@ static int handlerExit(struct kprobe *p, struct pt_regs *regs) {
 #ifndef EVALUATION
 	struct timeval time;
 #endif
-	unsigned long flags;
 	unsigned long long timeUS = 0;
 
 #ifdef EVALUATION
@@ -80,7 +78,7 @@ static int handlerExit(struct kprobe *p, struct pt_regs *regs) {
 		allocItem(SLC_DATA_MODEL,tuple,0,"process.process");
 		setItemInt(SLC_DATA_MODEL,tuple,"process.process",curTask->pid);
 		objectChangedUnicast(querySelec->query,tuple);
-	endForEachQueryObject(slcLock,exit)
+	endForEachQuery(slcLock,exit)
 
 	return 0;
 }
