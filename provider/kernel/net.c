@@ -5,7 +5,9 @@
 #include <linux/netdevice.h>
 #include <linux/tcp.h>
 #include <net/tcp.h>
+#include <net/tcp_states.h>
 #include <net/inet_hashtables.h>
+#include <net/request_sock.h>
 #include <net/sock.h>
 #include <net/udp.h>
 #include <datamodel.h>
@@ -32,6 +34,8 @@ static int handlerTX(struct kprobe *p, struct pt_regs *regs) {
 #ifndef EVALUATION
 	struct timeval time;
 #endif
+	struct sock *sk = NULL;
+	struct request_sock *reqsk = NULL;
 	struct list_head *pos = NULL;
 	QuerySelectors_t *querySelec = NULL;
 	char *devName = NULL;
@@ -54,6 +58,20 @@ skb = (struct sk_buff*)regs->ARM_r0;
 	timeUS = (unsigned long long)time.tv_sec * (unsigned long long)USEC_PER_SEC + (unsigned long long)time.tv_usec;
 #endif
 
+	sk = skb->sk;
+	if (sk) {
+		if (sk->sk_state == TCP_NEW_SYN_RECV) {
+			/*
+			 * Listening sockets are represented by a special socket struct, i.e., struct request_socket.
+			 * This is returned by the above lookup functions.
+			 * Thus, we cannot use it to determine the inode number directly.
+			 * We first have to resolve the actual struct sock behind it.
+			 */
+			reqsk = inet_reqsk(sk);
+			sk = reqsk->rsk_listener;
+		}
+	}
+
 	// Was the packet received by a device a query was registered on?
 	forEachQueryEvent(slcLock,tx,pos,querySelec)
 		if (strcmp(skb->dev->name,GET_SELECTORS(querySelec->query)[0].value) != 0) {
@@ -68,6 +86,7 @@ skb = (struct sk_buff*)regs->ARM_r0;
 		if (tupel == NULL) {
 			continue;
 		}
+
 		allocItem(SLC_DATA_MODEL,tupel,0,"net.device");
 		setItemString(SLC_DATA_MODEL,tupel,"net.device",devName);
 		allocItem(SLC_DATA_MODEL,tupel,1,"net.packetType");
@@ -75,8 +94,8 @@ skb = (struct sk_buff*)regs->ARM_r0;
 		copyArrayByte(SLC_DATA_MODEL,tupel,"net.packetType.macHdr",0,skb->data,ETH_HLEN);
 		setItemByte(SLC_DATA_MODEL,tupel,"net.packetType.macProtocol",42);
 		setItemInt(SLC_DATA_MODEL,tupel,"net.packetType.dataLength",skb->len);
-		if (skb->sk && skb->sk->sk_socket) {
-			setItemInt(SLC_DATA_MODEL,tupel,"net.packetType.socket",SOCK_INODE(skb->sk->sk_socket)->i_ino);
+		if (sk && sk->sk_socket) {
+			setItemInt(SLC_DATA_MODEL,tupel,"net.packetType.socket",SOCK_INODE(sk->sk_socket)->i_ino);
 		} else {
 			setItemInt(SLC_DATA_MODEL,tupel,"net.packetType.socket",-1);
 		}
@@ -89,12 +108,13 @@ skb = (struct sk_buff*)regs->ARM_r0;
 static int handlerRX(struct kprobe *p, struct pt_regs *regs) {
 	struct sk_buff *skb = NULL;
 	struct sock *sk = NULL;
+	struct request_sock *reqsk = NULL;
 	const struct tcphdr *th = NULL;
 	struct iphdr *iph;
 	struct udphdr *uh = NULL;
 	Tupel_t *tupel = NULL;
 #if LINUX_VERSION_CODE > KERNEL_VERSION(4,7,0)
-	bool refcounted;
+	bool refcounted = false;
 #endif
 #ifndef EVALUATION
 	struct timeval time;
@@ -131,10 +151,26 @@ skb = (struct sk_buff*)regs->ARM_r0;
 #else
 		sk = __inet_lookup_skb(&tcp_hashinfo, skb, __tcp_hdrlen(th), th->source, th->dest, inet_sdif(skb), &refcounted);
 #endif
+		if (sk->sk_state == TCP_NEW_SYN_RECV) {
+			/*
+			 * Listening sockets are represented by a special socket struct, i.e., struct request_socket.
+			 * This is returned by the above lookup functions.
+			 * Thus, we cannot use it to determine the inode number directly.
+			 * We first have to resolve the actual struct sock behind it.
+			 */
+			reqsk = inet_reqsk(sk);
+			sk = reqsk->rsk_listener;
+		} else if (sk->sk_state == TCP_TIME_WAIT) {
+			/*
+			 * Sockets in TIME_WAIT state are no real sockets in terms of associated inodes.
+			 * Hence, we cannot determine an inode number that we can pass on.
+			 */
+			return 0;
+		}
 	} else if (p == &rxKPUDP) {
 		// UDP packet
 		iph = ip_hdr(skb);
-		uh = udp_hdr(skb);//dev_net(skb->dev)
+		uh = udp_hdr(skb);
 #if LINUX_VERSION_CODE < KERNEL_VERSION(4,5,0)
 		sk = __udp4_lib_lookup(dev_net(skb_dst(skb)->dev), iph->saddr, uh->source,iph->daddr, uh->dest, inet_iif(skb),&udp_table);
 #elif LINUX_VERSION_CODE < KERNEL_VERSION(4,14,0)
@@ -154,6 +190,7 @@ skb = (struct sk_buff*)regs->ARM_r0;
 	do_gettimeofday(&time);
 	timeUS = (unsigned long long)time.tv_sec * (unsigned long long)USEC_PER_SEC + (unsigned long long)time.tv_usec;
 #endif
+
 	// Acquire the slcLock to avoid change in the datamodel while creating the tuple
 	forEachQueryEvent(slcLock,rx,pos,querySelec)
 		// Was the packet received by a device a query was registered on?
@@ -169,6 +206,7 @@ skb = (struct sk_buff*)regs->ARM_r0;
 		if (tupel == NULL) {
 			continue;
 		}
+
 		allocItem(SLC_DATA_MODEL,tupel,0,"net.device");
 		setItemString(SLC_DATA_MODEL,tupel,"net.device",devName);
 		allocItem(SLC_DATA_MODEL,tupel,1,"net.packetType");
@@ -177,14 +215,23 @@ skb = (struct sk_buff*)regs->ARM_r0;
 		setItemByte(SLC_DATA_MODEL,tupel,"net.packetType.macProtocol",42);
 		setItemInt(SLC_DATA_MODEL,tupel,"net.packetType.dataLength",skb->len);
 		if (sk && sk->sk_socket) {
-			setItemInt(SLC_DATA_MODEL,tupel,"net.packetType.socket",SOCK_INODE(sk->sk_socket)->i_ino);
+			setItemInt(SLC_DATA_MODEL,tupel,"net.packetType.socket", SOCK_INODE(sk->sk_socket)->i_ino);
 		} else {
 			setItemInt(SLC_DATA_MODEL,tupel,"net.packetType.socket",-1);
 		}
 		eventOccuredUnicast(querySelec->query,tupel);
-	// Give the socket back to the kernel
-	sock_put(sk);
 	endForEachQuery(slcLock,rx)
+
+#if LINUX_VERSION_CODE > KERNEL_VERSION(4,7,0)
+	if (refcounted) {
+		if (reqsk != NULL) {
+			reqsk_put(reqsk);
+		} else {
+			// Give the socket back to the kernel
+			sock_put(sk);
+		}
+	}
+#endif
 
 	return 0;
 }
