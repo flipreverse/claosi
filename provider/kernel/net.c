@@ -1,9 +1,11 @@
 #include <linux/module.h>
+#include <linux/moduleparam.h>
 #include <linux/kprobes.h>
 #include <linux/if_ether.h>
 #include <linux/list.h>
 #include <linux/netdevice.h>
 #include <linux/tcp.h>
+#include <linux/tracepoint.h>
 #include <net/tcp.h>
 #include <net/tcp_states.h>
 #include <net/inet_hashtables.h>
@@ -13,6 +15,11 @@
 #include <datamodel.h>
 #include <query.h>
 #include <api.h>
+
+enum SLC_PROT {
+	SLC_TCP = 0,
+	SLC_UDP
+};
 
 DECLARE_ELEMENTS(nsNet, model)
 DECLARE_ELEMENTS(objSocket, objDevice, srcSocketType, srcSocketFlags, typePacketType, srcTXBytes, srcRXBytes, evtOnRX, evtOnTX)
@@ -28,8 +35,14 @@ static struct kprobe rxKPTCP, rxKPUDP, *rxKP[2];
 static char txSymbolName[] = "dev_hard_start_xmit";
 static struct kprobe txKP;
 
-static int handlerTX(struct kprobe *p, struct pt_regs *regs) {
-	struct sk_buff *skb = NULL;
+static struct tracepoint *tpRX = NULL;
+static struct tracepoint *tpTX = NULL;
+
+static bool useTracepoints = 0;
+module_param(useTracepoints, bool, 0644);
+MODULE_PARM_DESC(useTracepoints, "Use tracepoints instead of kprobes [default: 0]");
+
+static int handlerTX(struct sk_buff *skb) {
 	Tupel_t *tupel = NULL;
 #ifndef EVALUATION
 	struct timeval time;
@@ -41,15 +54,6 @@ static int handlerTX(struct kprobe *p, struct pt_regs *regs) {
 	char *devName = NULL;
 	unsigned long long timeUS = 0;
 
-#if defined(__i386__)
-skb = (struct sk_buff*)regs->ax;
-#elif defined(__x86_64__)
-skb = (struct sk_buff*)regs->di;
-#elif defined(__arm__)
-skb = (struct sk_buff*)regs->ARM_r0;
-#else
-#error Unknown architecture
-#endif
 
 #ifdef EVALUATION
 	timeUS = getCycles();
@@ -105,8 +109,28 @@ skb = (struct sk_buff*)regs->ARM_r0;
 	return 0;
 }
 
-static int handlerRX(struct kprobe *p, struct pt_regs *regs) {
+static int kprobeHandlerTX(struct kprobe *p, struct pt_regs *regs) {
 	struct sk_buff *skb = NULL;
+
+#if defined(__i386__)
+skb = (struct sk_buff*)regs->ax;
+#elif defined(__x86_64__)
+skb = (struct sk_buff*)regs->di;
+#elif defined(__arm__)
+skb = (struct sk_buff*)regs->ARM_r0;
+#else
+#error Unknown architecture
+#endif
+
+	handlerTX(skb);
+	return 0;
+}
+
+static void traceHandlerTX(struct sk_buff *skb, void *data) {
+	handlerTX(skb);
+}
+
+static void handlerRX(struct sk_buff *skb, enum SLC_PROT protocol) {
 	struct sock *sk = NULL;
 	struct request_sock *reqsk = NULL;
 	const struct tcphdr *th = NULL;
@@ -124,22 +148,13 @@ static int handlerRX(struct kprobe *p, struct pt_regs *regs) {
 	char *devName = NULL;
 	unsigned long long timeUS = 0;
 
-#if defined(__i386__)
-skb = (struct sk_buff*)regs->ax;
-#elif defined(__x86_64__)
-skb = (struct sk_buff*)regs->di;
-#elif defined(__arm__)
-skb = (struct sk_buff*)regs->ARM_r0;
-#else
-#error Unknown architecture
-#endif
 	/*
 	 * Initially, an instance of struct sk_buff does *not* have a socket set.
 	 * It will be resolved while being passed through the diffrent layers.
 	 * For example, the functions (tcp_v4_rcv/udp_rcv) we're probing do this job.
 	 * Hence, it's necessary to do the same stuff here.
 	 */
-	if (p == &rxKPTCP) {
+	if (protocol == SLC_TCP) {
 		// TCP packet
 		th = tcp_hdr(skb);
 #if LINUX_VERSION_CODE < KERNEL_VERSION(4,5,0)
@@ -165,9 +180,9 @@ skb = (struct sk_buff*)regs->ARM_r0;
 			 * Sockets in TIME_WAIT state are no real sockets in terms of associated inodes.
 			 * Hence, we cannot determine an inode number that we can pass on.
 			 */
-			return 0;
+			return;
 		}
-	} else if (p == &rxKPUDP) {
+	} else if (protocol == SLC_UDP) {
 		// UDP packet
 		iph = ip_hdr(skb);
 		uh = udp_hdr(skb);
@@ -181,7 +196,7 @@ skb = (struct sk_buff*)regs->ARM_r0;
 	}
 	// No valid socket found. Abort.
 	if (sk == NULL) {
-		return 0;
+		return;
 	}
 
 #ifdef EVALUATION
@@ -232,8 +247,31 @@ skb = (struct sk_buff*)regs->ARM_r0;
 		}
 	}
 #endif
+}
 
+static int kprobeHandlerRX(struct kprobe *p, struct pt_regs *regs) {
+	struct sk_buff *skb = NULL;
+
+#if defined(__i386__)
+skb = (struct sk_buff*)regs->ax;
+#elif defined(__x86_64__)
+skb = (struct sk_buff*)regs->di;
+#elif defined(__arm__)
+skb = (struct sk_buff*)regs->ARM_r0;
+#else
+#error Unknown architecture
+#endif
+
+	if (p == &rxKPTCP) {
+		handlerRX(skb, SLC_TCP);
+	} else if (p == &rxKPUDP) {
+		handlerRX(skb, SLC_UDP);
+	}
 	return 0;
+}
+
+static void traceHandlerRX(struct sk_buff *skb) {
+	handlerRX(skb, SLC_TCP);
 }
 
 static void activateTX(Query_t *query) {
@@ -243,15 +281,23 @@ static void activateTX(Query_t *query) {
 	addAndEnqueueQuery(tx,ret, querySelec, query)
 	// list was empty before insertion
 	if (ret == 1) {
-		memset(&txKP,0,sizeof(struct kprobe));
-		txKP.pre_handler = handlerTX;
-		txKP.symbol_name = txSymbolName;
-		ret = register_kprobe(&txKP);
-		if (ret < 0) {
-			ERR_MSG("register_kprobe at %s failed. Reason: %d\n",txKP.symbol_name,ret);
-			return;
+		if (useTracepoints) {
+			ret = tracepoint_probe_register(tpTX, traceHandlerTX, NULL);
+			if (ret < 0) {
+				ERR_MSG("tracepoint_probe_register at %s failed. Reason: %d\n", tpTX->name, ret);
+				return;
+			}
+		} else {
+			memset(&txKP,0,sizeof(struct kprobe));
+			txKP.pre_handler = kprobeHandlerTX;
+			txKP.symbol_name = txSymbolName;
+			ret = register_kprobe(&txKP);
+			if (ret < 0) {
+				ERR_MSG("register_kprobe at %s failed. Reason: %d\n",txKP.symbol_name,ret);
+				return;
+			}
+			DEBUG_MSG(1,"Registered kprobe at %s\n",txKP.symbol_name);
 		}
-		DEBUG_MSG(1,"Registered kprobe at %s\n",txKP.symbol_name);
 	}
 }
 
@@ -263,8 +309,16 @@ static void deactivateTX(Query_t *query) {
 	findAndDeleteQuery(tx,ret, querySelec, query, pos, next)
 	// list is now empty
 	if (ret == 1) {
-		unregister_kprobe(&txKP);
-		DEBUG_MSG(1,"Unregistered kprobe at %s. Missed it %ld times.\n",txKP.symbol_name,txKP.nmissed);
+		if (useTracepoints) {
+			ret = tracepoint_probe_unregister(tpTX, traceHandlerTX, NULL);
+			if (ret < 0) {
+				ERR_MSG("tracepoint_probe_unregister at %s failed. Reason: %d\n", tpTX->name, ret);
+				return;
+			}
+		} else {
+			unregister_kprobe(&txKP);
+			DEBUG_MSG(1,"Unregistered kprobe at %s. Missed it %ld times.\n",txKP.symbol_name,txKP.nmissed);
+		}
 	}
 }
 
@@ -275,27 +329,35 @@ static void activateRX(Query_t *query) {
 	addAndEnqueueQuery(rx,ret, querySelec, query)
 	// list was empty before insertion
 	if (ret == 1) {
-		/*
-		 * Initially, an instance of struct sk_buff does *not* have a socket set.
-		 * It will be resolved while being passed through the diffrent layers.
-		 * The ipv4 variants of tcp and udp resolve the socket in tcp_v4_rcv and udp_rcv respectively.
-		 * Thus, it is insuffiecient to register a kprobe for packet reception which would be netif_receive_skb().
-		 * Furthermore, two kprobes for both functions tcp and udp are necessary.
-		 */
-		memset(&rxKPTCP,0,sizeof(struct kprobe));
-		memset(&rxKPUDP,0,sizeof(struct kprobe));
-		rxKPTCP.pre_handler = handlerRX;
-		rxKPTCP.symbol_name = rxSymbolNameTCP;
-		rxKP[0] = &rxKPTCP;
-		rxKPUDP.pre_handler = handlerRX;
-		rxKPUDP.symbol_name = rxSymbolNameUCP;
-		rxKP[1] = &rxKPUDP;
-		ret = register_kprobes(rxKP,2);
-		if (ret < 0) {
-			ERR_MSG("register_kprobe at %s and %s failed. Reason: %d\n",rxKPTCP.symbol_name,rxKPUDP.symbol_name,ret);
-			return;
+		if (useTracepoints) {
+			ret = tracepoint_probe_register(tpRX, traceHandlerRX, NULL);
+			if (ret < 0) {
+				ERR_MSG("tracepoint_probe_register at %s failed. Reason: %d\n", tpRX->name, ret);
+				return;
+			}
+		} else {
+			/*
+			 * Initially, an instance of struct sk_buff does *not* have a socket set.
+			 * It will be resolved while being passed through the diffrent layers.
+			 * The ipv4 variants of tcp and udp resolve the socket in tcp_v4_rcv and udp_rcv respectively.
+			 * Thus, it is insuffiecient to register a kprobe for packet reception which would be netif_receive_skb().
+			 * Furthermore, two kprobes for both functions tcp and udp are necessary.
+			 */
+			memset(&rxKPTCP,0,sizeof(struct kprobe));
+			memset(&rxKPUDP,0,sizeof(struct kprobe));
+			rxKPTCP.pre_handler = kprobeHandlerRX;
+			rxKPTCP.symbol_name = rxSymbolNameTCP;
+			rxKP[0] = &rxKPTCP;
+			rxKPUDP.pre_handler = kprobeHandlerRX;
+			rxKPUDP.symbol_name = rxSymbolNameUCP;
+			rxKP[1] = &rxKPUDP;
+			ret = register_kprobes(rxKP,2);
+			if (ret < 0) {
+				ERR_MSG("register_kprobe at %s and %s failed. Reason: %d\n",rxKPTCP.symbol_name,rxKPUDP.symbol_name,ret);
+				return;
+			}
+			DEBUG_MSG(1,"Registered kprobe at %s and %s\n",rxKPTCP.symbol_name,rxKPUDP.symbol_name);
 		}
-		DEBUG_MSG(1,"Registered kprobe at %s and %s\n",rxKPTCP.symbol_name,rxKPUDP.symbol_name);
 	}
 }
 
@@ -307,8 +369,16 @@ static void deactivateRX(Query_t *query) {
 	findAndDeleteQuery(rx,ret, querySelec, query, pos, next)
 	// list is now empty
 	if (ret == 1) {
-		unregister_kprobes(rxKP,2);
-		DEBUG_MSG(1,"Unregistered kprobe at %s (missed=%ld) and %s (missed=%ld).\n",rxKPTCP.symbol_name,rxKPTCP.nmissed,rxKPUDP.symbol_name,rxKPUDP.nmissed);
+		if (useTracepoints) {
+			ret = tracepoint_probe_unregister(tpRX, traceHandlerRX, NULL);
+			if (ret < 0) {
+				ERR_MSG("tracepoint_probe_unregister at %s failed. Reason: %d\n", tpRX->name, ret);
+				return;
+			}
+		} else {
+			unregister_kprobes(rxKP,2);
+			DEBUG_MSG(1,"Unregistered kprobe at %s (missed=%ld) and %s (missed=%ld).\n",rxKPTCP.symbol_name,rxKPTCP.nmissed,rxKPUDP.symbol_name,rxKPUDP.nmissed);
+		}
 	}
 }
 
@@ -671,10 +741,31 @@ static void initDatamodel(void) {
 	ADD_CHILD(model,0,nsNet)
 }
 
+static void resolveTPs(struct tracepoint *tp, void *data) {
+	int *ret = (int*)data;
+
+	if (strcmp(tp->name, "netif_receive_skb") == 0) {
+		*ret = *ret - 1;
+		tpRX = tp;
+	} else if (strcmp(tp->name, "net_dev_xmit") == 0) {
+		*ret = *ret - 1;
+		tpTX = tp;
+	}
+}
+
 int __init net_init(void)
 {
 	int ret = 0;
 	initDatamodel();
+
+	ret = 2;
+	for_each_kernel_tracepoint(resolveTPs, &ret);
+	if (ret != 0) {
+		ERR_MSG("Cannot resolve tracepoints (%d)\n", ret);
+		return -1;
+	} else {
+		DEBUG_MSG(1, "Resolved all tracepoints\n");
+	}
 
 	ret = registerProvider(&model, NULL);
 	if (ret < 0 ) {
