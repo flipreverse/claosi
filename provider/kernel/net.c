@@ -284,6 +284,7 @@ static void activateTX(Query_t *query) {
 				ERR_MSG("tracepoint_probe_register at %s failed. Reason: %d\n", tpTX->name, ret);
 				return;
 			}
+			DEBUG_MSG(1,"Registered tracepoint at %s\n",tpTX->name);
 		} else {
 			memset(&txKP,0,sizeof(struct kprobe));
 			txKP.pre_handler = kprobeHandlerTX;
@@ -312,6 +313,7 @@ static void deactivateTX(Query_t *query) {
 				ERR_MSG("tracepoint_probe_unregister at %s failed. Reason: %d\n", tpTX->name, ret);
 				return;
 			}
+			DEBUG_MSG(1,"Unregistered tracepoint at %s\n", tpTX->name);
 		} else {
 			unregister_kprobe(&txKP);
 			DEBUG_MSG(1,"Unregistered kprobe at %s. Missed it %ld times.\n",txKP.symbol_name,txKP.nmissed);
@@ -332,6 +334,7 @@ static void activateRX(Query_t *query) {
 				ERR_MSG("tracepoint_probe_register at %s failed. Reason: %d\n", tpRX->name, ret);
 				return;
 			}
+			DEBUG_MSG(1,"Registered tracepoint at %s\n",tpRX->name);
 		} else {
 			/*
 			 * Initially, an instance of struct sk_buff does *not* have a socket set.
@@ -372,6 +375,7 @@ static void deactivateRX(Query_t *query) {
 				ERR_MSG("tracepoint_probe_unregister at %s failed. Reason: %d\n", tpRX->name, ret);
 				return;
 			}
+			DEBUG_MSG(1,"Unregistered tracepoint at %s\n", tpRX->name);
 		} else {
 			unregister_kprobes(rxKP,2);
 			DEBUG_MSG(1,"Unregistered kprobe at %s (missed=%ld) and %s (missed=%ld).\n",rxKPTCP.symbol_name,rxKPTCP.nmissed,rxKPUDP.symbol_name,rxKPUDP.nmissed);
