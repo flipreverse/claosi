@@ -748,7 +748,7 @@ static void resolveTPs(struct tracepoint *tp, void *data) {
 	if (strcmp(tp->name, "netif_receive_skb") == 0) {
 		*ret = *ret - 1;
 		tpRX = tp;
-	} else if (strcmp(tp->name, "net_dev_xmit") == 0) {
+	} else if (strcmp(tp->name, "net_dev_start_xmit") == 0) {
 		*ret = *ret - 1;
 		tpTX = tp;
 	}
