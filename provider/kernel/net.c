@@ -127,11 +127,10 @@ static void traceHandlerTX(void *data, struct sk_buff *skb, const struct net_dev
 	handlerTX(skb);
 }
 
-static void handlerRX(struct sk_buff *skb, enum SLC_PROT protocol) {
+static void handlerRX(struct sk_buff *skb) {
 	struct sock *sk = NULL;
 	struct request_sock *reqsk = NULL;
 	const struct tcphdr *th = NULL;
-	struct iphdr *iph;
 	struct udphdr *uh = NULL;
 	Tupel_t *tupel = NULL;
 #if LINUX_VERSION_CODE > KERNEL_VERSION(4,7,0)
@@ -151,45 +150,64 @@ static void handlerRX(struct sk_buff *skb, enum SLC_PROT protocol) {
 	 * For example, the functions (tcp_v4_rcv/udp_rcv) we're probing do this job.
 	 * Hence, it's necessary to do the same stuff here.
 	 */
-	if (protocol == SLC_TCP) {
-		// TCP packet
-		th = tcp_hdr(skb);
+	
+	sk = skb->sk;
+	if (ntohs(skb->protocol) == ETH_P_IP) {
+		struct iphdr *iph = ip_hdr(skb);
+		if (iph) {
+			if (iph->protocol == IPPROTO_TCP) {
+				// TCP packet
+				th = tcp_hdr(skb);
 #if LINUX_VERSION_CODE < KERNEL_VERSION(4,5,0)
-		sk = __inet_lookup_skb(&tcp_hashinfo, skb, th->source, th->dest);
+				sk = __inet_lookup_skb(&tcp_hashinfo, skb, th->source, th->dest);
 #elif LINUX_VERSION_CODE < KERNEL_VERSION(4,7,0)
-		sk = __inet_lookup_skb(&tcp_hashinfo, skb, __tcp_hdrlen(th), th->source, th->dest);
+				sk = __inet_lookup_skb(&tcp_hashinfo, skb, __tcp_hdrlen(th), th->source, th->dest);
 #elif LINUX_VERSION_CODE < KERNEL_VERSION(4,14,0)
-		sk = __inet_lookup_skb(&tcp_hashinfo, skb, __tcp_hdrlen(th), th->source, th->dest, &refcounted);
+				sk = __inet_lookup_skb(&tcp_hashinfo, skb, __tcp_hdrlen(th), th->source, th->dest, &refcounted);
 #else
-		sk = __inet_lookup_skb(&tcp_hashinfo, skb, __tcp_hdrlen(th), th->source, th->dest, inet_sdif(skb), &refcounted);
+				sk = __inet_lookup_skb(&tcp_hashinfo, skb, __tcp_hdrlen(th), th->source, th->dest, inet_sdif(skb), &refcounted);
 #endif
-		if (sk->sk_state == TCP_NEW_SYN_RECV) {
-			/*
-			 * Listening sockets are represented by a special socket struct, i.e., struct request_socket.
-			 * This is returned by the above lookup functions.
-			 * Thus, we cannot use it to determine the inode number directly.
-			 * We first have to resolve the actual struct sock behind it.
-			 */
-			reqsk = inet_reqsk(sk);
-			sk = reqsk->rsk_listener;
-		} else if (sk->sk_state == TCP_TIME_WAIT) {
-			/*
-			 * Sockets in TIME_WAIT state are no real sockets in terms of associated inodes.
-			 * Hence, we cannot determine an inode number that we can pass on.
-			 */
-			return;
-		}
-	} else if (protocol == SLC_UDP) {
-		// UDP packet
-		iph = ip_hdr(skb);
-		uh = udp_hdr(skb);
+				printk("TCP: 0x%llx, 0x%llx, 0x%llx, 0x%llx, 0x%llx, 0x%llx, 0x%llx\n",
+					(uint64_t)th, (uint64_t)&tcp_hashinfo, (uint64_t)skb, (uint64_t)__tcp_hdrlen(th), (uint64_t)th->source, (uint64_t)th->dest, (uint64_t)inet_sdif(skb));
+				return;
+				if (sk->sk_state == TCP_NEW_SYN_RECV) {
+					/*
+					 * Listening sockets are represented by a special socket struct, i.e., struct request_socket.
+					 * This is returned by the above lookup functions.
+					 * Thus, we cannot use it to determine the inode number directly.
+					 * We first have to resolve the actual struct sock behind it.
+					 */
+					reqsk = inet_reqsk(sk);
+					sk = reqsk->rsk_listener;
+				} else if (sk->sk_state == TCP_TIME_WAIT) {
+					/*
+					 * Sockets in TIME_WAIT state are no real sockets in terms of associated inodes.
+					 * Hence, we cannot determine an inode number that we can pass on.
+					 */
+					return;
+				}
+			} else if (iph->protocol == IPPROTO_UDP) {
+				// UDP packet
+				uh = udp_hdr(skb);
+				printk("UDP: 0x%llx\n", (uint64_t)uh);
+				return;
 #if LINUX_VERSION_CODE < KERNEL_VERSION(4,5,0)
-		sk = __udp4_lib_lookup(dev_net(skb_dst(skb)->dev), iph->saddr, uh->source,iph->daddr, uh->dest, inet_iif(skb),&udp_table);
+				sk = __udp4_lib_lookup(dev_net(skb_dst(skb)->dev), iph->saddr, uh->source,iph->daddr, uh->dest, inet_iif(skb),&udp_table);
 #elif LINUX_VERSION_CODE < KERNEL_VERSION(4,14,0)
-		sk = __udp4_lib_lookup(dev_net(skb_dst(skb)->dev), iph->saddr, uh->source,iph->daddr, uh->dest, inet_iif(skb),&udp_table, skb);
+				sk = __udp4_lib_lookup(dev_net(skb_dst(skb)->dev), iph->saddr, uh->source,iph->daddr, uh->dest, inet_iif(skb),&udp_table, skb);
 #else
-		sk = __udp4_lib_lookup(dev_net(skb_dst(skb)->dev), iph->saddr, uh->source,iph->daddr, uh->dest, inet_iif(skb), inet_sdif(skb), &udp_table, skb);
+				sk = __udp4_lib_lookup(dev_net(skb_dst(skb)->dev), iph->saddr, uh->source,iph->daddr, uh->dest, inet_iif(skb), inet_sdif(skb), &udp_table, skb);
 #endif
+			} else {
+				DEBUG_MSG(1, "Got non TCP/UDP packet\n");
+				return;
+			}
+		} else {
+			printk("iphdr is NULL: 0x%llx,0x%llx\n", (uint64_t)skb->head, (uint64_t)skb->data);
+		}
+	} else {
+		DEBUG_MSG(1, "Got non IP packet\n");
+		return;
 	}
 	// No valid socket found. Abort.
 	if (sk == NULL) {
@@ -259,16 +277,12 @@ skb = (struct sk_buff*)regs->ARM_r0;
 #error Unknown architecture
 #endif
 
-	if (p == &rxKPTCP) {
-		handlerRX(skb, SLC_TCP);
-	} else if (p == &rxKPUDP) {
-		handlerRX(skb, SLC_UDP);
-	}
+	handlerRX(skb);
 	return 0;
 }
 
-static void traceHandlerRX(struct sk_buff *skb) {
-	handlerRX(skb, SLC_TCP);
+static void traceHandlerRX(void *data, struct sk_buff *skb) {
+	handlerRX(skb);
 }
 
 static void activateTX(Query_t *query) {
