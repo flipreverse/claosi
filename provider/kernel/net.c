@@ -42,7 +42,7 @@ static bool useTracepoints = 0;
 module_param(useTracepoints, bool, 0644);
 MODULE_PARM_DESC(useTracepoints, "Use tracepoints instead of kprobes [default: 0]");
 
-static int handlerTX(struct sk_buff *skb) {
+static void handlerTX(struct sk_buff *skb) {
 	Tupel_t *tupel = NULL;
 #ifndef EVALUATION
 	struct timeval time;
@@ -53,7 +53,6 @@ static int handlerTX(struct sk_buff *skb) {
 	QuerySelectors_t *querySelec = NULL;
 	char *devName = NULL;
 	unsigned long long timeUS = 0;
-
 
 #ifdef EVALUATION
 	timeUS = getCycles();
@@ -104,9 +103,7 @@ static int handlerTX(struct sk_buff *skb) {
 			setItemInt(SLC_DATA_MODEL,tupel,"net.packetType.socket",-1);
 		}
 		eventOccuredUnicast(querySelec->query,tupel);
-	endForEachQuery(slcLock,tx)
-
-	return 0;
+	endForEachQuery(slcLock,tx);
 }
 
 static int kprobeHandlerTX(struct kprobe *p, struct pt_regs *regs) {
