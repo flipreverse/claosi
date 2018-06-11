@@ -62,17 +62,32 @@ static void handlerTX(struct sk_buff *skb) {
 #endif
 
 	sk = skb->sk;
-	if (sk) {
-		if (sk->sk_state == TCP_NEW_SYN_RECV) {
-			/*
-			 * Listening sockets are represented by a special socket struct, i.e., struct request_socket.
-			 * This is returned by the above lookup functions.
-			 * Thus, we cannot use it to determine the inode number directly.
-			 * We first have to resolve the actual struct sock behind it.
-			 */
-			reqsk = inet_reqsk(sk);
-			sk = reqsk->rsk_listener;
+	if (ntohs(skb->protocol) == ETH_P_IP) {
+		struct iphdr *iphd = ip_hdr(skb);
+		if (iphd) {
+			if (iphd->protocol == IPPROTO_TCP) {
+				if (sk && sk->sk_state == TCP_NEW_SYN_RECV) {
+					/*
+					 * Listening sockets are represented by a special socket struct, i.e., struct request_socket.
+					 * This is returned by the above lookup functions.
+					 * Thus, we cannot use it to determine the inode number directly.
+					 * We first have to resolve the actual struct sock behind it.
+					 */
+					reqsk = inet_reqsk(sk);
+					sk = reqsk->rsk_listener;
+				}
+			} else if (iphd->protocol == IPPROTO_UDP) {
+				// Nothing to do
+			} else {
+				DEBUG_MSG(1, "Got non TCP/UDP packet\n");
+				return;
+			}
+		} else {
+			printk("iphdr is NULL: 0x%llx,0x%llx\n", (uint64_t)skb->head, (uint64_t)skb->data);
 		}
+	} else {
+		DEBUG_MSG(1, "Got non IP packet\n");
+		return;
 	}
 
 	// Was the packet received by a device a query was registered on?
