@@ -123,7 +123,7 @@ skb = (struct sk_buff*)regs->ARM_r0;
 	return 0;
 }
 
-static void traceHandlerTX(struct sk_buff *skb, void *data) {
+static void traceHandlerTX(void *data, struct sk_buff *skb, const struct net_device *dev) {
 	handlerTX(skb);
 }
 
