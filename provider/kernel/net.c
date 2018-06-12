@@ -79,14 +79,14 @@ static void handlerTX(struct sk_buff *skb) {
 			} else if (iphd->protocol == IPPROTO_UDP) {
 				// Nothing to do
 			} else {
-				DEBUG_MSG(1, "Got non TCP/UDP packet\n");
+				DEBUG_MSG(2, "Got non TCP/UDP packet\n");
 				return;
 			}
 		} else {
 			printk("iphdr is NULL: 0x%llx,0x%llx\n", (uint64_t)skb->head, (uint64_t)skb->data);
 		}
 	} else {
-		DEBUG_MSG(1, "Got non IP packet\n");
+		DEBUG_MSG(2, "Got non IP packet\n");
 		return;
 	}
 
@@ -165,26 +165,34 @@ static void handlerRX(struct sk_buff *skb) {
 	 * For example, the functions (tcp_v4_rcv/udp_rcv) we're probing do this job.
 	 * Hence, it's necessary to do the same stuff here.
 	 */
-	
-	sk = skb->sk;
 	if (ntohs(skb->protocol) == ETH_P_IP) {
 		struct iphdr *iph = ip_hdr(skb);
+		if (skb->transport_header == 0 || skb->network_header == 0) {
+			ERR_MSG("Either network or transport header is 0\n");
+			return;
+		}
 		if (iph) {
 			if (iph->protocol == IPPROTO_TCP) {
-				// TCP packet
+				/*
+				 * TCP packet
+				 * Ensure that the transport header has a proper value, i.e., points to the 
+				 * data of the ip packet.
+				 * ip_rcv()@net/ipv4/ip_input.c:484
+				 */
+				if ((skb->transport_header - skb->network_header) != (iph->ihl * 4)) {
+					ERR_MSG("skb->transport_header does not have a proper value\n");
+					return;
+				}
 				th = tcp_hdr(skb);
 #if LINUX_VERSION_CODE < KERNEL_VERSION(4,5,0)
-				sk = __inet_lookup_skb(&tcp_hashinfo, skb, th->source, th->dest);
+				sk = __inet_lookup(dev_net(skb->dev), &tcp_hashinfo, skb, iph->saddr, th->source, iph->daddr, th->dest, inet_iif(skb));
 #elif LINUX_VERSION_CODE < KERNEL_VERSION(4,7,0)
-				sk = __inet_lookup_skb(&tcp_hashinfo, skb, __tcp_hdrlen(th), th->source, th->dest);
+				sk = __inet_lookup(dev_net(skb->dev), &tcp_hashinfo, skb, __tcp_hdrlen(th), iph->saddr, th->source, iph->daddr, th->dest, inet_iif(skb));
 #elif LINUX_VERSION_CODE < KERNEL_VERSION(4,14,0)
-				sk = __inet_lookup_skb(&tcp_hashinfo, skb, __tcp_hdrlen(th), th->source, th->dest, &refcounted);
+				sk = __inet_lookup(dev_net(skb->dev), &tcp_hashinfo, skb, __tcp_hdrlen(th), iph->saddr, th->source, iph->daddr, th->dest, inet_iif(skb), &refcounted);
 #else
-				sk = __inet_lookup_skb(&tcp_hashinfo, skb, __tcp_hdrlen(th), th->source, th->dest, inet_sdif(skb), &refcounted);
+				sk = __inet_lookup(dev_net(skb->dev), &tcp_hashinfo, skb, __tcp_hdrlen(th), iph->saddr, th->source, iph->daddr, th->dest, inet_iif(skb), inet_sdif(skb), &refcounted);
 #endif
-				printk("TCP: 0x%llx, 0x%llx, 0x%llx, 0x%llx, 0x%llx, 0x%llx, 0x%llx\n",
-					(uint64_t)th, (uint64_t)&tcp_hashinfo, (uint64_t)skb, (uint64_t)__tcp_hdrlen(th), (uint64_t)th->source, (uint64_t)th->dest, (uint64_t)inet_sdif(skb));
-				return;
 				if (sk->sk_state == TCP_NEW_SYN_RECV) {
 					/*
 					 * Listening sockets are represented by a special socket struct, i.e., struct request_socket.
@@ -204,24 +212,22 @@ static void handlerRX(struct sk_buff *skb) {
 			} else if (iph->protocol == IPPROTO_UDP) {
 				// UDP packet
 				uh = udp_hdr(skb);
-				printk("UDP: 0x%llx\n", (uint64_t)uh);
-				return;
 #if LINUX_VERSION_CODE < KERNEL_VERSION(4,5,0)
 				sk = __udp4_lib_lookup(dev_net(skb_dst(skb)->dev), iph->saddr, uh->source,iph->daddr, uh->dest, inet_iif(skb),&udp_table);
 #elif LINUX_VERSION_CODE < KERNEL_VERSION(4,14,0)
 				sk = __udp4_lib_lookup(dev_net(skb_dst(skb)->dev), iph->saddr, uh->source,iph->daddr, uh->dest, inet_iif(skb),&udp_table, skb);
 #else
-				sk = __udp4_lib_lookup(dev_net(skb_dst(skb)->dev), iph->saddr, uh->source,iph->daddr, uh->dest, inet_iif(skb), inet_sdif(skb), &udp_table, skb);
+				sk = __udp4_lib_lookup(dev_net(skb->dev), iph->saddr, uh->source,iph->daddr, uh->dest, inet_iif(skb), inet_sdif(skb), &udp_table, skb);
 #endif
 			} else {
-				DEBUG_MSG(1, "Got non TCP/UDP packet\n");
+				DEBUG_MSG(2, "Got non TCP/UDP packet\n");
 				return;
 			}
 		} else {
-			printk("iphdr is NULL: 0x%llx,0x%llx\n", (uint64_t)skb->head, (uint64_t)skb->data);
+			ERR_MSG("ip header is NULL: head=0x%llx, data=0x%llx\n", (uint64_t)skb->head, (uint64_t)skb->data);
 		}
 	} else {
-		DEBUG_MSG(1, "Got non IP packet\n");
+		DEBUG_MSG(2, "Got non IP packet\n");
 		return;
 	}
 	// No valid socket found. Abort.
@@ -267,15 +273,29 @@ static void handlerRX(struct sk_buff *skb) {
 		eventOccuredUnicast(querySelec->query,tupel);
 	endForEachQuery(slcLock,rx)
 
+	// Give the socket back to the kernel
 #if LINUX_VERSION_CODE > KERNEL_VERSION(4,7,0)
-	if (refcounted) {
-		if (reqsk != NULL) {
-			reqsk_put(reqsk);
-		} else {
-			// Give the socket back to the kernel
-			sock_put(sk);
+	if (th != NULL) {
+		// Got a tcp socket. Has its refcount been incremented?
+		if (refcounted) {
+			if (reqsk != NULL) {
+				reqsk_put(reqsk);
+			} else {
+				sock_put(sk);
+			}
 		}
+	} else if (uh != NULL) {
+		/*
+		 * Got an UDP packet.
+		 * The UDP lookup function does *not* increment
+		 * the refcount unless udp4_lib_lookup() is used.
+		 */
+		//sock_put(sk);
+	} else {
+		ERR_MSG("This should not happen!\n");
 	}
+#else
+	sock_put(sk);
 #endif
 }
 
