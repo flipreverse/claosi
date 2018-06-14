@@ -16,11 +16,6 @@
 #include <query.h>
 #include <api.h>
 
-enum SLC_PROT {
-	SLC_TCP = 0,
-	SLC_UDP
-};
-
 DECLARE_ELEMENTS(nsNet, model)
 DECLARE_ELEMENTS(objSocket, objDevice, srcSocketType, srcSocketFlags, typePacketType, srcTXBytes, srcRXBytes, evtOnRX, evtOnTX)
 DECLARE_ELEMENTS(typeMacHdr, typeMacProt, typeNetHdr, typeNetProt, typeTranspHdr, typeTransProt, typeDataLen, typeSockRef)
