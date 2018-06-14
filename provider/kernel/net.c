@@ -22,6 +22,7 @@
 
 #define RX_SYMBOL_NAME_TCP "tcp_v4_rcv"
 #define RX_SYMBOL_NAME_UDP "udp_rcv"
+#define RX_SYMBOL_NAME "__netif_receive_skb_core"
 #define TX_SYMBOL_NAME "dev_hard_start_xmit"
 
 DECLARE_ELEMENTS(nsNet, model)
@@ -32,7 +33,7 @@ DECLARE_QUERY_LIST(rx);
 DECLARE_QUERY_LIST(tx);
 DECLARE_QUERY_LIST(dev);
 
-static struct kprobe rxKPTCP, rxKPUDP, *rxKP[2];
+static struct kprobe rxKPTCP, rxKPUDP, *rxKP[2], rxKPGeneric;
 static struct kprobe txKP;
 
 static struct tracepoint *tpRX = NULL;
@@ -41,6 +42,10 @@ static struct tracepoint *tpTX = NULL;
 static bool useTracepoints = 0;
 module_param(useTracepoints, bool, 0644);
 MODULE_PARM_DESC(useTracepoints, "Use tracepoints instead of kprobes [default: 0]");
+
+static bool useProtSpecific = 0;
+module_param(useProtSpecific, bool, 0644);
+MODULE_PARM_DESC(useProtSpecific, "Use protocol-specific rx probes/tp [default: 0]");
 
 static void handlerTX(struct sk_buff *skb) {
 	Tupel_t *tupel = NULL;
@@ -385,27 +390,39 @@ static void activateRX(Query_t *query) {
 			}
 			DEBUG_MSG(1,"Registered tracepoint at %s\n",tpRX->name);
 		} else {
-			/*
-			 * Initially, an instance of struct sk_buff does *not* have a socket set.
-			 * It will be resolved while being passed through the diffrent layers.
-			 * The ipv4 variants of tcp and udp resolve the socket in tcp_v4_rcv and udp_rcv respectively.
-			 * Thus, it is insuffiecient to register a kprobe for packet reception which would be netif_receive_skb().
-			 * Furthermore, two kprobes for both functions tcp and udp are necessary.
-			 */
-			memset(&rxKPTCP,0,sizeof(struct kprobe));
-			memset(&rxKPUDP,0,sizeof(struct kprobe));
-			rxKPTCP.pre_handler = kprobeHandlerRX;
-			rxKPTCP.symbol_name = RX_SYMBOL_NAME_TCP;
-			rxKP[0] = &rxKPTCP;
-			rxKPUDP.pre_handler = kprobeHandlerRX;
-			rxKPUDP.symbol_name = RX_SYMBOL_NAME_UDP;
-			rxKP[1] = &rxKPUDP;
-			ret = register_kprobes(rxKP,2);
-			if (ret < 0) {
-				ERR_MSG("register_kprobe at %s and %s failed. Reason: %d\n",rxKPTCP.symbol_name,rxKPUDP.symbol_name,ret);
-				return;
+			if (useProtSpecific) {
+				/*
+				 * Initially, an instance of struct sk_buff does *not* have a socket set.
+				 * It will be resolved while being passed through the diffrent layers.
+				 * The ipv4 variants of tcp and udp resolve the socket in tcp_v4_rcv and udp_rcv respectively.
+				 * Thus, it is insuffiecient to register a kprobe for packet reception which would be netif_receive_skb().
+				 * Furthermore, two kprobes for both functions tcp and udp are necessary.
+				 */
+				memset(&rxKPTCP,0,sizeof(struct kprobe));
+				memset(&rxKPUDP,0,sizeof(struct kprobe));
+				rxKPTCP.pre_handler = kprobeHandlerRX;
+				rxKPTCP.symbol_name = RX_SYMBOL_NAME_TCP;
+				rxKP[0] = &rxKPTCP;
+				rxKPUDP.pre_handler = kprobeHandlerRX;
+				rxKPUDP.symbol_name = RX_SYMBOL_NAME_UDP;
+				rxKP[1] = &rxKPUDP;
+				ret = register_kprobes(rxKP,2);
+				if (ret < 0) {
+					ERR_MSG("register_kprobe at %s and %s failed. Reason: %d\n",rxKPTCP.symbol_name,rxKPUDP.symbol_name,ret);
+					return;
+				}
+				DEBUG_MSG(1,"Registered kprobe at %s and %s\n",rxKPTCP.symbol_name,rxKPUDP.symbol_name);
+			} else {
+				memset(&rxKPGeneric,0,sizeof(struct kprobe));
+				rxKPGeneric.pre_handler = kprobeHandlerRX;
+				rxKPGeneric.symbol_name = RX_SYMBOL_NAME;
+				ret = register_kprobe(&rxKPGeneric);
+				if (ret < 0) {
+					ERR_MSG("register_kprobe at %s failed. Reason: %d\n",rxKPGeneric.symbol_name,ret);
+					return;
+				}
+				DEBUG_MSG(1,"Registered kprobe at %s\n",rxKPGeneric.symbol_name);
 			}
-			DEBUG_MSG(1,"Registered kprobe at %s and %s\n",rxKPTCP.symbol_name,rxKPUDP.symbol_name);
 		}
 	}
 }
@@ -426,8 +443,13 @@ static void deactivateRX(Query_t *query) {
 			}
 			DEBUG_MSG(1,"Unregistered tracepoint at %s\n", tpRX->name);
 		} else {
-			unregister_kprobes(rxKP,2);
-			DEBUG_MSG(1,"Unregistered kprobe at %s (missed=%ld) and %s (missed=%ld).\n",rxKPTCP.symbol_name,rxKPTCP.nmissed,rxKPUDP.symbol_name,rxKPUDP.nmissed);
+			if (useProtSpecific) {
+				unregister_kprobes(rxKP,2);
+				DEBUG_MSG(1,"Unregistered kprobe at %s (missed=%ld) and %s (missed=%ld).\n",rxKPTCP.symbol_name,rxKPTCP.nmissed,rxKPUDP.symbol_name,rxKPUDP.nmissed);
+			} else {
+				unregister_kprobe(&rxKPGeneric);
+				DEBUG_MSG(1,"Unregistered kprobe at %s (missed=%ld).\n",rxKPGeneric.symbol_name,rxKPGeneric.nmissed);
+			}
 		}
 	}
 }
