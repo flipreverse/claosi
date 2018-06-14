@@ -16,6 +16,11 @@
 #include <query.h>
 #include <api.h>
 
+
+#define RX_SYMBOL_NAME_TCP "tcp_v4_rcv"
+#define RX_SYMBOL_NAME_UDP "udp_rcv"
+#define TX_SYMBOL_NAME "dev_hard_start_xmit"
+
 DECLARE_ELEMENTS(nsNet, model)
 DECLARE_ELEMENTS(objSocket, objDevice, srcSocketType, srcSocketFlags, typePacketType, srcTXBytes, srcRXBytes, evtOnRX, evtOnTX)
 DECLARE_ELEMENTS(typeMacHdr, typeMacProt, typeNetHdr, typeNetProt, typeTranspHdr, typeTransProt, typeDataLen, typeSockRef)
@@ -24,10 +29,7 @@ DECLARE_QUERY_LIST(rx);
 DECLARE_QUERY_LIST(tx);
 DECLARE_QUERY_LIST(dev);
 
-static char rxSymbolNameTCP[] = "tcp_v4_rcv";
-static char rxSymbolNameUCP[] = "udp_rcv";
 static struct kprobe rxKPTCP, rxKPUDP, *rxKP[2];
-static char txSymbolName[] = "dev_hard_start_xmit";
 static struct kprobe txKP;
 
 static struct tracepoint *tpRX = NULL;
@@ -332,7 +334,7 @@ static void activateTX(Query_t *query) {
 		} else {
 			memset(&txKP,0,sizeof(struct kprobe));
 			txKP.pre_handler = kprobeHandlerTX;
-			txKP.symbol_name = txSymbolName;
+			txKP.symbol_name = TX_SYMBOL_NAME;
 			ret = register_kprobe(&txKP);
 			if (ret < 0) {
 				ERR_MSG("register_kprobe at %s failed. Reason: %d\n",txKP.symbol_name,ret);
@@ -390,10 +392,10 @@ static void activateRX(Query_t *query) {
 			memset(&rxKPTCP,0,sizeof(struct kprobe));
 			memset(&rxKPUDP,0,sizeof(struct kprobe));
 			rxKPTCP.pre_handler = kprobeHandlerRX;
-			rxKPTCP.symbol_name = rxSymbolNameTCP;
+			rxKPTCP.symbol_name = RX_SYMBOL_NAME_TCP;
 			rxKP[0] = &rxKPTCP;
 			rxKPUDP.pre_handler = kprobeHandlerRX;
-			rxKPUDP.symbol_name = rxSymbolNameUCP;
+			rxKPUDP.symbol_name = RX_SYMBOL_NAME_UDP;
 			rxKP[1] = &rxKPUDP;
 			ret = register_kprobes(rxKP,2);
 			if (ret < 0) {
