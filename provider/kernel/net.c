@@ -16,7 +16,8 @@
 #include <query.h>
 #include <api.h>
 
-
+#define RX_TRACEPOINT_TCP "tcp_rx"
+#define RX_TRACEPOINT_UDP "udp_rx"
 #define RX_TRACEPOINT "netif_receive_skb"
 #define TX_TRACEPOINT "net_dev_start_xmit"
 
@@ -36,7 +37,7 @@ DECLARE_QUERY_LIST(dev);
 static struct kprobe rxKPTCP, rxKPUDP, *rxKP[2], rxKPGeneric;
 static struct kprobe txKP;
 
-static struct tracepoint *tpRX = NULL;
+static struct tracepoint *tpRX = NULL, *tpRXTCP = NULL, *tpRXUDP = NULL;
 static struct tracepoint *tpTX = NULL;
 
 static bool useTracepoints = 0;
@@ -383,12 +384,30 @@ static void activateRX(Query_t *query) {
 	// list was empty before insertion
 	if (ret == 1) {
 		if (useTracepoints) {
-			ret = tracepoint_probe_register(tpRX, traceHandlerRX, NULL);
-			if (ret < 0) {
-				ERR_MSG("tracepoint_probe_register at %s failed. Reason: %d\n", tpRX->name, ret);
-				return;
+			if (useProtSpecific && tpRXTCP != NULL && tpRXUDP != NULL) {
+				ret = tracepoint_probe_register(tpRXTCP, traceHandlerRX, NULL);
+				if (ret < 0) {
+					ERR_MSG("tracepoint_probe_register at %s failed. Reason: %d\n", tpRXTCP->name, ret);
+					return;
+				}
+				ret = tracepoint_probe_register(tpRXUDP, traceHandlerRX, NULL);
+				if (ret < 0) {
+					tracepoint_probe_unregister(tpRXTCP, traceHandlerRX, NULL);
+					ERR_MSG("tracepoint_probe_register at %s failed. Reason: %d\n", tpRXUDP->name, ret);
+					return;
+				}
+				DEBUG_MSG(1,"Registered tracepoint at %s and %s\n",tpRXTCP->name, tpRXUDP->name);
+			} else {
+				if (useProtSpecific) {
+					ERR_MSG("No protocol-specific tracepoints present. Falling back to the generic one\n");
+				}
+				ret = tracepoint_probe_register(tpRX, traceHandlerRX, NULL);
+				if (ret < 0) {
+					ERR_MSG("tracepoint_probe_register at %s failed. Reason: %d\n", tpRX->name, ret);
+					return;
+				}
+				DEBUG_MSG(1,"Registered tracepoint at %s\n",tpRX->name);
 			}
-			DEBUG_MSG(1,"Registered tracepoint at %s\n",tpRX->name);
 		} else {
 			if (useProtSpecific) {
 				/*
@@ -436,12 +455,24 @@ static void deactivateRX(Query_t *query) {
 	// list is now empty
 	if (ret == 1) {
 		if (useTracepoints) {
-			ret = tracepoint_probe_unregister(tpRX, traceHandlerRX, NULL);
-			if (ret < 0) {
-				ERR_MSG("tracepoint_probe_unregister at %s failed. Reason: %d\n", tpRX->name, ret);
-				return;
+			if (useProtSpecific && tpRXTCP != NULL && tpRXUDP != NULL) {
+				ret = tracepoint_probe_unregister(tpRXTCP, traceHandlerRX, NULL);
+				if (ret < 0) {
+					ERR_MSG("tracepoint_probe_unregister at %s failed. Reason: %d\n", tpRXTCP->name, ret);
+				}
+				ret = tracepoint_probe_unregister(tpRXUDP, traceHandlerRX, NULL);
+				if (ret < 0) {
+					ERR_MSG("tracepoint_probe_unregister at %s failed. Reason: %d\n", tpRXUDP->name, ret);
+				}
+				DEBUG_MSG(1,"Unregistered tracepoint at %s and %s\n", tpRXTCP->name, tpRXUDP->name);
+			} else {
+				ret = tracepoint_probe_unregister(tpRX, traceHandlerRX, NULL);
+				if (ret < 0) {
+					ERR_MSG("tracepoint_probe_unregister at %s failed. Reason: %d\n", tpRX->name, ret);
+					return;
+				}
+				DEBUG_MSG(1,"Unregistered tracepoint at %s\n", tpRX->name);
 			}
-			DEBUG_MSG(1,"Unregistered tracepoint at %s\n", tpRX->name);
 		} else {
 			if (useProtSpecific) {
 				unregister_kprobes(rxKP,2);
@@ -822,6 +853,10 @@ static void resolveTPs(struct tracepoint *tp, void *data) {
 	} else if (strcmp(tp->name, TX_TRACEPOINT) == 0) {
 		*ret = *ret - 1;
 		tpTX = tp;
+	} else if (strcmp(tp->name, RX_TRACEPOINT_UDP) == 0) {
+		tpRXUDP = tp;
+	} else if (strcmp(tp->name, RX_TRACEPOINT_TCP) == 0) {
+		tpRXTCP = tp;
 	}
 }
 
