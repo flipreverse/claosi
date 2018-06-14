@@ -208,9 +208,9 @@ static void handlerRX(struct sk_buff *skb) {
 				// UDP packet
 				uh = udp_hdr(skb);
 #if LINUX_VERSION_CODE < KERNEL_VERSION(4,5,0)
-				sk = __udp4_lib_lookup(dev_net(skb_dst(skb)->dev), iph->saddr, uh->source,iph->daddr, uh->dest, inet_iif(skb),&udp_table);
+				sk = __udp4_lib_lookup(dev_net(skb->dev), iph->saddr, uh->source,iph->daddr, uh->dest, inet_iif(skb),&udp_table);
 #elif LINUX_VERSION_CODE < KERNEL_VERSION(4,14,0)
-				sk = __udp4_lib_lookup(dev_net(skb_dst(skb)->dev), iph->saddr, uh->source,iph->daddr, uh->dest, inet_iif(skb),&udp_table, skb);
+				sk = __udp4_lib_lookup(dev_net(skb->dev), iph->saddr, uh->source,iph->daddr, uh->dest, inet_iif(skb),&udp_table, skb);
 #else
 				sk = __udp4_lib_lookup(dev_net(skb->dev), iph->saddr, uh->source,iph->daddr, uh->dest, inet_iif(skb), inet_sdif(skb), &udp_table, skb);
 #endif
