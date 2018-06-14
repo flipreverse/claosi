@@ -17,6 +17,9 @@
 #include <api.h>
 
 
+#define RX_TRACEPOINT "netif_receive_skb"
+#define TX_TRACEPOINT "net_dev_start_xmit"
+
 #define RX_SYMBOL_NAME_TCP "tcp_v4_rcv"
 #define RX_SYMBOL_NAME_UDP "udp_rcv"
 #define TX_SYMBOL_NAME "dev_hard_start_xmit"
@@ -791,10 +794,10 @@ static void initDatamodel(void) {
 static void resolveTPs(struct tracepoint *tp, void *data) {
 	int *ret = (int*)data;
 
-	if (strcmp(tp->name, "netif_receive_skb") == 0) {
+	if (strcmp(tp->name, RX_TRACEPOINT) == 0) {
 		*ret = *ret - 1;
 		tpRX = tp;
-	} else if (strcmp(tp->name, "net_dev_start_xmit") == 0) {
+	} else if (strcmp(tp->name, TX_TRACEPOINT) == 0) {
 		*ret = *ret - 1;
 		tpTX = tp;
 	}
