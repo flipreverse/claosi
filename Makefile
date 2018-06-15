@@ -7,6 +7,7 @@ INCLUDE_PATH:= ./include
 BUILD_PATH:=build
 BUILD_KERN:=$(BUILD_PATH)/kern
 BUILD_USER:=$(BUILD_PATH)/user
+ROOT_DIR:=$(shell dirname $(realpath $(firstword $(MAKEFILE_LIST))))
 TEST_DIR:=test
 
 LD_TEXT = -e "LD\t$@"
@@ -191,15 +192,15 @@ git_version.h:
 
 $(BUILD_KERN)/%.c: %.c
 	@echo "Creating link from $@ to $<"
-	$(OUTPUT)ln -s $(PWD)/$< $@
+	$(OUTPUT)ln -s $(ROOT_DIR)/$< $@
 
 $(BUILD_KERN)/Kbuild: Kbuild
 	@echo "Creating link from $@ to $<"
-	$(OUTPUT)ln -s $(PWD)/Kbuild $@
+	$(OUTPUT)ln -s $(ROOT_DIR)/Kbuild $@
 
 $(BUILD_KERN)/Makefile: Makefile
 	@echo "Creating link from $@ to $<"
-	$(OUTPUT)ln -s $(PWD)/Makefile $@
+	$(OUTPUT)ln -s $(ROOT_DIR)/Makefile $@
 
 $(BUILD_PATH)/%:
 	@echo "Creating directory $@"
