@@ -10,11 +10,13 @@
 #define PRINT_TUPLE
 //#undef PRINT_TUPLE
 
+#define DEFAULT_DEVICE "eth1"
+
 static EventStream_t rxStreamJoin, txStreamJoin;
 static Predicate_t rxJoinProcessPredicateSocket, rxJoinProcessPredicatePID, txJoinProcessPredicate, txJoinProcessPredicatePID;
 static Join_t rxJoinProcess, txJoinProcess;
 static Query_t queryRXJoin, queryTXJoin;
-static char *devName = "eth1";
+static char *devName = NULL;
 
 static void printResultRxJoin(unsigned int id, Tupel_t *tupel) {
 #ifndef EVALUATION
@@ -81,8 +83,29 @@ static void setupQueries(void) {
 	SET_PREDICATE(txJoinProcessPredicatePID,EQUAL, OP_JOIN, "process.process", OP_POD, "-1")
 }
 
-	int ret = 0;
 int onLoad(int argc, char *argv[]) {
+	int ret = 0, opt;
+
+	optind = 1;
+	opterr = 0;
+	while ((opt = getopt(argc, argv, "d:")) != -1) {
+		switch (opt) {
+		case 'd':
+			devName = strdup(optarg);
+			if (devName == NULL) {
+				ERR_MSG("Cannot allocate memory for devName\n");
+				return -1;
+			}
+			break;
+		default:
+			ERR_MSG("Usage: %s [-d <device>]\n", __FILE__);
+			return -1;
+		}
+	}
+	if (devName == NULL) {
+		devName = strdup(DEFAULT_DEVICE);
+	}
+	DEBUG_MSG(1, "devName=%s\n", devName);
 
 	setupQueries();
 
@@ -101,6 +124,7 @@ int onUnload(void) {
 		ERR_MSG("Unregister queries failed: %d\n",-ret);
 	}
 
+	free(devName);
 	freeOperator(GET_BASE(rxStreamJoin),0);
 	freeOperator(GET_BASE(txStreamJoin),0);
 
