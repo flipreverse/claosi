@@ -116,7 +116,7 @@ static void setupQueries(void) {
 	SET_PREDICATE(commPredicate,EQUAL, OP_STREAM, "process.process", OP_JOIN, "process.process")
 }
 
-int onLoad(void) {
+int onLoad(int argc, char *argv[]) {
 	int ret = 0;
 	setupQueries();
 

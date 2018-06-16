@@ -166,7 +166,7 @@ static void setupQueries(void) {
 	ADD_ELEMENT(txSelectPacket,0,txElemPacket,"net.packetType")
 }
 
-int onLoad(void) {
+int onLoad(int argc, char *argv[]) {
 	int ret = 0;
 	setupQueries();
 

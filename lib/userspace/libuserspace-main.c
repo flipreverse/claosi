@@ -10,9 +10,6 @@
 #include <common.h>
 
 #define FIFO_PATH "./slc-userspace-input"
-#define BUFFER_SIZE 	128
-static char pathBuffer[BUFFER_SIZE];
-static char cmdBuffer[10];
 static const char *fifoPath = FIFO_PATH;
 static pthread_t fifoWorkThread;
 static pthread_attr_t fifoWorkThreadAttr;
@@ -63,9 +60,11 @@ static void unloadProvider(LoadedProvider_t *curProv) {
 static void* fifoWork(void *data) {
 	FILE *cmdFifo;
 	void *curDL = NULL;
-	int read = 0, ret = 0;
+	int read = 0, ret = 0, argc = 0;
 	LoadedProvider_t *curProv = NULL, *tmpProv = NULL;
-	int (*onLoadFn)(void);
+	int (*onLoadFn)(int argc, char *argv[]);
+	char *line = NULL, *cmd, *temp, **argv;
+	size_t lineSize = 0, argvSize = 10;
 
 	while (1) {
 		cmdFifo = fopen(fifoPath,"r");
@@ -76,11 +75,9 @@ static void* fifoWork(void *data) {
 			ERR_MSG("Cannot open FIFO (%s): %s\n",FIFO_PATH,strerror(errno));
 			pthread_exit(0);
 		}
-		// A command from the fifo: <command> [argument]
-		read = fscanf(cmdFifo,"%10s %127s\n",cmdBuffer,pathBuffer);
-		// At least one token is necessary
-		if (read == 0 || read == EOF) {
-			ERR_MSG("Cannot read from FIFO (%s): %s\n",FIFO_PATH,strerror(errno));
+		read = getline(&line, &lineSize, cmdFifo);
+		if (read == -1) {
+			ERR_MSG("Cannot read from FIFO   (%s): %s\n",FIFO_PATH,strerror(errno));
 			fclose(cmdFifo);
 			/*
 			 * Gracefully shutdown the userspace layer
@@ -93,19 +90,68 @@ static void* fifoWork(void *data) {
 				FREE(curProv->libPath);
 				FREE(curProv);
 			}
-			pthread_exit(0);
+			break;
 		}
-		fclose(cmdFifo);
-		if (strcmp(cmdBuffer,"add") == 0) {
-			curDL = dlopen(pathBuffer,RTLD_NOW);
+		// Remove the newline. Getline copies the delimiter, i.e., \n, to the buffer.
+		line[read - 1] = '\0';
+		// Extract the command
+		cmd = strtok(line, " ");
+		if (cmd == NULL) {
+			ERR_MSG("Cannot read cmd from line\n");
+			fclose(cmdFifo);
+			continue;
+		}
+		/*
+		 * Create our own version of *argv[] that will be passed to the loaded library.
+		 * Allocate space for one more pointer to accommodate for the terminating NULL pointer.
+		 */
+		argv = ALLOC(sizeof(*argv) * (argvSize + 1));
+		if (argv == NULL) {
+			ERR_MSG("Cannot allocate argv\n");
+			fclose(cmdFifo);
+			continue;
+		}
+		argc = 0;
+		// Now store a pointer to each single token in the argv array
+		while ((temp = strtok(NULL, " ")) != NULL) {
+			argv[argc] = temp;
+			argc++;
+			if (argc >= argvSize) {
+				argvSize += 5;
+				DEBUG_MSG(2, "argv is too small. Resizing to %lu\n", argvSize);
+				argv = realloc(argv, sizeof(*argv) * (argvSize + 1));
+				if (argv == NULL) {
+					ERR_MSG("Cannot realloc argv\n");
+					break;
+				}
+			}
+		}
+		// Abort further processing, because realloc failed.
+		if (argv == NULL) {
+			continue;
+		}
+		/*
+		 * To allow a provider to use getopt(), the very last argument of *our*
+		 * argv must be a NULL pointer (1).
+		 * 
+		 * (1) https://en.cppreference.com/w/cpp/language/main_function
+		 */
+		argv[argc] = NULL;
+		// Process the command
+		if (strcmp(cmd,"add") == 0) {
+			if (argc < 1 ) {
+				ERR_MSG("Not enough arguments for cmd add\n");
+				continue;
+			}
+			curDL = dlopen(argv[0],RTLD_NOW);
 			if (curDL == NULL) {
-				ERR_MSG("Error loading dynamic library '%s': %s\n",pathBuffer,dlerror());
+				ERR_MSG("Error loading dynamic library '%s': %s\n", argv[0], dlerror());
 				continue;
 			}
 			// Try to resolve the entry function
 			onLoadFn = dlsym(curDL,"onLoad");
 			if (onLoadFn == NULL) {
-				ERR_MSG("Error resolving symbol 'onLoad' from library '%s': %s\n",pathBuffer,dlerror());
+				ERR_MSG("Error resolving symbol 'onLoad' from library '%s': %s\n", argv[0], dlerror());
 				dlclose(curDL);
 				continue;
 			}
@@ -116,29 +162,44 @@ static void* fifoWork(void *data) {
 				dlclose(curDL);
 				continue;
 			}
-			curProv->libPath = ALLOC(strlen(pathBuffer) + 1);
+			curProv->libPath = ALLOC(strlen(argv[0]) + 1);
 			if (curProv->libPath == NULL) {
 				ERR_MSG("Cannot allocate memory for library path\n");
 				dlclose(curDL);
 				FREE(curProv);
 			}
-			// Initialize the provider
-			ret = onLoadFn();
+			/*
+			 * Initialize the provider...
+			 * We explizitly do *not* skip the library path.
+			 * To allow a provider to use getopt(), the first argument of *our*
+			 * argv must be 'the name of the invoked program'(1).
+			 * This is the library path in our case.
+			 * 
+			 * Since argv[0] is the program name and argv[argc] is a NULL pointer,
+			 * we have successfully faked an argv[] as it would have been used for main().
+			 * 
+			 * (1) https://en.cppreference.com/w/cpp/language/main_function
+			 */
+			ret = onLoadFn(argc, argv);
 			if (ret < 0) {
-				ERR_MSG("Provider %s initialization failed: %d\n",pathBuffer,-ret);
+				ERR_MSG("Provider %s initialization failed: %d\n", argv[0], -ret);
 				FREE(curProv->libPath);
 				FREE(curProv);
 				dlclose(curDL);
 				continue;
 			}
-			strcpy(curProv->libPath,pathBuffer);
+			strcpy(curProv->libPath, argv[0]);
 			curProv->dlHandle = curDL;
 			LIST_INSERT_HEAD(&providerList, curProv, listEntry);
-		} else if (strcmp(cmdBuffer,"del") == 0) {
+		} else if (strcmp(cmd,"del") == 0) {
+			if (argc < 1 ) {
+				ERR_MSG("Not enough arguments for cmd add\n");
+				continue;
+			}
 			ret = 0;
 			LIST_FOREACH(curProv, &providerList, listEntry) {
 				// The user has to provide the identical path to the shared library as for the add command
-				if (strcmp(curProv->libPath,pathBuffer) == 0) {
+				if (strcmp(curProv->libPath, argv[0]) == 0) {
 					ret = 1;
 					break;
 				}
@@ -149,9 +210,9 @@ static void* fifoWork(void *data) {
 				FREE(curProv->libPath);
 				FREE(curProv);
 			} else {
-				ERR_MSG("No provider loaded with library path %s\n",pathBuffer);
+				ERR_MSG("No provider loaded with library path %s\n", argv[0]);
 			}
-		} else if (strcmp(cmdBuffer,"exit") == 0) {
+		} else if (strcmp(cmd,"exit") == 0) {
 			/*
 			 * Gracefully shutdown the userspace layer
 			 * 
@@ -164,14 +225,19 @@ static void* fifoWork(void *data) {
 				FREE(curProv);
 			}
 			break;
-		} else if (strcmp(cmdBuffer,"printdm") == 0) {
+		} else if (strcmp(cmd,"printdm") == 0) {
 			ACQUIRE_READ_LOCK(slcLock);
 			printDatamodel(SLC_DATA_MODEL);
 			RELEASE_READ_LOCK(slcLock);
 		} else {
 			ERR_MSG("Unknown command!\n");
 		}
+		free(argv);
+		fclose(cmdFifo);
 	};
+	if (line) {
+		free(line);
+	}
 
 	pthread_exit(0);
 	return NULL;

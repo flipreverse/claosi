@@ -50,7 +50,7 @@ static void setupQueries(void) {
 	INIT_SRC_STREAM(fappStream,"ui.foregroundApp",0,0,NULL,1000)
 }
 
-int onLoad(void) {
+int onLoad(int argc, char *argv[]) {
 	int ret = 0;
 
 	setupQueries();

@@ -190,7 +190,7 @@ static void initDatamodel(void) {
 	ADD_CHILD(model,0,nsUI)
 }
 
-int onLoad(void) {
+int onLoad(int argc, char *argv[]) {
 	int ret = 0;
 
 	initDatamodel();

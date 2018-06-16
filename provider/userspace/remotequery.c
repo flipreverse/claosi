@@ -81,8 +81,8 @@ static void setupQueries(void) {
 	SET_PREDICATE(txJoinProcessPredicatePID,EQUAL, OP_JOIN, "process.process", OP_POD, "-1")
 }
 
-int onLoad(void) {
 	int ret = 0;
+int onLoad(int argc, char *argv[]) {
 
 	setupQueries();
 
