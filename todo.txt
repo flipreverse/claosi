@@ -1,3 +1,7 @@
+- rausfinden, warum cpu-hang auftritt
+- livepatch implementieren
+- slc-process auf TPs umstellen
+- Äquivalent zu PR_FMT einbauen
+- Userspace-Prozess schlafgenlegen, wenn nichts zu tun ist (Semaphore)
+- Filter ggf. in Source reinziehen
 - find_get_task vs. find_task: Welche Version sind an welcher Stelle weshlab verwendet?
-- STAP: 
-- Use xmit_one for handlerTX kprobe
