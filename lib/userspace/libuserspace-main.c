@@ -143,6 +143,19 @@ static void* fifoWork(void *data) {
 				ERR_MSG("Not enough arguments for cmd add\n");
 				continue;
 			}
+			// Check if this provider has already been loaded....
+			ret = 0;
+			LIST_FOREACH(curProv, &providerList, listEntry) {
+				if (strcmp(curProv->libPath, argv[0]) == 0) {
+					ret = 1;
+					break;
+				}
+			}
+			if (ret) {
+				ERR_MSG("Provider %s is already loaded\n", argv[0]);
+				continue;
+			}
+			// No it is not present. Load it...
 			curDL = dlopen(argv[0],RTLD_NOW);
 			if (curDL == NULL) {
 				ERR_MSG("Error loading dynamic library '%s': %s\n", argv[0], dlerror());
