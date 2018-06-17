@@ -14,7 +14,11 @@ DECLARE_QUERY_LIST(fork)
 DECLARE_QUERY_LIST(exit)
 
 static struct kretprobe forkKP;
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4,2,0)
 static char forkSymbolName[] = "do_fork";
+#else
+static char forkSymbolName[] = "_do_fork";
+#endif
 static struct kprobe exitKP;
 static char exitSymbolName[] = "do_exit";
 typedef void (*put_files_struct_ptr)(struct files_struct *files);
