@@ -34,8 +34,8 @@ static void printResultRx(unsigned int id, Tupel_t *tupel) {
 #endif
 
 #ifdef PRINT_TUPLE
-	printf("Received packet on device %s. Packet length=%d (itemLen=%d,tuple=%p,duration=%llu us)\n", 
-		getItemString(SLC_DATA_MODEL,tupel,"net.device"),
+	printf("Received packet. Mac protocol = %hhd, Packet length=%d (itemLen=%d,tuple=%p,duration=%llu us)\n",
+		getItemByte(SLC_DATA_MODEL,tupel,"net.packetType.macProtocol"),
 		getItemInt(SLC_DATA_MODEL,tupel,"net.packetType.dataLength"),
 		tupel->itemLen,tupel,timeUS - tupel->timestamp);
 #endif
@@ -61,8 +61,8 @@ static void printResultTx(unsigned int id, Tupel_t *tupel) {
 #endif
 
 #ifdef PRINT_TUPLE
-	printf("Transmitted packet on device %s. Packet length=%d (itemLen=%d,tuple=%p,duration=%llu us)\n",
-		getItemString(SLC_DATA_MODEL,tupel,"net.device"),
+	printf("Transmitted packet. Mac protocol = %hhd, Packet length=%d (itemLen=%d,tuple=%p,duration=%llu us)\n",
+		getItemByte(SLC_DATA_MODEL,tupel,"net.packetType.macProtocol"),
 		getItemInt(SLC_DATA_MODEL,tupel,"net.packetType.dataLength"),
 		tupel->itemLen,tupel,timeUS - tupel->timestamp);
 #endif
