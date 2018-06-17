@@ -199,6 +199,10 @@ static void handlerRX(struct sk_buff *skb) {
 #else
 				sk = __inet_lookup(dev_net(skb->dev), &tcp_hashinfo, skb, __tcp_hdrlen(th), iph->saddr, th->source, iph->daddr, th->dest, inet_iif(skb), inet_sdif(skb), &refcounted);
 #endif
+				if (sk == NULL) {
+					ERR_MSG("TCP socket not resolved (source=%hu, dest=%hu)!\n", ntohs(th->source), ntohs(th->dest));
+					return;
+				}
 				if (sk->sk_state == TCP_NEW_SYN_RECV) {
 					/*
 					 * Listening sockets are represented by a special socket struct, i.e., struct request_socket.
