@@ -164,14 +164,13 @@ int registerQuery(Query_t *queries) {
 	#ifdef __KERNEL__
 	unsigned long flags;
 	#endif
-	ACQUIRE_WRITE_LOCK(slcLock);
 
 	if (queries != NULL) {
 		ret = checkQueries(SLC_DATA_MODEL,queries,NULL,0);
 		if (ret < 0) {
-			RELEASE_WRITE_LOCK(slcLock);
 			return ret;
 		}
+		ACQUIRE_WRITE_LOCK(slcLock);
 		#ifdef __KERNEL__
 		ret = addQueries(SLC_DATA_MODEL,queries,&flags);
 		#else
@@ -181,11 +180,10 @@ int registerQuery(Query_t *queries) {
 			RELEASE_WRITE_LOCK(slcLock);
 			return ret;
 		}
-	} else {
 		RELEASE_WRITE_LOCK(slcLock);
+	} else {
 		return -EPARAM;
 	}
-	RELEASE_WRITE_LOCK(slcLock);
 	return 0;
 }
 #ifdef __KERNEL__
@@ -201,14 +199,13 @@ int unregisterQuery(Query_t *queries) {
 	#ifdef __KERNEL__
 	unsigned long flags;
 	#endif
-	ACQUIRE_WRITE_LOCK(slcLock);
 
 	if (queries != NULL) {
 		ret = checkQueries(SLC_DATA_MODEL,queries,NULL,0);
 		if (ret < 0) {
-			RELEASE_WRITE_LOCK(slcLock);
 			return ret;
 		}
+		ACQUIRE_WRITE_LOCK(slcLock);
 		#ifdef __KERNEL__
 		ret = delQueries(SLC_DATA_MODEL,queries,&flags);
 		#else
@@ -218,11 +215,10 @@ int unregisterQuery(Query_t *queries) {
 			RELEASE_WRITE_LOCK(slcLock);
 			return ret;
 		}
-	} else {
 		RELEASE_WRITE_LOCK(slcLock);
+	} else {
 		return -EPARAM;
 	}
-	RELEASE_WRITE_LOCK(slcLock);
 	return 0;
 }
 #ifdef __KERNEL__
