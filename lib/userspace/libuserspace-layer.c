@@ -349,6 +349,15 @@ static void* commThreadWork(void *data) {
 		DEBUG_MSG(3,"sleepTime = %d us\n",sleepTime);
 	}
 
+	INFO_MSG("Flushing rx buffer...\n");
+	ret = 0;
+	do {
+		msg = ringBufferReadBegin(rxBuffer);
+		ringBufferReadEnd(rxBuffer);
+		ret++;
+	} while (msg != NULL);
+	INFO_MSG("Discarded %d messages from rx buffer while flushing.\n", --ret);
+
 	pthread_exit(0);
 	return NULL;
 }
