@@ -1003,35 +1003,42 @@ void rewriteDatamodelAddress(DataModelElement_t *node, void *oldBaseAddr, void *
 /**
  * Calculates the size of the subtree starting at {@link root}, allocates txMemory and copies the
  * subtree to the memory location.
- * Afterwards it tries to write the message to the ringbuffer. If it fails, it will sleep for one second and try again until it succeeds.
- * Hopefully, the ringbuffer is large enough so this will be a rare corner case...
+ * Afterwards it tries to write the message to the ringbuffer. If it fails, it will return -1.
+ * If so and the caller provided {@link userCopy}, he or she can simply call this function again after a certain amount of time.
+ * Using {@link userCopy} will speed up sendDatamodel, because the datamodel is not compressed and copied again.
  * @param root
  * @param add
+ * @param userCopy A pointer location where the function might store the pointer to the compact data model that should be send.
  */
-void sendDatamodel(DataModelElement_t *root, int type) {
+int sendDatamodel(DataModelElement_t *root, int type, DataModelElement_t **userCopy) {
 	DataModelElement_t *copy = NULL;
 	int ret = 0;
 
 	if (!ENDPOINT_CONNECTED()) {
 		DEBUG_MSG(3,"No endpoint connected. Aborting send.\n");
-		return;
+		return -EBADF;
 	}
 	if (txBuffer == NULL) {
 		ERR_MSG("txBuffer not initialized. Abort sending datamodel.\n");
-		return;
+		return -EBADF;
 	}
-	ret = calcDatamodelSize(root);
-	copy = (DataModelElement_t*)slcmalloc(ret);
-	if (copy == NULL) {
-		ERR_MSG("Cannot allocate memory to copy the datamodel\n");
-		return;
-	}
-	copyAndCollectDatamodel(root,copy);
-	do {
-		ret = ringBufferWrite(txBuffer,type,(char*)copy);
-		if (ret == -1) {
-			// Oh no. Start busy waiting...
-			MSLEEP(100);
+	if (userCopy == NULL || (userCopy != NULL && *userCopy == NULL)) {
+		ret = calcDatamodelSize(root);
+		copy = (DataModelElement_t*)slcmalloc(ret);
+		if (copy == NULL) {
+			ERR_MSG("Cannot allocate memory to copy the datamodel\n");
+			return -ENOMEM;
 		}
-	} while (ret == -1);
+		copyAndCollectDatamodel(root,copy);
+	} else {
+		copy = *userCopy;
+	}
+	ret = ringBufferWrite(txBuffer,type,(char*)copy);
+	if (ret == -1) {
+		if (userCopy == NULL) {
+			slcfree(copy);
+		}
+		return -EBUSY;
+	}
+	return 0;
 }

@@ -124,7 +124,7 @@ int getDataModelSize(DataModelElement_t *rootDM, DataModelElement_t *elem, int i
 int calcDatamodelSize(DataModelElement_t *node);
 void copyAndCollectDatamodel(DataModelElement_t *node, void *freeMem);
 void rewriteDatamodelAddress(DataModelElement_t *node, void *oldBaseAddr, void *newBaseAddr);
-void sendDatamodel(DataModelElement_t *root, int type);
+int sendDatamodel(DataModelElement_t *root, int type, DataModelElement_t **copy);
 
 /**
  * Sometimes a path specifitcations leads to a source, object, event or a reference.

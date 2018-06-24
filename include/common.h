@@ -18,6 +18,7 @@
 #include <pthread.h>
 #include <unistd.h>
 #include <sys/queue.h>
+#include <errno.h>
 #define PAGE_SIZE 4096
 #endif
 

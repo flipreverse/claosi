@@ -480,12 +480,21 @@ static int commThreadWork(void *data) {
 					break;
 
 				case MSG_DM_SNAPSHOT:
+				{
+					DataModelElement_t *callerCopy = NULL;
 					// the userspace part requests a complete snapshot of our datamodel.
 					DEBUG_MSG(2,"Userspace requested a complete snapshot of our datamode. Give to him... (aha aha)\n");
-					ACQUIRE_WRITE_LOCK(slcLock);
-					sendDatamodel(SLC_DATA_MODEL,MSG_DM_SNAPSHOT);
-					RELEASE_WRITE_LOCK(slcLock);
+					do {
+						ACQUIRE_WRITE_LOCK(slcLock);
+						ret = sendDatamodel(SLC_DATA_MODEL,MSG_DM_SNAPSHOT, &callerCopy);
+						RELEASE_WRITE_LOCK(slcLock);
+						if (ret == -EBUSY) {
+							ERR_MSG("Experiencing congestion sending the data model!\n");
+							msleep(100);
+						}
+					} while (ret == -EBUSY);
 					break;
+				}
 
 				case MSG_EMPTY:
 					ERR_MSG("Read empty message!\n");

@@ -31,10 +31,10 @@ int initSLCDatamodel(void) {
  */
 int registerProvider(DataModelElement_t *dm, Query_t *queries) {
 	int ret = 0;
+	DataModelElement_t *callerCopy = NULL;
 	#ifdef __KERNEL__
 	unsigned long flags;
 	#endif
-	ACQUIRE_WRITE_LOCK(slcLock);
 
 	if (dm == NULL && queries == NULL) {
 		return -EPARAM;
@@ -42,24 +42,32 @@ int registerProvider(DataModelElement_t *dm, Query_t *queries) {
 	if (dm != NULL) {
 		ret = checkDataModelSyntax(SLC_DATA_MODEL,dm,NULL);
 		if (ret < 0) {
-			RELEASE_WRITE_LOCK(slcLock);
 			return ret;
 		}
+		ACQUIRE_WRITE_LOCK(slcLock);
 		// First, check if the datamodel is mergable
 		ret = mergeDataModel(1,SLC_DATA_MODEL,dm);
 		if (ret < 0) {
 			RELEASE_WRITE_LOCK(slcLock);
 			return ret;
 		}
-		sendDatamodel(dm,MSG_DM_ADD);
 		// Now merge it.
 		ret = mergeDataModel(0,SLC_DATA_MODEL,dm);
 		if (ret < 0) {
 			RELEASE_WRITE_LOCK(slcLock);
 			return ret;
 		}
+		RELEASE_WRITE_LOCK(slcLock);
+		do {
+			ret = sendDatamodel(dm,MSG_DM_ADD, &callerCopy);
+			if (ret == -EBUSY) {
+				// Oh no. Start busy waiting...
+				MSLEEP(100);
+			}
+		} while (ret == -EBUSY);
 	}
 	if (queries != NULL) {
+		ACQUIRE_WRITE_LOCK(slcLock);
 		ret = checkQueries(SLC_DATA_MODEL,queries,NULL,0);
 		if (ret < 0) {
 			RELEASE_WRITE_LOCK(slcLock);
@@ -74,8 +82,8 @@ int registerProvider(DataModelElement_t *dm, Query_t *queries) {
 			RELEASE_WRITE_LOCK(slcLock);
 			return ret;
 		}
+		RELEASE_WRITE_LOCK(slcLock);
 	}
-	RELEASE_WRITE_LOCK(slcLock);
 
 	return 0;
 }
@@ -92,21 +100,20 @@ EXPORT_SYMBOL(registerProvider);
  */
 int unregisterProvider(DataModelElement_t *dm, Query_t *queries) {
 	int ret = 0;
+	DataModelElement_t *callerCopy = NULL;
 	#ifdef __KERNEL__
 	unsigned long flags;
 	#endif
-	ACQUIRE_WRITE_LOCK(slcLock);
 
 	if (dm == NULL && queries == NULL) {
-		RELEASE_WRITE_LOCK(slcLock);
 		return -EPARAM;
 	}
 	if (queries != NULL) {
 		ret = checkQueries(SLC_DATA_MODEL,queries,NULL,0);
 		if (ret < 0) {
-			RELEASE_WRITE_LOCK(slcLock);
 			return ret;
 		}
+		ACQUIRE_WRITE_LOCK(slcLock);
 		#ifdef __KERNEL__
 		ret = delQueries(SLC_DATA_MODEL,queries,&flags);
 		#else
@@ -116,25 +123,32 @@ int unregisterProvider(DataModelElement_t *dm, Query_t *queries) {
 			RELEASE_WRITE_LOCK(slcLock);
 			return ret;
 		}
+		RELEASE_WRITE_LOCK(slcLock);
 	}
 	if (dm != NULL) {
 		ret = checkDataModelSyntax(SLC_DATA_MODEL,dm,NULL);
 		if (ret < 0) {
-			RELEASE_WRITE_LOCK(slcLock);
 			return ret;
 		}
+		ACQUIRE_WRITE_LOCK(slcLock);
 		ret = deleteSubtree(&SLC_DATA_MODEL,dm);
 		if (ret < 0) {
 			RELEASE_WRITE_LOCK(slcLock);
 			return ret;
 		}
-		sendDatamodel(dm,MSG_DM_DEL);
 		// If deleteSubtree removes even the root node, it is necessary to reinitialize the global datamodel
 		if (SLC_DATA_MODEL == NULL) {
 			initSLCDatamodel();
 		}
+		RELEASE_WRITE_LOCK(slcLock);
+		do {
+			ret = sendDatamodel(dm,MSG_DM_DEL, &callerCopy);
+			if (ret == -EBUSY) {
+				// Oh no. Start busy waiting...
+				MSLEEP(100);
+			}
+		} while (ret == -EBUSY);
 	}
-	RELEASE_WRITE_LOCK(slcLock);
 	return 0;
 }
 #ifdef __KERNEL__
