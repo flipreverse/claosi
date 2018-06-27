@@ -187,7 +187,7 @@ int onLoad(int argc, char *argv[]) {
 		ERR_MSG("Register failed: %d\n",-ret);
 		return -1;
 	}
-	DEBUG_MSG(1,"Registered eval net queries\n");
+	INFO_MSG("Registered eval net queries\n");
 
 	return 0;
 }
@@ -209,7 +209,7 @@ int onUnload(void) {
 	INFO_MSG("nRx=%llu, nTx=%llu\n",nRx,nTx);
 	freeOperator(GET_BASE(rxStream),0);
 	freeOperator(GET_BASE(txStream),0);
-	DEBUG_MSG(1,"Unregistered eval net queries\n");
+	INFO_MSG("Unregistered eval net queries\n");
 
 	return 0;
 }

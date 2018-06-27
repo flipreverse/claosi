@@ -239,7 +239,7 @@ int __init processqueries_init(void)
 		ERR_MSG("Register queries failed: %d\n",-ret);
 		return -1;
 	}
-	DEBUG_MSG(1,"Sucessfully registered process queries\n");
+	INFO_MSG("Sucessfully registered process queries\n");
 
 	return 0;
 }
@@ -259,7 +259,7 @@ void __exit processqueries_exit(void) {
 	freeOperator(GET_BASE(processCommStr),0);
 	freeOperator(GET_BASE(processObjStatusJoin),0);
 	freeOperator(GET_BASE(processSocketsStr),0);
-	DEBUG_MSG(1,"Unregistered process queries\n");
+	INFO_MSG("Unregistered process queries\n");
 }
 
 module_init(processqueries_init);

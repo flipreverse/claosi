@@ -7,6 +7,11 @@ DECLARE_LOCK(slcLock);
 #ifdef __KERNEL__
 EXPORT_SYMBOL(slcDataModel);
 EXPORT_SYMBOL(slcLock);
+#else
+/**
+ * Represents the debug level for the userspace part of slc
+ */
+int debug_level = 0;
 #endif
 /**
  * Initializes the global datamodel.

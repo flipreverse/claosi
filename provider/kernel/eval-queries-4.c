@@ -177,13 +177,13 @@ static ssize_t enableQueryWrite(struct file *file, const char *buffer, size_t co
 			destroyRelayFS();
 			return -1;
 		}
-		DEBUG_MSG(1,"Registered eval exit queries\n");
+		INFO_MSG("Registered eval exit queries\n");
 	} else if (value == 0) {
 		ret = unregisterQuery(&queryExitJoin);
 		if (ret < 0 ) {
 			ERR_MSG("Unregister eval exit failed: %d\n",-ret);
 		}
-		DEBUG_MSG(1,"Unregistered eval exit queries\n");
+		INFO_MSG("Unregistered eval exit queries\n");
 	}
 
 	return toCopy;

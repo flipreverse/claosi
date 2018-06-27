@@ -35,7 +35,7 @@ int __init evalqueries_3_init(void) {
 		ERR_MSG("Register failed: %d\n",-ret);
 		return -1;
 	}
-	DEBUG_MSG(1,"Registered eval net queries\n");
+	INFO_MSG("Registered eval net queries\n");
 
 	return 0;
 }
@@ -55,7 +55,7 @@ void __exit evalqueries_3_exit(void) {
 	destroyQueriesTXRX();
 	destroyQueriesTXRXBytes();
 
-	DEBUG_MSG(1,"Unregistered eval net queries\n");
+	INFO_MSG("Unregistered eval net queries\n");
 }
 
 module_init(evalqueries_3_init);

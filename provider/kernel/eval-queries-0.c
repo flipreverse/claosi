@@ -77,7 +77,7 @@ int __init evalqueries_0_init(void) {
 		destroyRelayFS();
 		return -1;
 	}
-	DEBUG_MSG(1,"Registered eval fork queries\n");
+	INFO_MSG("Registered eval fork queries\n");
 
 	return 0;
 }
@@ -96,7 +96,7 @@ void __exit evalqueries_0_exit(void) {
 
 	freeOperator(GET_BASE(processObjFork),0);
 
-	DEBUG_MSG(1,"Unregistered eval fork queries\n");
+	INFO_MSG("Unregistered eval fork queries\n");
 }
 
 module_init(evalqueries_0_init);

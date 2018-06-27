@@ -33,7 +33,7 @@ int __init evalqueries_2_init(void) {
 		ERR_MSG("Register eval tx/rx + join failed: %d\n",-ret);
 		return -1;
 	}
-	DEBUG_MSG(1,"Registered eval tx/rx + join queries\n");
+	INFO_MSG("Registered eval tx/rx + join queries\n");
 
 	return 0;
 }
@@ -52,7 +52,7 @@ void __exit evalqueries_2_exit(void) {
 
 	destroyQueriesTXRXJoin();
 
-	DEBUG_MSG(1,"Unregistered eval tx/rx + join queries\n");
+	INFO_MSG("Unregistered eval tx/rx + join queries\n");
 }
 
 module_init(evalqueries_2_init);

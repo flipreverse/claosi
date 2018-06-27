@@ -61,7 +61,7 @@ int onLoad(int argc, char *argv[]) {
 		return -1;
 	}
 
-	DEBUG_MSG(1,"Registered ui queries\n");
+	INFO_MSG("Registered ui queries\n");
 	return 0;
 }
 
@@ -75,7 +75,7 @@ int onUnload(void) {
 	freeOperator(GET_BASE(displayStream),0);
 	freeOperator(GET_BASE(appStream),0);
 
-	DEBUG_MSG(1,"Unregistered ui queries\n");
+	INFO_MSG("Unregistered ui queries\n");
 	return 0;
 }
 

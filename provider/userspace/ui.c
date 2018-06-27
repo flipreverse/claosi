@@ -201,7 +201,7 @@ int onLoad(int argc, char *argv[]) {
 		return -1;
 	}
 
-	DEBUG_MSG(1,"Registered ui provider\n");
+	INFO_MSG("Registered ui provider\n");
 	return 0;
 }
 
@@ -214,6 +214,6 @@ int onUnload(void) {
 	}
 	freeDataModel(&model,0);
 
-	DEBUG_MSG(1,"Unregistered ui provider\n");
+	INFO_MSG("Unregistered ui provider\n");
 	return 0;
 }

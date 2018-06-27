@@ -191,7 +191,7 @@ int __init netqueries_init(void)
 		ERR_MSG("Register failed: %d\n",-ret);
 		return -1;
 	}
-	DEBUG_MSG(1,"Registered net queries\n");
+	INFO_MSG("Registered net queries\n");
 
 	return 0;
 }
@@ -211,7 +211,7 @@ void __exit netqueries_exit(void) {
 	freeOperator(GET_BASE(txBytesSrc),0);
 	freeOperator(GET_BASE(devStatusStream),0);
 	freeOperator(GET_BASE(devObjStream),0);
-	DEBUG_MSG(1,"Unregistered net queries\n");
+	INFO_MSG("Unregistered net queries\n");
 }
 
 module_init(netqueries_init);

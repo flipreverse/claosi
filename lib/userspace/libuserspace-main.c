@@ -1,4 +1,5 @@
 #include <api.h>
+#include <limits.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <errno.h>
@@ -141,6 +142,8 @@ static void* fifoWork(void *data) {
 		if (strcmp(cmd,"add") == 0) {
 			if (argc < 1 ) {
 				ERR_MSG("Not enough arguments for cmd add\n");
+				free(argv);
+				fclose(cmdFifo);
 				continue;
 			}
 			// Check if this provider has already been loaded....
@@ -153,12 +156,16 @@ static void* fifoWork(void *data) {
 			}
 			if (ret) {
 				ERR_MSG("Provider %s is already loaded\n", argv[0]);
+				free(argv);
+				fclose(cmdFifo);
 				continue;
 			}
 			// No it is not present. Load it...
 			curDL = dlopen(argv[0],RTLD_NOW);
 			if (curDL == NULL) {
 				ERR_MSG("Error loading dynamic library '%s': %s\n", argv[0], dlerror());
+				free(argv);
+				fclose(cmdFifo);
 				continue;
 			}
 			// Try to resolve the entry function
@@ -166,6 +173,8 @@ static void* fifoWork(void *data) {
 			if (onLoadFn == NULL) {
 				ERR_MSG("Error resolving symbol 'onLoad' from library '%s': %s\n", argv[0], dlerror());
 				dlclose(curDL);
+				free(argv);
+				fclose(cmdFifo);
 				continue;
 			}
 			// Found it. Allocate space for an entry in the provider list
@@ -173,6 +182,8 @@ static void* fifoWork(void *data) {
 			if (curProv == NULL) {
 				ERR_MSG("Cannot allocate memory for LoadedProvider_t\n");
 				dlclose(curDL);
+				free(argv);
+				fclose(cmdFifo);
 				continue;
 			}
 			curProv->libPath = ALLOC(strlen(argv[0]) + 1);
@@ -180,6 +191,8 @@ static void* fifoWork(void *data) {
 				ERR_MSG("Cannot allocate memory for library path\n");
 				dlclose(curDL);
 				FREE(curProv);
+				free(argv);
+				fclose(cmdFifo);
 			}
 			/*
 			 * Initialize the provider...
@@ -199,6 +212,8 @@ static void* fifoWork(void *data) {
 				FREE(curProv->libPath);
 				FREE(curProv);
 				dlclose(curDL);
+				free(argv);
+				fclose(cmdFifo);
 				continue;
 			}
 			strcpy(curProv->libPath, argv[0]);
@@ -207,6 +222,8 @@ static void* fifoWork(void *data) {
 		} else if (strcmp(cmd,"del") == 0) {
 			if (argc < 1 ) {
 				ERR_MSG("Not enough arguments for cmd add\n");
+				free(argv);
+				fclose(cmdFifo);
 				continue;
 			}
 			ret = 0;
@@ -242,6 +259,22 @@ static void* fifoWork(void *data) {
 			ACQUIRE_READ_LOCK(slcLock);
 			printDatamodel(SLC_DATA_MODEL);
 			RELEASE_READ_LOCK(slcLock);
+		} else if (strcmp(cmd, "dbglvl") == 0) {
+			if (argc < 1) {
+				INFO_MSG("Current debug level: %d\n", debug_level);
+			} else {
+				int value = strtol(argv[0], NULL, 10);
+				if (value == LONG_MIN || value == LONG_MAX) {
+					ERR_MSG("Unknown value for debug level: %s\n", argv[0]);
+				} else {
+					if (value < 0) {
+						ERR_MSG("No negative values for debug level allowed\n");
+					} else {
+						debug_level = value;
+						INFO_MSG("Set debug level to %d\n", debug_level);
+					}
+				}
+			}
 		} else {
 			ERR_MSG("Unknown command!\n");
 		}

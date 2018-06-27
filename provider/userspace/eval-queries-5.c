@@ -77,7 +77,7 @@ int onLoad(int argc, char *argv[]) {
 		destroyEvalWriter();
 		return -1;
 	}
-	DEBUG_MSG(1,"Registered eval fork queries\n");
+	INFO_MSG("Registered eval fork queries\n");
 
 	return 0;
 }

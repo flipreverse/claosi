@@ -103,7 +103,7 @@ static void activateProcess(Query_t *query) {
 			if (ret < 0) {
 				ERR_MSG("Registration of kprobe at %s failed. Reason: %d\n",forkKP.kp.symbol_name,ret);
 			} else {
-				DEBUG_MSG(1,"Registered kretprobe at %s\n",forkKP.kp.symbol_name);
+				INFO_MSG("Registered kretprobe at %s\n",forkKP.kp.symbol_name);
 			}
 		}
 	}
@@ -118,7 +118,7 @@ static void activateProcess(Query_t *query) {
 				ERR_MSG("Registration of kprobe at %s failed. Reason: %d\n",exitKP.symbol_name,ret);
 				return;
 			} else {
-				DEBUG_MSG(1,"Registered kprobe at %s\n",exitKP.symbol_name);
+				INFO_MSG("Registered kprobe at %s\n",exitKP.symbol_name);
 			}
 		}
 	}
@@ -134,14 +134,14 @@ static void deactivateProcess(Query_t *query) {
 		findAndDeleteQuery(fork,listEmpty, querySelec, query, pos, next);
 		if (listEmpty == 1) {
 			unregister_kretprobe(&forkKP);
-			DEBUG_MSG(1,"Unregistered kretprobe at %s. Missed it %lu times.\n",forkKP.kp.symbol_name,forkKP.kp.nmissed);
+			INFO_MSG("Unregistered kretprobe at %s. Missed it %lu times.\n",forkKP.kp.symbol_name,forkKP.kp.nmissed);
 		}
 	}
 	if ((events & OBJECT_DELETE) == OBJECT_DELETE) {
 		findAndDeleteQuery(exit,listEmpty, querySelec, query, pos, next)
 		if (listEmpty == 1) {
 			unregister_kprobe(&exitKP);
-			DEBUG_MSG(1,"Unregistered kprobe at %s. Missed it %lu times.\n",exitKP.symbol_name,exitKP.nmissed);
+			INFO_MSG("Unregistered kprobe at %s. Missed it %lu times.\n",exitKP.symbol_name,exitKP.nmissed);
 		}
 	}
 }
@@ -497,7 +497,7 @@ int __init process_init(void)
 		freeDataModel(&model,0);
 		return -1;
 	}
-	DEBUG_MSG(1,"Registered process provider\n");
+	INFO_MSG("Registered process provider\n");
 
 	return 0;
 }
@@ -511,7 +511,7 @@ void __exit process_exit(void) {
 	}
 	freeDataModel(&model,0);
 
-	DEBUG_MSG(1,"Unregistered process provider\n");
+	INFO_MSG("Unregistered process provider\n");
 }
 
 module_init(process_init);

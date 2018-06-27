@@ -165,7 +165,6 @@ static inline void setItemString(DataModelElement_t *rootDM, Tupel_t *tupel, cha
 	void *valuePtr = NULL;
 	valuePtr = getMemberPointer(rootDM,tupel,typeName,NULL);
 	if (valuePtr == NULL) {
-		PRINT_MSG("LOL\n");
 		return;
 	}
 	if (TEST_BIT(tupel->flags,TUPLE_COMPACT)) {
