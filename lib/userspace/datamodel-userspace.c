@@ -1,3 +1,4 @@
+#define MSG_FMT(fmt) "[slc-datamodelu] " fmt
 #include <datamodel.h>
 #include <stdio.h>
 

@@ -1,3 +1,4 @@
+#define MSG_FMT(fmt) "[slc-processqueries] " fmt
 #include <linux/module.h>
 #include <datamodel.h>
 #include <query.h>

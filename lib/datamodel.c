@@ -1,3 +1,4 @@
+#define MSG_FMT(fmt) "[slc-datamodel] " fmt
 #include <common.h>
 #include <datamodel.h>
 #include <communication.h>

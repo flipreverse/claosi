@@ -1,3 +1,4 @@
+#define MSG_FMT(fmt) "[slc-evalremotequery] " fmt
 #include <datamodel.h>
 #include <query.h>
 #include <api.h>

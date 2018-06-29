@@ -1,3 +1,4 @@
+#define MSG_FMT(fmt) "[slc-uiquery] " fmt
 #include <query.h>
 #include <api.h>
 #include <sys/time.h>

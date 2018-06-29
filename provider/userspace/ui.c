@@ -1,3 +1,4 @@
+#define MSG_FMT(fmt) "[slc-ui] " fmt
 #include <query.h>
 #include <api.h>
 #include <stdio.h>

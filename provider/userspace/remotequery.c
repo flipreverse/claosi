@@ -1,3 +1,4 @@
+#define MSG_FMT(fmt) "[slc-remotequery] " fmt
 #include <query.h>
 #include <api.h>
 #include <statistic.h>

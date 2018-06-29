@@ -1,3 +1,4 @@
+#define MSG_FMT(fmt) "[slc-resultsetu] " fmt
 #include <resultset.h>
 
 

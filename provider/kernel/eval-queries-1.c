@@ -1,3 +1,4 @@
+#define MSG_FMT(fmt) "[slc-eval1] " fmt
 #include <linux/module.h>
 #include <linux/relay.h>
 #include <linux/kthread.h>

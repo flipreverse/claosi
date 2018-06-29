@@ -1,3 +1,4 @@
+#define MSG_FMT(fmt) "[slc-queryu] " fmt
 #include <query.h>
 #include <stdio.h>
 

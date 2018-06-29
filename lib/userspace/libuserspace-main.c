@@ -1,3 +1,4 @@
+#define MSG_FMT(fmt) "[slc-main] " fmt
 #include <api.h>
 #include <limits.h>
 #include <stdlib.h>

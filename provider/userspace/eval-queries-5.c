@@ -1,3 +1,4 @@
+#define MSG_FMT(fmt) "[slc-eval5] " fmt
 #include <datamodel.h>
 #include <query.h>
 #include <api.h>

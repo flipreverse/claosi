@@ -1,3 +1,4 @@
+#define MSG_FMT(fmt) "[slc-process] " fmt
 #include <linux/module.h>
 #include <linux/kprobes.h>
 #include <linux/if_ether.h>

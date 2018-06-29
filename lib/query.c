@@ -1,3 +1,4 @@
+#define MSG_FMT(fmt) "[slc-query] " fmt
 #include <common.h>
 #include <resultset.h>
 #include <query.h>

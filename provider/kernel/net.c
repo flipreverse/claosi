@@ -1,3 +1,4 @@
+#define MSG_FMT(fmt)	"[slc-net] " fmt
 #include <linux/module.h>
 #include <linux/moduleparam.h>
 #include <linux/kprobes.h>
@@ -343,7 +344,7 @@ static void activateTX(Query_t *query) {
 				ERR_MSG("tracepoint_probe_register at %s failed. Reason: %d\n", tpTX->name, ret);
 				return;
 			}
-			DEBUG_MSG(1,"Registered tracepoint at %s\n",tpTX->name);
+			INFO_MSG("Registered tracepoint at %s\n",tpTX->name);
 		} else {
 			memset(&txKP,0,sizeof(struct kprobe));
 			txKP.pre_handler = kprobeHandlerTX;
@@ -353,7 +354,7 @@ static void activateTX(Query_t *query) {
 				ERR_MSG("register_kprobe at %s failed. Reason: %d\n",txKP.symbol_name,ret);
 				return;
 			}
-			DEBUG_MSG(1,"Registered kprobe at %s\n",txKP.symbol_name);
+			INFO_MSG("Registered kprobe at %s\n",txKP.symbol_name);
 		}
 	}
 }
@@ -372,10 +373,10 @@ static void deactivateTX(Query_t *query) {
 				ERR_MSG("tracepoint_probe_unregister at %s failed. Reason: %d\n", tpTX->name, ret);
 				return;
 			}
-			DEBUG_MSG(1,"Unregistered tracepoint at %s\n", tpTX->name);
+			INFO_MSG("Unregistered tracepoint at %s\n", tpTX->name);
 		} else {
 			unregister_kprobe(&txKP);
-			DEBUG_MSG(1,"Unregistered kprobe at %s. Missed it %ld times.\n",txKP.symbol_name,txKP.nmissed);
+			INFO_MSG("Unregistered kprobe at %s. Missed it %ld times.\n",txKP.symbol_name,txKP.nmissed);
 		}
 	}
 }
@@ -400,7 +401,7 @@ static void activateRX(Query_t *query) {
 					ERR_MSG("tracepoint_probe_register at %s failed. Reason: %d\n", tpRXUDP->name, ret);
 					return;
 				}
-				DEBUG_MSG(1,"Registered tracepoint at %s and %s\n",tpRXTCP->name, tpRXUDP->name);
+				INFO_MSG("Registered tracepoint at %s and %s\n",tpRXTCP->name, tpRXUDP->name);
 			} else {
 				if (useProtSpecific) {
 					ERR_MSG("No protocol-specific tracepoints present. Falling back to the generic one\n");
@@ -410,7 +411,7 @@ static void activateRX(Query_t *query) {
 					ERR_MSG("tracepoint_probe_register at %s failed. Reason: %d\n", tpRX->name, ret);
 					return;
 				}
-				DEBUG_MSG(1,"Registered tracepoint at %s\n",tpRX->name);
+				INFO_MSG("Registered tracepoint at %s\n",tpRX->name);
 			}
 		} else {
 			if (useProtSpecific) {
@@ -434,7 +435,7 @@ static void activateRX(Query_t *query) {
 					ERR_MSG("register_kprobe at %s and %s failed. Reason: %d\n",rxKPTCP.symbol_name,rxKPUDP.symbol_name,ret);
 					return;
 				}
-				DEBUG_MSG(1,"Registered kprobe at %s and %s\n",rxKPTCP.symbol_name,rxKPUDP.symbol_name);
+				INFO_MSG("Registered kprobe at %s and %s\n",rxKPTCP.symbol_name,rxKPUDP.symbol_name);
 			} else {
 				memset(&rxKPGeneric,0,sizeof(struct kprobe));
 				rxKPGeneric.pre_handler = kprobeHandlerRX;
@@ -444,7 +445,7 @@ static void activateRX(Query_t *query) {
 					ERR_MSG("register_kprobe at %s failed. Reason: %d\n",rxKPGeneric.symbol_name,ret);
 					return;
 				}
-				DEBUG_MSG(1,"Registered kprobe at %s\n",rxKPGeneric.symbol_name);
+				INFO_MSG("Registered kprobe at %s\n",rxKPGeneric.symbol_name);
 			}
 		}
 	}
@@ -468,22 +469,22 @@ static void deactivateRX(Query_t *query) {
 				if (ret < 0) {
 					ERR_MSG("tracepoint_probe_unregister at %s failed. Reason: %d\n", tpRXUDP->name, ret);
 				}
-				DEBUG_MSG(1,"Unregistered tracepoint at %s and %s\n", tpRXTCP->name, tpRXUDP->name);
+				INFO_MSG("Unregistered tracepoint at %s and %s\n", tpRXTCP->name, tpRXUDP->name);
 			} else {
 				ret = tracepoint_probe_unregister(tpRX, traceHandlerRX, NULL);
 				if (ret < 0) {
 					ERR_MSG("tracepoint_probe_unregister at %s failed. Reason: %d\n", tpRX->name, ret);
 					return;
 				}
-				DEBUG_MSG(1,"Unregistered tracepoint at %s\n", tpRX->name);
+				INFO_MSG("Unregistered tracepoint at %s\n", tpRX->name);
 			}
 		} else {
 			if (useProtSpecific) {
 				unregister_kprobes(rxKP,2);
-				DEBUG_MSG(1,"Unregistered kprobe at %s (missed=%ld) and %s (missed=%ld).\n",rxKPTCP.symbol_name,rxKPTCP.nmissed,rxKPUDP.symbol_name,rxKPUDP.nmissed);
+				INFO_MSG("Unregistered kprobe at %s (missed=%ld) and %s (missed=%ld).\n",rxKPTCP.symbol_name,rxKPTCP.nmissed,rxKPUDP.symbol_name,rxKPUDP.nmissed);
 			} else {
 				unregister_kprobe(&rxKPGeneric);
-				DEBUG_MSG(1,"Unregistered kprobe at %s (missed=%ld).\n",rxKPGeneric.symbol_name,rxKPGeneric.nmissed);
+				INFO_MSG("Unregistered kprobe at %s (missed=%ld).\n",rxKPGeneric.symbol_name,rxKPGeneric.nmissed);
 			}
 		}
 	}
@@ -884,7 +885,7 @@ int __init net_init(void)
 		freeDataModel(&model,0);
 		return -1;
 	}
-	DEBUG_MSG(1,"Registered net provider\n");
+	INFO_MSG("Registered net provider\n");
 
 	return 0;
 }
@@ -898,7 +899,7 @@ void __exit net_exit(void) {
 	}
 
 	freeDataModel(&model,0);
-	DEBUG_MSG(1,"Unregistered net provider\n");
+	INFO_MSG("Unregistered net provider\n");
 }
 
 module_init(net_init);

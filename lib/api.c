@@ -1,3 +1,4 @@
+#define MSG_FMT(fmt) "[slc-api] " fmt
 #include <api.h>
 #include <communication.h>
 

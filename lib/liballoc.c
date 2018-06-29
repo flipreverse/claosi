@@ -1,3 +1,4 @@
+#define MSG_FMT(fmt) "[slc-alloc] " fmt
 #include <liballoc.h>
 #include <common.h>
 #include <output.h>

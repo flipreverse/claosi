@@ -20,6 +20,9 @@
 #endif
 
 #define TAG "[slc] "
+#ifndef MSG_FMT
+#define MSG_FMT(fmt)	TAG fmt
+#endif
 
 #ifdef OUTPUT
 #ifdef __KERNEL__
@@ -35,9 +38,9 @@
 #define DEBUG_MSG(prio,args...) pr_debug(args)
 #else  // !__KERNEL__
 extern int debug_level;
-#define DEBUG_MSG(prio,args...) do {		\
+#define DEBUG_MSG(prio, fmt, ...) do {		\
 	if ((prio) <= debug_level) {				\
-		printf(TAG args);			\
+		PRINT_MSG(MSG_FMT(fmt), ##__VA_ARGS__);			\
 	}									\
 } while(0);
 #endif
@@ -45,9 +48,9 @@ extern int debug_level;
 #else // !DYNAMIC_DEBUG
 
 #if DEBUG > 0
-#define DEBUG_MSG(prio,args...) do {		\
+#define DEBUG_MSG(prio,fmt, ...) do {		\
 	if ((prio) <= DEBUG) {				\
-		PRINT_DEBUG_MSG_(TAG args);			\
+		PRINT_MSG(MSG_FMT(fmt), ##__VA_ARGS__);			\
 	}									\
 } while(0);
 #else // ! (DEBUG > 0)
@@ -56,13 +59,13 @@ extern int debug_level;
 #endif // DYNAMIC_DEBUG
 
 #ifdef  __KERNEL__
-#define ERR_MSG(args...) printk(KERN_ERR TAG args);
-#define WARN_MSG(args...) printk(KERN_WARN TAG args);
-#define INFO_MSG(args...) printk(KERN_INFO TAG args);
+#define ERR_MSG(fmt, ...) printk(KERN_ERR MSG_FMT(fmt), ##__VA_ARGS__);
+#define WARN_MSG(fmt, ...) printk(KERN_WARN MSG_FMT(fmt), ##__VA_ARGS__);
+#define INFO_MSG(fmt, ...) printk(KERN_INFO MSG_FMT(fmt), ##__VA_ARGS__);
 #else // !__KERNEL__
-#define ERR_MSG(args...) fprintf(stderr,TAG args);
-#define WARN_MSG(args...) printf(TAG args);
-#define INFO_MSG(args...) printf(TAG args);
+#define ERR_MSG(fmt, ...) fprintf(stderr,MSG_FMT(fmt), ##__VA_ARGS__);
+#define WARN_MSG(fmt, ...) printf(MSG_FMT(fmt), ##__VA_ARGS__);
+#define INFO_MSG(fmt, ...) printf(MSG_FMT(fmt), ##__VA_ARGS__);
 #endif // __KERNEL__
 #else
 #define DEBUG_MSG(prio,...) do {} while(0);

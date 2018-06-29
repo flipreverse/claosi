@@ -1,3 +1,4 @@
+#define MSG_FMT(fmt) "[slc-layer] " fmt
 #include <api.h>
 #include <sys/queue.h>
 #include <sys/types.h>
