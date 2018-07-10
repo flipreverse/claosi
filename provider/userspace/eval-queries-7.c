@@ -130,7 +130,7 @@ int onLoad(int argc, char *argv[]) {
 	if (devName == NULL) {
 		devName = strdup(DEFAULT_DEVICE);
 	}
-	INFO_MSG("Monitoring device %s. %s timestamps.\n", devName, (useEvalReader ? "Recording" : "Do not record"));
+	INFO_MSG("Monitoring device %s. %s timestamps (ofile: %s).\n", devName, (useEvalReader ? "Recording" : "Do not record"), outputFname);
 
 	setupQueries();
 

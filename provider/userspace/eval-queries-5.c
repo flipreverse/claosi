@@ -66,7 +66,7 @@ int onLoad(int argc, char *argv[]) {
 			return -1;
 		}
 	}
-	INFO_MSG("%s timestamps.\n", (useEvalReader ? "Recording" : "Do not record"))
+	INFO_MSG("%s timestamps (ofile: %s).\n", (useEvalReader ? "Recording" : "Do not record"), outputFname)
 
 	setupQueries();
 
