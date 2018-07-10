@@ -135,6 +135,7 @@ int onLoad(int argc, char *argv[]) {
 	setupQueries();
 
 	if (setupEvalWriter(outputFname) != 0) {
+		ERR_MSG("Cannot setup evalwriter\n");
 		return -1;
 	}
 

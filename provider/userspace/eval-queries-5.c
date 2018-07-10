@@ -70,7 +70,10 @@ int onLoad(int argc, char *argv[]) {
 
 	setupQueries();
 
-	setupEvalWriter(outputFname);
+	if (setupEvalWriter(outputFname) != 0) {
+		ERR_MSG("Cannot setup evalwriter\n");
+		return -1;
+	}
 
 	ret = registerQuery(&queryForkJoin);
 	if (ret < 0 ) {
