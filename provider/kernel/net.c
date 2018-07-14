@@ -374,6 +374,7 @@ static void deactivateTX(Query_t *query) {
 				return;
 			}
 			INFO_MSG("Unregistered tracepoint at %s\n", tpTX->name);
+			tracepoint_synchronize_unregister();
 		} else {
 			unregister_kprobe(&txKP);
 			INFO_MSG("Unregistered kprobe at %s. Missed it %ld times.\n",txKP.symbol_name,txKP.nmissed);
@@ -478,6 +479,7 @@ static void deactivateRX(Query_t *query) {
 				}
 				INFO_MSG("Unregistered tracepoint at %s\n", tpRX->name);
 			}
+			tracepoint_synchronize_unregister();
 		} else {
 			if (useProtSpecific) {
 				unregister_kprobes(rxKP,2);
