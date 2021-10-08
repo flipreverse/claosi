@@ -79,7 +79,6 @@ static DEFINE_SPINLOCK(varNamePrefix ## ListLock);
  */
 #define forEachQueryEvent(slcLockVar, varNamePrefix, tempListVar, tempVar)	do { \
 	unsigned long flags; \
-	ACQUIRE_READ_LOCK(slcLockVar); \
 	spin_lock(&varNamePrefix ## ListLock); \
 	list_for_each(tempListVar,&varNamePrefix ## QueriesList) { \
 	tempVar = container_of(tempListVar,QuerySelectors_t,list);
@@ -92,7 +91,6 @@ static DEFINE_SPINLOCK(varNamePrefix ## ListLock);
  */
 #define forEachQueryObject(slcLockVar, varNamePrefix, tempListVar, tempVar, newEvent)	do { \
 	unsigned long flags; \
-	ACQUIRE_READ_LOCK(slcLockVar); \
 	spin_lock_irqsave(&varNamePrefix ## ListLock, flags); \
 	list_for_each(tempListVar,&varNamePrefix ## QueriesList) { \
 	tempVar = container_of(tempListVar,QuerySelectors_t,list); \
@@ -104,7 +102,6 @@ static DEFINE_SPINLOCK(varNamePrefix ## ListLock);
  */
 #define endForEachQuery(slcLockVar,varNamePrefix)				} \
 	spin_unlock_irqrestore(&varNamePrefix ## ListLock, flags); \
-	RELEASE_READ_LOCK(slcLockVar); \
 	} while (0);
 /**
  * Allocates a QuerySeletor_t, assigns the query (queryVar) to it, acquires <varNamePrefix>ListLock and inserts 

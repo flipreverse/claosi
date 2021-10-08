@@ -2,6 +2,7 @@
 #include <common.h>
 #include <datamodel.h>
 #include <communication.h>
+#include <api.h>
 #include <liballoc.h>
 
 /**
@@ -310,6 +311,44 @@ DataModelElement_t* copyNode(DataModelElement_t *node) {
  * @param node
  */
 void freeNode(DataModelElement_t *node, int freeNodeItself) {
+	int i;
+	Query_t **regQueries = NULL;
+
+	if (node->layerCode == LAYER_CODE) {
+		switch (node->dataModelType) {
+			case EVENT:
+				regQueries = ((Event_t*)node->typeInfo)->queries;
+				break;
+
+			case OBJECT:
+				regQueries = ((Object_t*)node->typeInfo)->queries;
+				break;
+
+			case SOURCE:
+				regQueries = ((Source_t*)node->typeInfo)->queries;
+				break;
+		}
+		for (i = 0; i < MAX_QUERIES_PER_DM; i++) {
+			if (regQueries[i] != NULL) {
+				switch (node->dataModelType) {
+					case EVENT:
+						((Event_t*)node->typeInfo)->numQueries--;
+						((Event_t*)node->typeInfo)->deactivate(regQueries[i]);
+						break;
+
+					case OBJECT:
+						((Object_t*)node->typeInfo)->numQueries--;
+						((Object_t*)node->typeInfo)->deactivate(regQueries[i]);
+						break;
+
+					case SOURCE:
+						stopSourceTimer(regQueries[i]);
+						((Source_t*)node->typeInfo)->numQueries--;
+						break;
+				}
+			}
+		}
+	}
 	if (node->children != NULL) {
 		FREE(node->children);
 		node->children = NULL;

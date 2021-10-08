@@ -1,7 +1,12 @@
-- rausfinden, warum cpu-hang auftritt
-- livepatch implementieren
+- Evaluieren
+	+ Alte Skripte auf "alL" und "prot-specific" umbauen
+	+ vermessen
+- Quellen deaktivieren, wenn Provider entladen wird
 - slc-process auf TPs umstellen
-- Äquivalent zu PR_FMT einbauen
 - Userspace-Prozess schlafgenlegen, wenn nichts zu tun ist (Semaphore)
+- Tupel auf statisches FOrmat umstellen
+- livepatch implementieren
+x PR_FMT im Kernelteil und Äquivalent zu PR_FMT einbauen
+x auf pr_debug wechseln
 - Filter ggf. in Source reinziehen
 - find_get_task vs. find_task: Welche Version sind an welcher Stelle weshlab verwendet?
